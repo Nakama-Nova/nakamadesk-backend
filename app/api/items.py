@@ -1,4 +1,5 @@
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.auth import get_current_user
 from app.db.deps import get_db
 from app.models.item import Item
-from app.schemas.item import ItemCreate, ItemResponse
+from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.schemas.stock import StockUpdate
 from app.services.inventory_service import update_item_stock
 
@@ -39,7 +40,7 @@ def get_items(
 
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(
-    item_id: int,
+    item_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -51,8 +52,8 @@ def get_item(
 
 @router.put("/{item_id}", response_model=ItemResponse)
 def update_item(
-    item_id: int,
-    item_data: ItemCreate,
+    item_id: UUID,
+    item_data: ItemUpdate,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -60,7 +61,8 @@ def update_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    for key, value in item_data.model_dump().items():
+    update_data = item_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         setattr(item, key, value)
 
     db.commit()
@@ -70,7 +72,7 @@ def update_item(
 
 @router.delete("/{item_id}")
 def delete_item(
-    item_id: int,
+    item_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -85,7 +87,7 @@ def delete_item(
 
 @router.patch("/{item_id}/stock", response_model=ItemResponse)
 def adjust_stock(
-    item_id: int,
+    item_id: UUID,
     stock_update: StockUpdate,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),

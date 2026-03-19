@@ -18,14 +18,22 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-
     existing_user = db.query(User).filter(User.username == user.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
 
     hashed_pw = hash_password(user.password)
 
-    new_user = User(username=user.username, password_hash=hashed_pw, role="owner")
+    new_user = User(
+        username=user.username,
+        email=user.email,
+        password_hash=hashed_pw,
+        full_name=user.full_name,
+        phone=user.phone,
+        role=user.role,
+        status=user.status,
+        is_active=user.is_active
+    )
 
     db.add(new_user)
     db.commit()
@@ -38,7 +46,6 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user:
@@ -51,19 +58,24 @@ def login(
         )
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": user.username})
+    # Store user_id (UUID) in the token instead of just username
+    token = create_access_token({"sub": str(user.id), "username": user.username})
 
     return {"access_token": token, "token_type": "bearer"}
 
 
-def get_current_user(token: str = Depends(oauth2_scheme)):
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    payload = verify_token(token)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
 
-    username = verify_token(token)
 
-    return username
-
-
-@router.get("/me")
-def get_me(current_user: str = Depends(get_current_user)):
-
-    return {"username": current_user}
+@router.get("/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user

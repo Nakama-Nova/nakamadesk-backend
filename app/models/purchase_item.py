@@ -6,18 +6,16 @@ import uuid
 from app.db.base import Base
 
 
-class SaleItem(Base):
-    __tablename__ = "sale_items"
+class PurchaseItem(Base):
+    __tablename__ = "purchase_items"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
-    sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.id"))
+    purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id"))
     item_id = Column(UUID(as_uuid=True), ForeignKey("items.id"))
     quantity = Column(Integer, nullable=False)
-    price_at_sale = Column(Float, nullable=False)
+    unit_price = Column(Float, nullable=False)
     gst_percent = Column(Float, default=0.0)
-    cgst_amount = Column(Float, default=0.0)
-    sgst_amount = Column(Float, default=0.0)
-    total_price = Column(Float, default=0.0)
+    line_total = Column(Float, default=0.0)
 
-    sale = relationship("Sale", back_populates="items")
+    purchase = relationship("Purchase", back_populates="items")
     item = relationship("Item")
