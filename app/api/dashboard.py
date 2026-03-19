@@ -8,12 +8,13 @@ from app.api.auth import get_current_user
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.models.item import Item
+from app.models.user import User
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/summary")
 def get_dashboard_summary(
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     today = date.today()
@@ -33,9 +34,9 @@ def get_dashboard_summary(
         func.date(Sale.created_at) == today
     ).scalar() or 0
     
-    # Low stock count (items with stock_quantity <= 5, for example)
+    # Low stock count (items with current_stock <= min_stock)
     low_stock_count = db.query(func.count(Item.id)).filter(
-        Item.stock_quantity <= 5
+        Item.current_stock <= Item.min_stock
     ).scalar() or 0
     
     return {

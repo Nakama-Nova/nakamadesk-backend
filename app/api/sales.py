@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ def create_sale(
 def get_sales(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    customer_id: int = None,
+    customer_id: Optional[UUID] = None,
     date: str = None,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -38,7 +39,7 @@ def get_sales(
 
 @router.get("/{sale_id}", response_model=SaleResponse)
 def get_sale(
-    sale_id: int,
+    sale_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -50,7 +51,7 @@ def get_sale(
 
 @router.get("/{sale_id}/items", response_model=List[SaleItemResponse])
 def get_sale_items(
-    sale_id: int,
+    sale_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

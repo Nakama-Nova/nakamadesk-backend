@@ -1,4 +1,5 @@
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -23,16 +24,18 @@ def create_customer(
     db.refresh(new_customer)
     return new_customer
 
+
 @router.get("/search", response_model=CustomerResponse)
 def search_customer_by_phone(
     phone: str,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     customer = db.query(Customer).filter(Customer.phone == phone).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
+
 
 @router.get("/", response_model=List[CustomerResponse])
 def get_customers(
@@ -46,7 +49,7 @@ def get_customers(
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
 def get_customer(
-    customer_id: int,
+    customer_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -58,7 +61,7 @@ def get_customer(
 
 @router.put("/{customer_id}", response_model=CustomerResponse)
 def update_customer(
-    customer_id: int,
+    customer_id: UUID,
     customer_data: CustomerCreate,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -66,8 +69,11 @@ def update_customer(
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    for key, value in customer_data.model_dump().items():
+    
+    update_data = customer_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         setattr(customer, key, value)
+    
     db.commit()
     db.refresh(customer)
     return customer
@@ -75,7 +81,7 @@ def update_customer(
 
 @router.delete("/{customer_id}")
 def delete_customer(
-    customer_id: int,
+    customer_id: UUID,
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

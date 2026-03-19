@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, List, Optional
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def create_sale_transaction(
-    db: Session, sale_data: SaleCreate, current_user: str
+    db: Session, sale_data: SaleCreate, current_user_id: UUID
 ) -> Sale:
     """Handles the business logic for creating a sale, verifying stock, and calculating GST."""
 
@@ -25,7 +26,7 @@ def create_sale_transaction(
         )
 
     # Group requested items
-    item_requests: Dict[int, SaleItemCreate] = {}
+    item_requests: Dict[UUID, SaleItemCreate] = {}
     for item_data in sale_data.items:
         if item_data.quantity <= 0:
             raise HTTPException(
@@ -49,19 +50,25 @@ def create_sale_transaction(
             )
 
     new_sale = Sale(
-        total_amount=0.0,
         invoice_number=generate_invoice_number(db),
         customer_id=sale_data.customer_id,
+        user_id=current_user_id,
+        order_type=sale_data.order_type,
+        discount=sale_data.discount,
+        payment_method=sale_data.payment_method,
+        payment_status=sale_data.payment_status,
+        order_status=sale_data.order_status,
     )
     db.add(new_sale)
     db.flush()
 
-    total_amount = to_decimal(0)
+    sub_total = to_decimal(0)
+    tax_total = to_decimal(0)
 
     for item_id, req_data in item_requests.items():
         item = items_map[item_id]
 
-        current_stock = item.stock_quantity or 0
+        current_stock = item.current_stock or 0
         if current_stock < req_data.quantity:
             db.rollback()
             raise HTTPException(
@@ -69,19 +76,20 @@ def create_sale_transaction(
             )
 
         # Deduct stock
-        item.stock_quantity = current_stock - req_data.quantity
+        item.current_stock = current_stock - req_data.quantity
 
-        price_at_sale = to_decimal(item.price)
+        price_at_sale = to_decimal(item.selling_price)
         gst_percent = to_decimal(item.gst_percent)
         quantity = to_decimal(req_data.quantity)
 
-        base_price = price_at_sale * quantity
-        gst_amount = base_price * (gst_percent / to_decimal(100))
-        cgst_amount = gst_amount / to_decimal(2)
-        sgst_amount = gst_amount / to_decimal(2)
-        line_total = base_price + gst_amount
+        line_base = price_at_sale * quantity
+        line_tax = line_base * (gst_percent / to_decimal(100))
+        cgst_amount = line_tax / to_decimal(2)
+        sgst_amount = line_tax / to_decimal(2)
+        line_total = line_base + line_tax
 
-        total_amount += line_total
+        sub_total += line_base
+        tax_total += line_tax
 
         sale_item = SaleItem(
             sale_id=new_sale.id,
@@ -95,7 +103,10 @@ def create_sale_transaction(
         )
         db.add(sale_item)
 
-    new_sale.total_amount = float(total_amount)
+    new_sale.sub_total = float(sub_total)
+    new_sale.tax_total = float(tax_total)
+    new_sale.total_amount = float(sub_total + tax_total - to_decimal(sale_data.discount))
+    
     db.commit()
     db.refresh(new_sale)
 
@@ -107,7 +118,7 @@ def get_all_sales(
     db: Session, 
     limit: int = 50, 
     offset: int = 0, 
-    customer_id: Optional[int] = None, 
+    customer_id: Optional[UUID] = None, 
     date: Optional[str] = None
 ) -> List[Sale]:
     """Retrieve paginated sales with optional filtering and eager loading of items."""
@@ -123,16 +134,13 @@ def get_all_sales(
             target_date = datetime.strptime(date, "%Y-%m-%d").date()
             query = query.filter(func.date(Sale.created_at) == target_date)
         except ValueError:
-            # Note: We might want to handle this differently in a service, 
-            # but for now we follow the existing pattern of raising in the route if needed.
-            # Here we just pass it along or ignore invalid dates.
             pass
 
     sales = query.limit(limit).offset(offset).all()
     return sales
 
 
-def get_sale_by_id(db: Session, sale_id: int) -> Optional[Sale]:
+def get_sale_by_id(db: Session, sale_id: UUID) -> Optional[Sale]:
     """Retrieve a single sale by ID."""
     sale = (
         db.query(Sale)
