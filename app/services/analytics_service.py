@@ -84,19 +84,23 @@ def get_inventory_report(db: Session) -> List[InventoryReportResponse]:
 def get_profit_loss(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> ProfitLossResponse:
     # 1. Get Revenue (Total Sales)
     rev_query = db.query(func.sum(SaleItem.total_price))
+    if start_date or end_date:
+        rev_query = rev_query.join(Sale)
     if start_date:
-        rev_query = rev_query.join(Sale).filter(func.date(Sale.created_at) >= start_date)
+        rev_query = rev_query.filter(func.date(Sale.created_at) >= start_date)
     if end_date:
-        rev_query = rev_query.join(Sale).filter(func.date(Sale.created_at) <= end_date)
+        rev_query = rev_query.filter(func.date(Sale.created_at) <= end_date)
     
     total_rev = rev_query.scalar() or 0.0
     
     # 2. Get Total Production Cost (Sum of individual item production_cost * quantity sold)
     cost_query = db.query(func.sum(SaleItem.quantity * Item.production_cost)).join(Item, SaleItem.item_id == Item.id)
+    if start_date or end_date:
+        cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id)
     if start_date:
-        cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id).filter(func.date(Sale.created_at) >= start_date)
+        cost_query = cost_query.filter(func.date(Sale.created_at) >= start_date)
     if end_date:
-        cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id).filter(func.date(Sale.created_at) <= end_date)
+        cost_query = cost_query.filter(func.date(Sale.created_at) <= end_date)
         
     total_cost = cost_query.scalar() or 0.0
     

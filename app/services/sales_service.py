@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.exc import IntegrityError
 
 from app.models.item import Item
 from app.models.sale import Sale
@@ -44,9 +45,9 @@ def create_sale_transaction(
         else:
             item_requests[item_data.item_id] = item_data
 
-    # Fetch all items in a single query
+    # Fetch all items in a single query with row-level locks to prevent stock race conditions
     item_ids = list(item_requests.keys())
-    items = db.query(Item).filter(Item.id.in_(item_ids)).all()
+    items = db.query(Item).filter(Item.id.in_(item_ids)).with_for_update().all()
     items_map = {item.id: item for item in items}
 
     # Verify all items exist
@@ -56,19 +57,35 @@ def create_sale_transaction(
                 status_code=404, detail=f"Item with ID {item_id} not found"
             )
 
-    new_sale = Sale(
-        invoice_number=generate_invoice_number(db),
-        customer_id=sale_data.customer_id,
-        user_id=current_user_id,
-        client_id=sale_data.client_id,
-        order_type=sale_data.order_type,
-        discount=to_decimal(sale_data.discount),
-        payment_method=sale_data.payment_method,
-        payment_status=sale_data.payment_status,
-        order_status=sale_data.order_status,
-    )
-    db.add(new_sale)
-    db.flush()
+    for attempt in range(5):
+        try:
+            with db.begin_nested():
+                new_sale = Sale(
+                    invoice_number=generate_invoice_number(db),
+                    customer_id=sale_data.customer_id,
+                    user_id=current_user_id,
+                    client_id=sale_data.client_id,
+                    order_type=sale_data.order_type,
+                    discount=to_decimal(sale_data.discount),
+                    payment_method=sale_data.payment_method,
+                    payment_status=sale_data.payment_status,
+                    order_status=sale_data.order_status,
+                )
+                db.add(new_sale)
+                db.flush()
+            break # Successfully bound without duplicate invoice exception
+        except IntegrityError as e:
+            if "client_id" in str(e):
+                db.rollback()
+                existing_sale = db.query(Sale).filter(Sale.client_id == sale_data.client_id).first()
+                if existing_sale:
+                    logger.info(f"Idempotency retry triggered. Returning existing sale {existing_sale.id}")
+                    return existing_sale
+            if attempt == 4:
+                db.rollback()
+                raise HTTPException(
+                    status_code=409, detail="High concurrency blocked sale creation over invoice collisions. Please try again."
+                )
 
     sub_total = to_decimal(0)
     tax_total = to_decimal(0)
