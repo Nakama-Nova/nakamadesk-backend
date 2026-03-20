@@ -1,12 +1,9 @@
 import os
-from datetime import datetime
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.pdfgen import canvas
-from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
-                                TableStyle)
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.models.sale import Sale
 
@@ -54,6 +51,7 @@ def generate_invoice_pdf(sale: Sale) -> str:
     data = [["Item Name", "Qty", "Price", "CGST", "SGST", "Total"]]
 
     from decimal import Decimal
+
     total_cgst = Decimal("0.0")
     total_sgst = Decimal("0.0")
     grand_total = Decimal("0.0")
@@ -75,7 +73,9 @@ def generate_invoice_pdf(sale: Sale) -> str:
             qty = getattr(item, "quantity", 0)
 
             # Check how total is stored on item, recalculate if necessary
-            line_total = getattr(item, "total_price", (price * Decimal(str(qty))) + cgst + sgst)
+            line_total = getattr(
+                item, "total_price", (price * Decimal(str(qty))) + cgst + sgst
+            )
 
             data.append(
                 [
