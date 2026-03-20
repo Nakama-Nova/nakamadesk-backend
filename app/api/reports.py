@@ -1,67 +1,64 @@
-from datetime import date, datetime
-from typing import List
-
-from fastapi import APIRouter, Depends
-from sqlalchemy import func
+from datetime import date
+from typing import List, Optional
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db, get_current_user
-from app.models.item import Item
-from app.models.sale import Sale
-from app.models.sale_item import SaleItem
+from app.db.deps import get_db, get_current_user, check_role
 from app.models.user import User
-from app.schemas.item import ItemResponse
+from app.schemas.report import (
+    SalesReportResponse,
+    TopProductResponse,
+    InventoryReportResponse,
+    ProfitLossResponse,
+    GSTSummaryResponse
+)
+from app.services import analytics_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
 
-@router.get("/sales/daily")
-def get_daily_sales(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+@router.get("/sales", response_model=SalesReportResponse)
+def get_sales_report(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
 ):
-    today = date.today()
-
-    total_sales = (
-        db.query(func.count(Sale.id))
-        .filter(func.date(Sale.created_at) == today)
-        .scalar()
-    )
-
-    total_revenue = (
-        db.query(func.sum(Sale.total_amount))
-        .filter(func.date(Sale.created_at) == today)
-        .scalar()
-    )
-
-    items_sold = (
-        db.query(func.sum(SaleItem.quantity))
-        .join(Sale)
-        .filter(func.date(Sale.created_at) == today)
-        .scalar()
-    )
-
-    return {
-        "total_sales": total_sales or 0,
-        "items_sold": items_sold or 0,
-        "total_revenue": total_revenue or 0,
-    }
+    return analytics_service.get_sales_analytics(db, start_date, end_date)
 
 
-@router.get("/sales/summary")
-def get_sales_summary(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+@router.get("/top-products", response_model=List[TopProductResponse])
+def get_top_products_report(
+    limit: int = Query(10),
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
 ):
-    total_sales = db.query(func.count(Sale.id)).scalar()
-
-    total_revenue = db.query(func.sum(Sale.total_amount)).scalar()
-
-    return {"total_sales": total_sales or 0, "total_revenue": total_revenue or 0}
+    return analytics_service.get_top_products(db, limit)
 
 
-@router.get("/inventory/low-stock", response_model=List[ItemResponse])
-def get_low_stock_inventory(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+@router.get("/inventory", response_model=List[InventoryReportResponse])
+def get_inventory_report(
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
 ):
-    low_stock_items = db.query(Item).filter(Item.current_stock <= Item.min_stock).all()
+    return analytics_service.get_inventory_report(db)
 
-    return low_stock_items
+
+@router.get("/profit-loss", response_model=ProfitLossResponse)
+def get_profit_loss_analytics(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
+):
+    return analytics_service.get_profit_loss(db, start_date, end_date)
+
+
+@router.get("/gst-summary", response_model=GSTSummaryResponse)
+def get_gst_summary_report(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
+):
+    return analytics_service.get_gst_summary(db, start_date, end_date)
