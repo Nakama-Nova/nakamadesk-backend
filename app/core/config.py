@@ -10,16 +10,19 @@ class Settings:
 
     ENV: str = os.getenv("ENV", "dev")
 
-    if ENV == "test":
-        DATABASE_URL: str = os.getenv(
-            "TEST_DATABASE_URL",
-            "postgresql://postgres:password@localhost:5432/furnibiz_test",
-        )
-    else:
-        DATABASE_URL: str = os.getenv(
-            "DEV_DATABASE_URL",
-            "postgresql://postgres:password@localhost:5432/furnibiz_dev",
-        )
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+
+    if not DATABASE_URL:
+        if ENV == "test":
+            DATABASE_URL = os.getenv(
+                "TEST_DATABASE_URL",
+                "postgresql://postgres:postgres@localhost:5432/furnbiz_test",
+            )
+        else:
+            DATABASE_URL = os.getenv(
+                "DEV_DATABASE_URL",
+                "postgresql://postgres:postgres@localhost:5432/furnbiz_dev",
+            )
 
 
 settings = Settings()
