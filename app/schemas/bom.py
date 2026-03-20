@@ -6,8 +6,8 @@ from decimal import Decimal
 
 class BOMBase(BaseModel):
     material_id: UUID
-    required_qty: Decimal = Field(..., decimal_places=2)
-    wastage_pct: Decimal = Field(default=0.0, decimal_places=2)
+    required_qty: Decimal = Field(..., decimal_places=4)
+    wastage_pct: Decimal = Field(default=Decimal("0.00"), decimal_places=4)
 
 
 class BOMCreate(BOMBase):
