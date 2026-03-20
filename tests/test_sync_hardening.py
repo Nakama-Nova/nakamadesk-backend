@@ -74,9 +74,7 @@ def test_updated_at_timestamp(auth_client: TestClient):
     time.sleep(1.1)
 
     # 2. Update item
-    auth_client.patch(
-        f"/items/{item['id']}", json={"name": "Updated Name"}
-    )
+    auth_client.patch(f"/items/{item['id']}", json={"name": "Updated Name"})
 
     # In some DB setups, updated_at might be returned or we might need to fetch it
     # Let's fetch to be sure

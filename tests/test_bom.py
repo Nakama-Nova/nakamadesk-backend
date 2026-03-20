@@ -35,7 +35,9 @@ def test_manufacturing_flow(auth_client: TestClient):
     response = auth_client.get(f"/bom/item/{item_id}")
     assert Decimal(str(response.json()["total_cost"])) == Decimal("3300.00")
 
-    target_item = next(i for i in auth_client.get("/items/").json() if i["id"] == item_id)
+    target_item = next(
+        i for i in auth_client.get("/items/").json() if i["id"] == item_id
+    )
     assert Decimal(str(target_item["production_cost"])) == Decimal("3300.00")
 
     # Update RM price
