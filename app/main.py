@@ -1,16 +1,26 @@
 from fastapi import FastAPI
 
-from app.api import auth, customers, dashboard, health, invoices, items, reports, sales, raw_materials, bom, attendance, wages, sync
-from app.db.base import Base
-from app.db.session import engine
-from app.models.customer import Customer
-from app.models.item import Item
-from app.models.sale import Sale
-from app.models.sale_item import SaleItem
-from app.models.user import User
+from app.core.middleware import TimingMiddleware
 
+from app.api import (
+    auth,
+    customers,
+    dashboard,
+    health,
+    invoices,
+    items,
+    reports,
+    sales,
+    raw_materials,
+    bom,
+    attendance,
+    wages,
+    sync,
+)
 
 app = FastAPI(title="NakamaDesk API", version="0.1.0")
+
+app.add_middleware(TimingMiddleware)
 
 app.include_router(health.router)
 app.include_router(auth.router)
