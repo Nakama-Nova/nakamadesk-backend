@@ -10,6 +10,7 @@ from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.raw_material import RawMaterial
 from app.models.bom import BillOfMaterials
+from app.models.sync import SyncLog
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
 from app.models.audit_log import AuditLog
