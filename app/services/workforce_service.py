@@ -27,6 +27,12 @@ def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
 
 
 def mark_attendance(db: Session, attendance_data: AttendanceCreate, recorder_id: UUID) -> Attendance:
+    # 0. Idempotency Check
+    if attendance_data.client_id:
+        existing = db.query(Attendance).filter(Attendance.client_id == attendance_data.client_id).first()
+        if existing:
+            return existing
+
     # 1. Create attendance record
     db_attendance = Attendance(
         **attendance_data.model_dump(),
@@ -74,3 +80,24 @@ def pay_wages(db: Session, payment_data: WagePaymentRequest) -> List[DailyWage]:
     for wage in wages:
         db.refresh(wage)
     return wages
+
+
+def update_attendance(db: Session, attendance_id: UUID, update_data: AttendanceUpdate) -> Optional[Attendance]:
+    """Updates attendance and re-calculates linked wage if necessary."""
+    db_attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    if not db_attendance:
+        return None
+        
+    for key, value in update_data.model_dump(exclude_unset=True).items():
+        setattr(db_attendance, key, value)
+    
+    # If status or wage changed, re-calculate the linked wage entry
+    if update_data.status or update_data.daily_wage:
+        if db_attendance.wage_entry:
+            db_attendance.wage_entry.total_amount = calculate_wage(
+                db_attendance.status, db_attendance.daily_wage
+            )
+            
+    db.commit()
+    db.refresh(db_attendance)
+    return db_attendance

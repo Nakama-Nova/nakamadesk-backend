@@ -23,8 +23,8 @@ def get_sales_analytics(db: Session, start_date: Optional[date] = None, end_date
     query = db.query(
         func.count(Sale.id).label("total_orders"),
         func.sum(Sale.total_amount).label("total_revenue"),
-        func.sum(Sale.tax_amount).label("total_tax"),
-        func.sum(Sale.discount_amount).label("total_discount")
+        func.sum(Sale.tax_total).label("total_tax"),
+        func.sum(Sale.discount).label("total_discount")
     )
     
     if start_date:
@@ -125,6 +125,8 @@ def get_gst_summary(db: Session, start_date: Optional[date] = None, end_date: Op
     if start_date:
         query = query.join(Sale).filter(func.date(Sale.created_at) >= start_date)
     if end_date:
+        if not start_date: # joining Sale if not already joined
+             query = query.join(Sale)
         query = query.filter(func.date(Sale.created_at) <= end_date)
         
     res = query.first()
@@ -160,10 +162,10 @@ def export_sales_to_excel(db: Session, start_date: Optional[date] = None, end_da
         data.append({
             "Invoice No": s.invoice_number,
             "Date": s.created_at.strftime("%Y-%m-%d"),
-            "Customer": s.customer.full_name if s.customer else "Walk-in",
-            "Taxable Value": float(s.total_amount - s.tax_amount),
-            "CGST": float(s.tax_amount / 2),
-            "SGST": float(s.tax_amount / 2),
+            "Customer": s.customer.name if s.customer else "Walk-in",
+            "Taxable Value": float(s.total_amount - s.tax_total),
+            "CGST": float(s.tax_total / 2),
+            "SGST": float(s.tax_total / 2),
             "Total Amount": float(s.total_amount)
         })
         

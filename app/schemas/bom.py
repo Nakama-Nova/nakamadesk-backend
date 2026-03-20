@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 from typing import List, Optional
 from decimal import Decimal
+from datetime import datetime
 
 
 class BOMBase(BaseModel):
@@ -22,6 +23,8 @@ class BOMUpdate(BaseModel):
 class BOMResponse(BOMBase):
     id: UUID
     item_id: UUID
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     
     # Optional material info for display
     material_name: Optional[str] = None

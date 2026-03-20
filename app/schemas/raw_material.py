@@ -26,6 +26,7 @@ class RawMaterialUpdate(BaseModel):
 class RawMaterialResponse(RawMaterialBase):
     id: UUID
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
