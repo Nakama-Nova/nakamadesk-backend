@@ -83,5 +83,50 @@ def auth_client(client, db):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
     yield client
-    # Dependency overrides cleared by client fixture clear() or manually here
-    # But client fixture handles it
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def manager_client(client, db):
+    """Get a TestClient with an authenticated 'manager' user."""
+    unique_id = uuid.uuid4().hex[:8]
+    test_user = User(
+        username=f"manager_{unique_id}",
+        email=f"manager_{unique_id}@example.com",
+        password_hash="fakehash",
+        role="manager",
+        is_active=True
+    )
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+
+    def override_get_current_user():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def worker_client(client, db):
+    """Get a TestClient with an authenticated 'worker' user."""
+    unique_id = uuid.uuid4().hex[:8]
+    test_user = User(
+        username=f"worker_{unique_id}",
+        email=f"worker_{unique_id}@example.com",
+        password_hash="fakehash",
+        role="worker",
+        is_active=True
+    )
+    db.add(test_user)
+    db.commit()
+    db.refresh(test_user)
+
+    def override_get_current_user():
+        return test_user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    yield client
+    app.dependency_overrides.clear()
