@@ -1,16 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import datetime, date
+from datetime import date
 
-from app.db.deps import get_db
-from app.db.deps import get_current_user
-from app.models.sale import Sale
-from app.models.sale_item import SaleItem
-from app.models.item import Item
+from app.db.deps import get_db, get_current_user
 from app.models.user import User
+from app.services import analytics_service, workforce_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
 
 @router.get("/summary")
 def get_dashboard_summary(
@@ -19,29 +16,20 @@ def get_dashboard_summary(
 ):
     today = date.today()
     
-    # Today's sales count
-    today_sales = db.query(func.count(Sale.id)).filter(
-        func.date(Sale.created_at) == today
-    ).scalar() or 0
+    sales = analytics_service.get_sales_analytics(db, today, today)
+    inventory = analytics_service.get_inventory_report(db)
+    low_stock_count = sum(1 for item in inventory if item.is_low_stock)
     
-    # Today's revenue
-    today_revenue = db.query(func.sum(Sale.total_amount)).filter(
-        func.date(Sale.created_at) == today
-    ).scalar() or 0.0
+    top_products = analytics_service.get_top_products(db, limit=5)
     
-    # Items sold today (sum of quantities)
-    items_sold = db.query(func.sum(SaleItem.quantity)).join(Sale).filter(
-        func.date(Sale.created_at) == today
-    ).scalar() or 0
-    
-    # Low stock count (items with current_stock <= min_stock)
-    low_stock_count = db.query(func.count(Item.id)).filter(
-        Item.current_stock <= Item.min_stock
-    ).scalar() or 0
+    # Get pending wages count/sum (from workforce service if available)
+    pending_wages = workforce_service.get_pending_wages(db)
+    pending_wages_total = sum(wage.total_amount for wage in pending_wages)
     
     return {
-        "today_sales": today_sales,
-        "today_revenue": today_revenue,
-        "items_sold": items_sold,
-        "low_stock_count": low_stock_count
+        "today_sales_count": sales.total_orders,
+        "today_revenue": sales.total_revenue,
+        "low_stock_count": low_stock_count,
+        "pending_wages_total": pending_wages_total,
+        "top_products": top_products
     }
