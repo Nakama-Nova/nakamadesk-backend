@@ -9,8 +9,8 @@ from app.models.supplier import Supplier
 from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.raw_material import RawMaterial
-from app.models.bom import BillOfMaterial
+from app.models.bom import BillOfMaterials
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
 from app.models.audit_log import AuditLog
-from app.models.price_history import PriceHistory
+from app.models.price_history import RawMaterialPriceHistory
