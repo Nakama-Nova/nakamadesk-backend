@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, text
+from sqlalchemy import Column, String, Boolean, DateTime, text, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, timezone
 import uuid
@@ -18,4 +18,5 @@ class User(Base):
     role = Column(String, default="worker")  # owner, manager, sales, achari, worker, customer
     status = Column(String, default="active") # active, inactive, suspended
     is_active = Column(Boolean, default=True)
+    base_daily_wage = Column(Numeric(10, 2), default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
