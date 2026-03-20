@@ -20,6 +20,7 @@ class ItemBase(BaseModel):
     current_stock: int = 0
     min_stock: int = 5
     image_url: Optional[str] = None
+    production_cost: float = 0.0
     is_active: bool = True
 
 
@@ -53,6 +54,7 @@ class ItemUpdate(BaseModel):
     current_stock: Optional[int] = None
     min_stock: Optional[int] = None
     image_url: Optional[str] = None
+    production_cost: Optional[float] = None
     is_active: Optional[bool] = None
 
 

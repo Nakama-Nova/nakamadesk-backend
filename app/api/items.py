@@ -4,8 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user
-from app.db.deps import get_db
+from app.db.deps import get_db, get_current_user
 from app.models.item import Item
 from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.schemas.stock import StockUpdate

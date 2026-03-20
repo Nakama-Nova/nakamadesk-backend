@@ -5,8 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.auth import get_current_user
-from app.db.deps import get_db
+from app.db.deps import get_db, get_current_user
 from app.models.item import Item
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
