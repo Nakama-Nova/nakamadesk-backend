@@ -4,13 +4,21 @@ from typing import List
 from uuid import UUID
 
 from app.db.deps import get_db, check_role
-from app.schemas.raw_material import RawMaterialCreate, RawMaterialUpdate, RawMaterialResponse
+from app.schemas.raw_material import (
+    RawMaterialCreate,
+    RawMaterialUpdate,
+    RawMaterialResponse,
+)
 from app.services import raw_material_service as service
 
 router = APIRouter(prefix="/raw-materials", tags=["Manufacturing - Raw Materials"])
 
 
-@router.post("/", response_model=RawMaterialResponse, dependencies=[Depends(check_role(["owner", "manager"]))])
+@router.post(
+    "/",
+    response_model=RawMaterialResponse,
+    dependencies=[Depends(check_role(["owner", "manager"]))],
+)
 def create_raw_material(material: RawMaterialCreate, db: Session = Depends(get_db)):
     return service.create_raw_material(db, material)
 
@@ -28,8 +36,14 @@ def get_raw_material(id: UUID, db: Session = Depends(get_db)):
     return db_material
 
 
-@router.patch("/{id}", response_model=RawMaterialResponse, dependencies=[Depends(check_role(["owner", "manager"]))])
-def update_raw_material(id: UUID, material_update: RawMaterialUpdate, db: Session = Depends(get_db)):
+@router.patch(
+    "/{id}",
+    response_model=RawMaterialResponse,
+    dependencies=[Depends(check_role(["owner", "manager"]))],
+)
+def update_raw_material(
+    id: UUID, material_update: RawMaterialUpdate, db: Session = Depends(get_db)
+):
     db_material = service.update_raw_material(db, id, material_update)
     if not db_material:
         raise HTTPException(status_code=404, detail="Raw material not found")

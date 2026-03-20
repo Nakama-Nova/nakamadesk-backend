@@ -1,7 +1,6 @@
-import pytest
 from fastapi.testclient import TestClient
 from datetime import date
-from decimal import Decimal
+
 
 def test_sales_and_gst_reports(auth_client: TestClient):
     # Setup data
@@ -11,38 +10,34 @@ def test_sales_and_gst_reports(auth_client: TestClient):
         "selling_price": 1000.0,
         "production_cost": 400.0,  # For P&L
         "current_stock": 50,
-        "gst_percent": 18.0
+        "gst_percent": 18.0,
     }
     item_id = auth_client.post("/items/", json=item_payload).json()["id"]
 
     # Sale 1: 2 qty
-    sale_payload1 = {
-        "items": [
-            {"item_id": item_id, "quantity": 2}
-        ]
-    }
+    sale_payload1 = {"items": [{"item_id": item_id, "quantity": 2}]}
     auth_client.post("/sales/", json=sale_payload1)
-    
+
     # Sale 2: 3 qty
-    sale_payload2 = {
-        "items": [
-            {"item_id": item_id, "quantity": 3}
-        ]
-    }
+    sale_payload2 = {"items": [{"item_id": item_id, "quantity": 3}]}
     auth_client.post("/sales/", json=sale_payload2)
-    
+
     # Total qty sold = 5
     # Total revenue roughly 5000 + 18% GST = 5900
     # Expected base price = 5000
     # Expected GST = 900 (CGST 450, SGST 450)
     # Expected Cost = 5 * 400 = 2000
     # Expected Profit = 5000 - 2000 = 3000
-    
+
     # 1. Sales Report validation
-    sales_rep = auth_client.get(f"/reports/sales?start_date={date.today()}&end_date={date.today()}")
+    sales_rep = auth_client.get(
+        f"/reports/sales?start_date={date.today()}&end_date={date.today()}"
+    )
     assert sales_rep.status_code == 200
     sr_data = sales_rep.json()
-    assert sr_data["total_sales"] >= 2 # could be more from other tests if DB not clean, but at least 2
+    assert (
+        sr_data["total_sales"] >= 2
+    )  # could be more from other tests if DB not clean, but at least 2
     # Ensure current totals are incorporated
     assert float(sr_data["total_revenue"]) >= 5900.0
 
@@ -62,28 +57,36 @@ def test_sales_and_gst_reports(auth_client: TestClient):
     assert float(pl_data["total_cost"]) >= 2000.0
     assert float(pl_data["net_profit"]) >= 3000.0
 
+
 def test_profit_loss_zero_revenue_edge_case(auth_client: TestClient, db):
     # Depending on how the system is hardened or the testing DB strategy,
     # if we have a fresh DB, checking zero revenue directly might be hard if previous tests run.
     # We will just verify the endpoint completes successfully without divide-by-zero errors.
-    
+
     # We can also verify other endpoints
-    pass 
-    
+    pass
+
+
 def test_get_top_products(auth_client: TestClient):
     response = auth_client.get("/reports/top-products?limit=5")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
+
 
 def test_get_inventory_report(auth_client: TestClient):
     response = auth_client.get("/reports/inventory")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
+
 def test_export_sales_excel(auth_client: TestClient):
     response = auth_client.get("/reports/export/sales")
     assert response.status_code == 200
-    assert response.headers["content-type"] == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    assert (
+        response.headers["content-type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 
 def test_reports_rbac_worker(worker_client: TestClient):
     # Workers should NOT be able to access reports

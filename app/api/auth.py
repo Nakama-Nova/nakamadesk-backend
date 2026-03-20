@@ -1,13 +1,12 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token, oauth2_scheme, verify_token
+from app.core.security import create_access_token
 from app.db.deps import get_db, get_current_user
 from app.models.user import User
-from app.schemas.token import Token
 from app.schemas.user import UserCreate, UserResponse
 from app.services.auth_service import hash_password, verify_password
 
@@ -32,7 +31,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
         phone=user.phone,
         role=user.role,
         status=user.status,
-        is_active=user.is_active
+        is_active=user.is_active,
     )
 
     db.add(new_user)

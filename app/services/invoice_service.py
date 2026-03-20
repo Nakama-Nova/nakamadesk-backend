@@ -13,33 +13,14 @@ logger = logging.getLogger(__name__)
 
 def generate_invoice_number(db: Session) -> str:
     """
-    Generate a unique invoice number in the format NTD-YYYY-XXXXX
-    Example: NTD-2026-00001
+    Generate a unique invoice number in the format NTD-YYYY-[UUID]
+    Example: NTD-2026-A1B2C3D4
     """
     current_year = datetime.now().year
+    import uuid
 
-    # Prefix for this year
-    prefix = f"NTD-{current_year}-"
-
-    # Find the latest sale for this year
-    latest_sale = (
-        db.query(Sale)
-        .filter(Sale.invoice_number.like(f"{prefix}%"))
-        .order_by(desc(Sale.invoice_number))
-        .first()
-    )
-
-    if latest_sale and latest_sale.invoice_number:
-        # Extract the sequence number
-        try:
-            seq_str = latest_sale.invoice_number.split("-")[-1]
-            next_seq = int(seq_str) + 1
-        except (ValueError, IndexError):
-            next_seq = 1
-    else:
-        next_seq = 1
-
-    return f"{prefix}{next_seq:05d}"
+    suffix = uuid.uuid4().hex[:8].upper()
+    return f"NTD-{current_year}-{suffix}"
 
 
 def format_invoice_response(sale: Sale) -> InvoiceResponse:
@@ -76,6 +57,7 @@ def get_all_invoices(
     sales = (
         db.query(Sale)
         .filter(Sale.invoice_number.isnot(None))
+        .order_by(desc(Sale.created_at))
         .limit(limit)
         .offset(offset)
         .all()

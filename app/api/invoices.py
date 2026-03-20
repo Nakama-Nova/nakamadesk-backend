@@ -1,5 +1,4 @@
 from typing import List
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -8,9 +7,8 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db, get_current_user
 from app.models.sale import Sale
 from app.models.user import User
-from app.schemas.invoice import InvoiceItemResponse, InvoiceResponse
-from app.services.invoice_service import (get_all_invoices,
-                                          get_invoice_by_number)
+from app.schemas.invoice import InvoiceResponse
+from app.services.invoice_service import get_all_invoices, get_invoice_by_number
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 

@@ -25,7 +25,7 @@ class BOMResponse(BOMBase):
     item_id: UUID
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    
+
     # Optional material info for display
     material_name: Optional[str] = None
     material_unit: Optional[str] = None

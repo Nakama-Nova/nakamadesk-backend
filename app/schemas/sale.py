@@ -19,7 +19,7 @@ class SaleItemCreate(BaseModel):
 class SaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
-    client_id: Optional[UUID] = None # For idempotency
+    client_id: Optional[UUID] = None  # For idempotency
     items: List[SaleItemCreate]
     order_type: str = "in-store"
     discount: float = 0.0

@@ -9,7 +9,12 @@ from app.db.base import Base
 class Supplier(Base):
     __tablename__ = "suppliers"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
     name = Column(String, index=True, nullable=False)
     contact_person = Column(String)
     phone = Column(String, index=True)

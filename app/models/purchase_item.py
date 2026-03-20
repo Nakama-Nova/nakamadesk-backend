@@ -9,7 +9,12 @@ from app.db.base import Base
 class PurchaseItem(Base):
     __tablename__ = "purchase_items"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
     purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id"))
     item_id = Column(UUID(as_uuid=True), ForeignKey("items.id"))
     quantity = Column(Integer, nullable=False)

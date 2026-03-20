@@ -30,7 +30,7 @@ def setup_db():
             conn.execute(text("DROP SCHEMA public CASCADE; CREATE SCHEMA public;"))
     except Exception:
         Base.metadata.drop_all(bind=engine)
-        
+
     Base.metadata.create_all(bind=engine)
     yield
     # No need to drop after session if we want to inspect or if we drop at start of next session
@@ -49,6 +49,7 @@ def db():
 @pytest.fixture
 def client(db):
     """Get a TestClient for testing endpoints."""
+
     def override_get_db():
         try:
             yield db
@@ -62,6 +63,7 @@ def client(db):
 
 import uuid
 
+
 @pytest.fixture
 def auth_client(client, db):
     """Get a TestClient with an authenticated 'owner' user."""
@@ -72,7 +74,7 @@ def auth_client(client, db):
         email=f"admin_{unique_id}@example.com",
         password_hash="fakehash",
         role="owner",
-        is_active=True
+        is_active=True,
     )
     db.add(test_user)
     db.commit()
@@ -95,7 +97,7 @@ def manager_client(client, db):
         email=f"manager_{unique_id}@example.com",
         password_hash="fakehash",
         role="manager",
-        is_active=True
+        is_active=True,
     )
     db.add(test_user)
     db.commit()
@@ -118,7 +120,7 @@ def worker_client(client, db):
         email=f"worker_{unique_id}@example.com",
         password_hash="fakehash",
         role="worker",
-        is_active=True
+        is_active=True,
     )
     db.add(test_user)
     db.commit()

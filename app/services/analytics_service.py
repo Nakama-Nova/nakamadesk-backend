@@ -3,7 +3,6 @@ from sqlalchemy import func
 from datetime import date, datetime
 from typing import List, Optional
 from decimal import Decimal
-from uuid import UUID
 import pandas as pd
 from io import BytesIO
 
@@ -11,64 +10,76 @@ from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.models.item import Item
 from app.schemas.report import (
-    SalesReportResponse, 
-    TopProductResponse, 
+    SalesReportResponse,
+    TopProductResponse,
     InventoryReportResponse,
     ProfitLossResponse,
-    GSTSummaryResponse
+    GSTSummaryResponse,
 )
 
 
-def get_sales_analytics(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> SalesReportResponse:
+def get_sales_analytics(
+    db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None
+) -> SalesReportResponse:
     query = db.query(
         func.count(Sale.id).label("total_orders"),
         func.sum(Sale.total_amount).label("total_revenue"),
         func.sum(Sale.tax_total).label("total_tax"),
-        func.sum(Sale.discount).label("total_discount")
+        func.sum(Sale.discount).label("total_discount"),
     )
-    
+
     if start_date:
-        query = query.filter(func.date(Sale.created_at) >= start_date)
+        query = query.filter(
+            Sale.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
-        query = query.filter(func.date(Sale.created_at) <= end_date)
-        
+        query = query.filter(
+            Sale.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+
     result = query.first()
-    
+
     return SalesReportResponse(
         total_sales=int(result.total_revenue or 0),
         total_orders=result.total_orders or 0,
         total_revenue=Decimal(str(result.total_revenue or 0)),
         total_tax=Decimal(str(result.total_tax or 0)),
-        total_discount=Decimal(str(result.total_discount or 0))
+        total_discount=Decimal(str(result.total_discount or 0)),
     )
 
 
 def get_top_products(db: Session, limit: int = 10) -> List[TopProductResponse]:
-    results = db.query(
-        Item.id,
-        Item.name,
-        Item.sku,
-        func.sum(SaleItem.quantity).label("quantity_sold"),
-        func.sum(SaleItem.total_price).label("revenue")
-    ).join(SaleItem, Item.id == SaleItem.item_id)\
-     .group_by(Item.id)\
-     .order_by(func.sum(SaleItem.quantity).desc())\
-     .limit(limit)\
-     .all()
-     
+    results = (
+        db.query(
+            Item.id,
+            Item.name,
+            Item.sku,
+            func.sum(SaleItem.quantity).label("quantity_sold"),
+            func.sum(SaleItem.total_price).label("revenue"),
+        )
+        .join(SaleItem, Item.id == SaleItem.item_id)
+        .group_by(Item.id)
+        .order_by(func.sum(SaleItem.quantity).desc())
+        .limit(limit)
+        .all()
+    )
+
     return [
         TopProductResponse(
             item_id=r.id,
             name=r.name,
             sku=r.sku,
             quantity_sold=int(r.quantity_sold or 0),
-            revenue=Decimal(str(r.revenue or 0))
-        ) for r in results
+            revenue=Decimal(str(r.revenue or 0)),
+        )
+        for r in results
     ]
 
 
 def get_inventory_report(db: Session) -> List[InventoryReportResponse]:
-    items = db.query(Item).all()
+    items = db.query(
+        Item.id, Item.name, Item.sku, Item.current_stock, Item.min_stock
+    ).all()
     return [
         InventoryReportResponse(
             item_id=item.id,
@@ -76,107 +87,137 @@ def get_inventory_report(db: Session) -> List[InventoryReportResponse]:
             sku=item.sku,
             current_stock=item.current_stock,
             min_stock=item.min_stock,
-            is_low_stock=item.current_stock <= item.min_stock
-        ) for item in items
+            is_low_stock=item.current_stock <= item.min_stock,
+        )
+        for item in items
     ]
 
 
-def get_profit_loss(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> ProfitLossResponse:
+def get_profit_loss(
+    db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None
+) -> ProfitLossResponse:
     # 1. Get Revenue (Total Sales)
     rev_query = db.query(func.sum(SaleItem.total_price))
     if start_date or end_date:
         rev_query = rev_query.join(Sale)
     if start_date:
-        rev_query = rev_query.filter(func.date(Sale.created_at) >= start_date)
+        rev_query = rev_query.filter(
+            Sale.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
-        rev_query = rev_query.filter(func.date(Sale.created_at) <= end_date)
-    
+        rev_query = rev_query.filter(
+            Sale.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+
     total_rev = rev_query.scalar() or 0.0
-    
+
     # 2. Get Total Production Cost (Sum of individual item production_cost * quantity sold)
-    cost_query = db.query(func.sum(SaleItem.quantity * Item.production_cost)).join(Item, SaleItem.item_id == Item.id)
+    cost_query = db.query(func.sum(SaleItem.quantity * Item.production_cost)).join(
+        Item, SaleItem.item_id == Item.id
+    )
     if start_date or end_date:
         cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id)
     if start_date:
-        cost_query = cost_query.filter(func.date(Sale.created_at) >= start_date)
+        cost_query = cost_query.filter(
+            Sale.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
-        cost_query = cost_query.filter(func.date(Sale.created_at) <= end_date)
-        
+        cost_query = cost_query.filter(
+            Sale.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+
     total_cost = cost_query.scalar() or 0.0
-    
+
     revenue = Decimal(str(total_rev))
     cost = Decimal(str(total_cost))
     net_profit = revenue - cost
-    
-    margin_pct = (net_profit / revenue * 100).quantize(Decimal("0.01")) if revenue > 0 else Decimal("0.00")
-    
+
+    margin_pct = (
+        (net_profit / revenue * 100).quantize(Decimal("0.01"))
+        if revenue > 0
+        else Decimal("0.00")
+    )
+
     return ProfitLossResponse(
         total_revenue=revenue,
         total_cost=cost,
         net_profit=net_profit,
         profit_margin_pct=margin_pct,
-        alert_flag=margin_pct < Decimal("10") if revenue > 0 else False
+        alert_flag=margin_pct < Decimal("10") if revenue > 0 else False,
     )
 
 
-def get_gst_summary(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> GSTSummaryResponse:
+def get_gst_summary(
+    db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None
+) -> GSTSummaryResponse:
     query = db.query(
         func.sum(SaleItem.total_price).label("gross"),
         func.sum(SaleItem.cgst_amount).label("cgst"),
-        func.sum(SaleItem.sgst_amount).label("sgst")
+        func.sum(SaleItem.sgst_amount).label("sgst"),
     )
-    
+
     if start_date:
-        query = query.join(Sale).filter(func.date(Sale.created_at) >= start_date)
+        query = query.join(Sale).filter(
+            Sale.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
     if end_date:
-        if not start_date: # joining Sale if not already joined
-             query = query.join(Sale)
-        query = query.filter(func.date(Sale.created_at) <= end_date)
-        
+        if not start_date:  # joining Sale if not already joined
+            query = query.join(Sale)
+        query = query.filter(
+            Sale.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+
     res = query.first()
-    
+
     gross = Decimal(str(res.gross or 0))
     cgst = Decimal(str(res.cgst or 0))
     sgst = Decimal(str(res.sgst or 0))
     igst = Decimal("0.00")
-    
+
     total_tax = cgst + sgst + igst
     taxable_value = gross - total_tax
-    
+
     return GSTSummaryResponse(
         taxable_value=taxable_value,
         cgst_total=cgst,
         sgst_total=sgst,
         igst_total=igst,
-        total_tax=total_tax
+        total_tax=total_tax,
     )
 
 
-def export_sales_to_excel(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> BytesIO:
-    query = db.query(Sale)
+from sqlalchemy.orm import joinedload
+
+
+def export_sales_to_excel(
+    db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None
+) -> BytesIO:
+    query = db.query(Sale).options(joinedload(Sale.customer))
     if start_date:
         query = query.filter(func.date(Sale.created_at) >= start_date)
     if end_date:
         query = query.filter(func.date(Sale.created_at) <= end_date)
-        
+
     sales = query.all()
-    
+
     data = []
     for s in sales:
-        data.append({
-            "Invoice No": s.invoice_number,
-            "Date": s.created_at.strftime("%Y-%m-%d"),
-            "Customer": s.customer.name if s.customer else "Walk-in",
-            "Taxable Value": float(s.total_amount - s.tax_total),
-            "CGST": float(s.tax_total / 2),
-            "SGST": float(s.tax_total / 2),
-            "Total Amount": float(s.total_amount)
-        })
-        
+        data.append(
+            {
+                "Invoice No": s.invoice_number,
+                "Date": s.created_at.strftime("%Y-%m-%d"),
+                "Customer": s.customer.name if s.customer else "Walk-in",
+                "Taxable Value": float(s.total_amount - s.tax_total),
+                "CGST": float(s.tax_total / 2),
+                "SGST": float(s.tax_total / 2),
+                "Total Amount": float(s.total_amount),
+            }
+        )
+
     df = pd.DataFrame(data)
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Sales Report")
-    
+
     output.seek(0)
     return output
