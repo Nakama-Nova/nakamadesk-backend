@@ -33,6 +33,15 @@ def mark_attendance(db: Session, attendance_data: AttendanceCreate, recorder_id:
         if existing:
             return existing
 
+    # Ensure no double attendance for the same day
+    from fastapi import HTTPException
+    existing_attendance = db.query(Attendance).filter(
+        Attendance.user_id == attendance_data.user_id,
+        Attendance.date == attendance_data.date
+    ).first()
+    if existing_attendance:
+        raise HTTPException(status_code=400, detail="Attendance already recorded for this user on this date")
+
     # 1. Create attendance record
     db_attendance = Attendance(
         **attendance_data.model_dump(),

@@ -7,7 +7,7 @@ from datetime import datetime
 
 class BOMBase(BaseModel):
     material_id: UUID
-    required_qty: Decimal = Field(..., decimal_places=4)
+    required_qty: Decimal = Field(..., gt=0, decimal_places=4)
     wastage_pct: Decimal = Field(default=Decimal("0.00"), decimal_places=4)
 
 
