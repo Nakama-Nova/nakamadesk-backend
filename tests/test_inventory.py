@@ -1,75 +1,86 @@
-import requests
-from tests.utils import BASE_URL, get_auth_headers
+import pytest
+from fastapi.testclient import TestClient
 
-def _create_item():
-    headers = get_auth_headers()
+def test_create_item(auth_client: TestClient):
     payload = {
+        "sku": "ITEM-001",
         "name": "Test Chair",
         "category": "Furniture",
-        "price": 100.0,
-        "stock_quantity": 20
+        "purchase_price": 100.0,
+        "selling_price": 200.0,
+        "current_stock": 20
     }
-    response = requests.post(f"{BASE_URL}/items", json=payload, headers=headers)
-    return response.json()["id"]
-
-def test_create_item():
-    headers = get_auth_headers()
-    payload = {
-        "name": "Test Chair",
-        "category": "Furniture",
-        "price": 100.0,
-        "stock_quantity": 20
-    }
-    response = requests.post(f"{BASE_URL}/items", json=payload, headers=headers)
+    response = auth_client.post("/items/", json=payload)
     assert response.status_code == 200
     assert response.json()["name"] == "Test Chair"
 
-def test_list_items():
-    headers = get_auth_headers()
-    response = requests.get(f"{BASE_URL}/items", headers=headers)
+def test_list_items(auth_client: TestClient):
+    response = auth_client.get("/items/")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
-def test_fetch_item_by_id():
-    item_id = _create_item()
-    headers = get_auth_headers()
+def test_fetch_item_by_id(auth_client: TestClient):
+    # Create item first
+    payload = {
+        "sku": "ITEM-002",
+        "name": "Another Chair",
+        "purchase_price": 100.0,
+        "selling_price": 200.0
+    }
+    create_response = auth_client.post("/items/", json=payload)
+    item_id = create_response.json()["id"]
     
-    response = requests.get(f"{BASE_URL}/items/{item_id}", headers=headers)
+    response = auth_client.get(f"/items/{item_id}")
     assert response.status_code == 200
     assert response.json()["id"] == item_id
 
-def test_update_item():
-    item_id = _create_item()
-    headers = get_auth_headers()
+def test_update_item(auth_client: TestClient):
+    # Create item
+    payload = {
+        "sku": "ITEM-003",
+        "name": "Update Me",
+        "purchase_price": 100.0,
+        "selling_price": 200.0
+    }
+    create_response = auth_client.post("/items/", json=payload)
+    item_id = create_response.json()["id"]
     
     update_payload = {
-        "name": "Updated Chair",
-        "category": "Furniture",
-        "price": 150.0,
-        "stock_quantity": 25
+        "name": "Updated Name",
+        "selling_price": 250.0
     }
-    response = requests.put(f"{BASE_URL}/items/{item_id}", json=update_payload, headers=headers)
+    response = auth_client.put(f"/items/{item_id}", json=update_payload)
     assert response.status_code == 200
-    assert response.json()["name"] == "Updated Chair"
-    assert response.json()["price"] == 150.0
+    assert response.json()["name"] == "Updated Name"
+    assert response.json()["selling_price"] == 250.0
 
-def test_adjust_stock():
-    item_id = _create_item()
-    headers = get_auth_headers()
+def test_adjust_stock(auth_client: TestClient):
+    # Create item with stock 20
+    payload = {
+        "sku": "ITEM-004",
+        "name": "Stock Item",
+        "current_stock": 20
+    }
+    create_response = auth_client.post("/items/", json=payload)
+    item_id = create_response.json()["id"]
     
-    # We started with 20 quantity, let's adjust by -5
-    payload = {"quantity": -5}
-    response = requests.patch(f"{BASE_URL}/items/{item_id}/stock", json=payload, headers=headers)
+    # Adjust stock by -5
+    response = auth_client.patch(f"/items/{item_id}/stock", json={"quantity": -5})
     assert response.status_code == 200
-    assert response.json()["stock_quantity"] == 15
+    assert response.json()["current_stock"] == 15
 
-def test_delete_item():
-    item_id = _create_item()
-    headers = get_auth_headers()
+def test_delete_item(auth_client: TestClient):
+    # Create item
+    payload = {
+        "sku": "ITEM-005",
+        "name": "Delete Me"
+    }
+    create_response = auth_client.post("/items/", json=payload)
+    item_id = create_response.json()["id"]
     
-    response = requests.delete(f"{BASE_URL}/items/{item_id}", headers=headers)
+    response = auth_client.delete(f"/items/{item_id}")
     assert response.status_code == 200
     
-    # Verify it is deleted
-    get_response = requests.get(f"{BASE_URL}/items/{item_id}", headers=headers)
+    # Verify deletion
+    get_response = auth_client.get(f"/items/{item_id}")
     assert get_response.status_code == 404

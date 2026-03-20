@@ -25,7 +25,7 @@ def generate_invoice_number(db: Session) -> str:
     latest_sale = (
         db.query(Sale)
         .filter(Sale.invoice_number.like(f"{prefix}%"))
-        .order_by(desc(Sale.id))
+        .order_by(desc(Sale.invoice_number))
         .first()
     )
 

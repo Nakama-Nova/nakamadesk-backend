@@ -13,13 +13,15 @@ from app.services.sales_service import (create_sale_transaction, get_all_sales,
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
 
+from app.models.user import User
+
 @router.post("/", response_model=SaleResponse)
 def create_sale(
     sale_data: SaleCreate,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return create_sale_transaction(db, sale_data, current_user)
+    return create_sale_transaction(db, sale_data, current_user.id)
 
 
 @router.get("/", response_model=List[SaleResponse])
