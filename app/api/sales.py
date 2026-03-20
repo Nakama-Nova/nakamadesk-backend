@@ -1,96 +1,58 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from uuid import UUID
 
-from app.models.sale import Sale
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.db.deps import get_db, get_current_user
 from app.models.sale_item import SaleItem
-from app.models.item import Item
-from app.schemas.sale import SaleCreate, SaleResponse
-from app.db.deps import get_db
-from app.api.auth import get_current_user
-from app.services.invoice_service import generate_invoice_number
+from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse
+from app.services.sales_service import (create_sale_transaction, get_all_sales,
+                                        get_sale_by_id)
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
+
 
 @router.post("/", response_model=SaleResponse)
 def create_sale(
     sale_data: SaleCreate,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    if not sale_data.items:
-        raise HTTPException(status_code=400, detail="Sale must contain at least one item")
+    return create_sale_transaction(db, sale_data, current_user)
 
-    total_amount = 0.0
-    
-    new_sale = Sale(
-        total_amount=0.0,
-        invoice_number=generate_invoice_number(db),
-        customer_id=sale_data.customer_id
-    )
-    db.add(new_sale)
-    db.flush()
-
-    for item_data in sale_data.items:
-        if item_data.quantity <= 0:
-            db.rollback()
-            raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
-
-        item = db.query(Item).filter(Item.id == item_data.item_id).first()
-        if not item:
-            db.rollback()
-            raise HTTPException(status_code=404, detail=f"Item with ID {item_data.item_id} not found")
-        
-        current_stock = item.stock_quantity or 0
-        if current_stock < item_data.quantity:
-            db.rollback()
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for item '{item.name}'")
-        
-        item.stock_quantity = current_stock - item_data.quantity
-
-        price_at_sale = item.price or 0.0
-        gst_percent = item.gst_percent or 0.0
-
-        base_price = price_at_sale * item_data.quantity
-        gst_amount = base_price * (gst_percent / 100)
-        cgst_amount = gst_amount / 2
-        sgst_amount = gst_amount / 2
-        line_total = base_price + gst_amount
-
-        total_amount += line_total
-        
-        sale_item = SaleItem(
-            sale_id=new_sale.id,
-            item_id=item.id,
-            quantity=item_data.quantity,
-            price_at_sale=price_at_sale,
-            gst_percent=gst_percent,
-            cgst_amount=cgst_amount,
-            sgst_amount=sgst_amount,
-            total_price=line_total
-        )
-        db.add(sale_item)
-    
-    new_sale.total_amount = total_amount
-    db.commit()
-    db.refresh(new_sale)
-    return new_sale
 
 @router.get("/", response_model=List[SaleResponse])
 def get_sales(
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    customer_id: Optional[UUID] = None,
+    date: str = None,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    sales = db.query(Sale).all()
-    return sales
+    return get_all_sales(
+        db, limit=limit, offset=offset, customer_id=customer_id, date=date
+    )
+
 
 @router.get("/{sale_id}", response_model=SaleResponse)
 def get_sale(
-    sale_id: int,
+    sale_id: UUID,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    sale = db.query(Sale).filter(Sale.id == sale_id).first()
+    sale = get_sale_by_id(db, sale_id)
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     return sale
+
+
+@router.get("/{sale_id}/items", response_model=List[SaleItemResponse])
+def get_sale_items(
+    sale_id: UUID,
+    current_user: str = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    items = db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()
+    return items

@@ -1,10 +1,13 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict
+
 from app.schemas.customer import CustomerResponse
 
+
 class InvoiceItemResponse(BaseModel):
-    item_id: int
+    item_id: UUID
     item_name: str
     quantity: int
     price_at_sale: float
@@ -13,16 +16,15 @@ class InvoiceItemResponse(BaseModel):
     sgst_amount: float = 0.0
     total_price: float = 0.0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 class InvoiceResponse(BaseModel):
-    id: int
+    id: UUID
     invoice_number: str
     invoice_date: datetime
     total_amount: float
     customer: Optional[CustomerResponse] = None
     items: List[InvoiceItemResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -1,18 +1,35 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict, field_validator
+
 
 class SaleItemCreate(BaseModel):
-    item_id: int
+    item_id: UUID
     quantity: int
 
+    @field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v):
+        if v <= 0:
+            raise ValueError("quantity must be greater than zero")
+        return v
+
+
 class SaleCreate(BaseModel):
+    customer_id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
     items: List[SaleItemCreate]
-    customer_id: Optional[int] = None
+    order_type: str = "in-store"
+    discount: float = 0.0
+    payment_method: Optional[str] = None
+    payment_status: str = "pending"
+    order_status: str = "completed"
+
 
 class SaleItemResponse(BaseModel):
-    id: int
-    item_id: int
+    id: UUID
+    item_id: UUID
     quantity: int
     price_at_sale: float
     gst_percent: float = 0.0
@@ -20,17 +37,24 @@ class SaleItemResponse(BaseModel):
     sgst_amount: float = 0.0
     total_price: float = 0.0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
 
 class SaleResponse(BaseModel):
-    id: int
-    total_amount: float
-    created_at: datetime
-    customer_id: Optional[int] = None
+    id: UUID
     invoice_number: Optional[str] = None
     invoice_date: Optional[datetime] = None
+    customer_id: Optional[UUID] = None
+    user_id: Optional[UUID] = None
+    order_type: str
+    sub_total: float
+    tax_total: float
+    discount: float
+    total_amount: float
+    payment_status: str
+    payment_method: Optional[str] = None
+    order_status: str
+    created_at: datetime
     items: List[SaleItemResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

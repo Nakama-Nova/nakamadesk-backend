@@ -1,29 +1,66 @@
-from pydantic import BaseModel, field_validator
 from typing import Optional
+from uuid import UUID
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, field_validator
 
-class ItemCreate(BaseModel):
+from app.core.constants import GST_ALLOWED
+
+
+class ItemBase(BaseModel):
+    sku: str
     name: str
-    category: Optional[str] = None
-    price: Optional[float] = None
-    stock_quantity: Optional[int] = None
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+    brand_id: Optional[UUID] = None
+    unit: str = "pcs"
+    purchase_price: float = 0.0
+    selling_price: float = 0.0
+    gst_percent: float = 0.0
     hsn_code: Optional[str] = None
-    gst_percent: Optional[float] = 0.0
+    current_stock: int = 0
+    min_stock: int = 5
+    image_url: Optional[str] = None
+    production_cost: float = 0.0
+    is_active: bool = True
 
+
+class ItemCreate(ItemBase):
     @field_validator("gst_percent")
     @classmethod
     def validate_gst(cls, v):
-        if v is not None and not (0 <= v <= 28):
-            raise ValueError("gst_percent must be between 0 and 28")
+        if v not in GST_ALLOWED:
+            raise ValueError(f"gst_percent must be one of {GST_ALLOWED}")
         return v
 
-class ItemResponse(BaseModel):
-    id: int
-    name: str
-    category: Optional[str] = None
-    price: Optional[float] = None
-    stock_quantity: Optional[int] = None
-    hsn_code: Optional[str] = None
-    gst_percent: Optional[float] = 0.0
+    @field_validator("purchase_price", "selling_price")
+    @classmethod
+    def validate_price(cls, v):
+        if v < 0:
+            raise ValueError("price must not be negative")
+        return v
 
-    class Config:
-        from_attributes = True
+
+class ItemUpdate(BaseModel):
+    sku: Optional[str] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+    brand_id: Optional[UUID] = None
+    unit: Optional[str] = None
+    purchase_price: Optional[float] = None
+    selling_price: Optional[float] = None
+    gst_percent: Optional[float] = None
+    hsn_code: Optional[str] = None
+    current_stock: Optional[int] = None
+    min_stock: Optional[int] = None
+    image_url: Optional[str] = None
+    production_cost: Optional[float] = None
+    is_active: Optional[bool] = None
+
+
+class ItemResponse(ItemBase):
+    id: UUID
+    version_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
