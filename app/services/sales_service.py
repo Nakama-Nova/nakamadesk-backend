@@ -20,6 +20,13 @@ def create_sale_transaction(
 ) -> Sale:
     """Handles the business logic for creating a sale, verifying stock, and calculating GST."""
 
+    # 1. Idempotency Check
+    if sale_data.client_id:
+        existing_sale = db.query(Sale).filter(Sale.client_id == sale_data.client_id).first()
+        if existing_sale:
+            logger.info(f"Duplicate sale request for client_id {sale_data.client_id}, returning existing sale {existing_sale.id}")
+            return existing_sale
+
     if not sale_data.items:
         raise HTTPException(
             status_code=400, detail="Sale must contain at least one item"
@@ -53,8 +60,9 @@ def create_sale_transaction(
         invoice_number=generate_invoice_number(db),
         customer_id=sale_data.customer_id,
         user_id=current_user_id,
+        client_id=sale_data.client_id,
         order_type=sale_data.order_type,
-        discount=sale_data.discount,
+        discount=to_decimal(sale_data.discount),
         payment_method=sale_data.payment_method,
         payment_status=sale_data.payment_status,
         order_status=sale_data.order_status,
@@ -95,17 +103,17 @@ def create_sale_transaction(
             sale_id=new_sale.id,
             item_id=item.id,
             quantity=req_data.quantity,
-            price_at_sale=float(price_at_sale),
-            gst_percent=float(gst_percent),
-            cgst_amount=float(cgst_amount),
-            sgst_amount=float(sgst_amount),
-            total_price=float(line_total),
+            price_at_sale=price_at_sale,
+            gst_percent=gst_percent,
+            cgst_amount=cgst_amount,
+            sgst_amount=sgst_amount,
+            total_price=line_total,
         )
         db.add(sale_item)
 
-    new_sale.sub_total = float(sub_total)
-    new_sale.tax_total = float(tax_total)
-    new_sale.total_amount = float(sub_total + tax_total - to_decimal(sale_data.discount))
+    new_sale.sub_total = sub_total
+    new_sale.tax_total = tax_total
+    new_sale.total_amount = sub_total + tax_total - to_decimal(sale_data.discount)
     
     db.commit()
     db.refresh(new_sale)

@@ -11,6 +11,7 @@ class AttendanceBase(BaseModel):
     status: str # present, absent, half-day
     daily_wage: Decimal
     payment_status: str = "pending"
+    client_id: Optional[UUID] = None # For idempotency
 
 
 class AttendanceCreate(AttendanceBase):
@@ -27,5 +28,6 @@ class AttendanceResponse(AttendanceBase):
     id: UUID
     recorded_by: UUID
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

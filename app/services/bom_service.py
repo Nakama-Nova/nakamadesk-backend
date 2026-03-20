@@ -39,7 +39,15 @@ def delete_bom_entry(db: Session, bom_id: UUID) -> bool:
 
 
 def calculate_item_cost(db: Session, item_id: UUID) -> dict:
-    bom_entries = db.query(BillOfMaterials).filter(BillOfMaterials.item_id == item_id).all()
+    from sqlalchemy.orm import joinedload
+    
+    # Use JOIN to fetch BOM entries and Material details in one go
+    bom_entries = (
+        db.query(BillOfMaterials)
+        .options(joinedload(BillOfMaterials.material))
+        .filter(BillOfMaterials.item_id == item_id)
+        .all()
+    )
     
     total_material_cost = Decimal("0.00")
     total_cost_with_wastage = Decimal("0.00")
@@ -47,12 +55,12 @@ def calculate_item_cost(db: Session, item_id: UUID) -> dict:
     detailed_entries = []
     
     for entry in bom_entries:
-        material = db.query(RawMaterial).filter(RawMaterial.id == entry.material_id).first()
+        material = entry.material
         if not material:
             continue
             
-        base_cost = entry.required_qty * material.current_price
-        wastage_multiplier = (Decimal("1") + (entry.wastage_pct / Decimal("100")))
+        base_cost = Decimal(str(entry.required_qty)) * Decimal(str(material.current_price))
+        wastage_multiplier = (Decimal("1") + (Decimal(str(entry.wastage_pct)) / Decimal("100")))
         final_cost = base_cost * wastage_multiplier
         
         total_material_cost += base_cost

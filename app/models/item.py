@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, String, Text, Boolean, DateTime, ForeignKey, Integer, text, Numeric
+from sqlalchemy import Column, Float, String, Text, Boolean, DateTime, ForeignKey, Integer, text, Numeric, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, timezone
@@ -28,5 +28,6 @@ class Item(Base):
     is_active = Column(Boolean, default=True)
     version_id = Column(Integer, default=1) # For optimistic locking
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     bom_entries = relationship("BillOfMaterials", back_populates="item", cascade="all, delete-orphan")

@@ -53,20 +53,7 @@ def update_attendance_record(
     current_user: User = Depends(check_role(["owner", "manager"])),
     db: Session = Depends(get_db)
 ):
-    db_attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    db_attendance = workforce_service.update_attendance(db, attendance_id, update_data)
     if not db_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
-        
-    for key, value in update_data.model_dump(exclude_unset=True).items():
-        setattr(db_attendance, key, value)
-    
-    # If status or wage changed, re-calculate the linked wage entry
-    if update_data.status or update_data.daily_wage:
-        if db_attendance.wage_entry:
-            db_attendance.wage_entry.total_amount = workforce_service.calculate_wage(
-                db_attendance.status, db_attendance.daily_wage
-            )
-            
-    db.commit()
-    db.refresh(db_attendance)
     return db_attendance

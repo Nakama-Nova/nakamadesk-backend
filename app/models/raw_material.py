@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Numeric, String, DateTime, text, CheckConstraint
+from sqlalchemy import Column, Numeric, String, DateTime, text, CheckConstraint, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, timezone
@@ -16,6 +16,7 @@ class RawMaterial(Base):
     current_price = Column(Numeric(10, 2), default=0.0)
     stock = Column(Numeric(10, 2), default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         CheckConstraint('stock >= 0', name='check_stock_positive'),

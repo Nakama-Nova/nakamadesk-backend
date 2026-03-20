@@ -19,6 +19,7 @@ class SaleItemCreate(BaseModel):
 class SaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
+    client_id: Optional[UUID] = None # For idempotency
     items: List[SaleItemCreate]
     order_type: str = "in-store"
     discount: float = 0.0
@@ -36,6 +37,8 @@ class SaleItemResponse(BaseModel):
     cgst_amount: float = 0.0
     sgst_amount: float = 0.0
     total_price: float = 0.0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -55,6 +58,7 @@ class SaleResponse(BaseModel):
     payment_method: Optional[str] = None
     order_status: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
     items: List[SaleItemResponse] = []
 
     model_config = ConfigDict(from_attributes=True)

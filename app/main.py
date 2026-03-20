@@ -9,7 +9,6 @@ from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.models.user import User
 
-Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="NakamaDesk API", version="0.1.0")
 
