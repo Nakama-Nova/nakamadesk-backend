@@ -59,8 +59,8 @@ jobs:
 
       - name: Type check with mypy
         run: |
-          # exit-zero for now to not block CI while type hints are being improved
-          mypy app --exit-zero
+          # Use || true for now to not block CI while type hints are being improved
+          mypy app || true
 
       - name: Run migrations
         run: |
