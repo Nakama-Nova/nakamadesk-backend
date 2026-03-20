@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Float, String, Text, Boolean, DateTime, ForeignKey, Integer, text
+from sqlalchemy import Column, Float, String, Text, Boolean, DateTime, ForeignKey, Integer, text, Numeric
+from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 from datetime import datetime, timezone
 import uuid
@@ -22,7 +23,10 @@ class Item(Base):
     hsn_code = Column(String, index=True)
     current_stock = Column(Integer, default=0)
     min_stock = Column(Integer, default=5)
+    production_cost = Column(Numeric(10, 2), default=0.0)
     image_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     version_id = Column(Integer, default=1) # For optimistic locking
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bom_entries = relationship("BillOfMaterials", back_populates="item", cascade="all, delete-orphan")
