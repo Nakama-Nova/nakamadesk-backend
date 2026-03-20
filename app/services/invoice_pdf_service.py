@@ -52,18 +52,19 @@ def generate_invoice_pdf(sale: Sale) -> str:
     # --- Table Data ---
     data = [["Item Name", "Qty", "Price", "CGST", "SGST", "Total"]]
 
-    total_cgst = 0.0
-    total_sgst = 0.0
-    grand_total = 0.0
+    from decimal import Decimal
+    total_cgst = Decimal("0.0")
+    total_sgst = Decimal("0.0")
+    grand_total = Decimal("0.0")
 
     if sale.items:
         for item in sale.items:
             # Check for tax attributes, default to 0 if not present
-            cgst = getattr(item, "cgst_amount", 0.0)
-            sgst = getattr(item, "sgst_amount", 0.0)
+            cgst = getattr(item, "cgst_amount", Decimal("0.0"))
+            sgst = getattr(item, "sgst_amount", Decimal("0.0"))
 
             # Use price from item if possible, fallback to cost_price if named differently
-            price = getattr(item, "price_at_sale", 0.0)
+            price = getattr(item, "price_at_sale", Decimal("0.0"))
 
             # Try to get item name
             item_name = "Unknown Item"
@@ -73,7 +74,7 @@ def generate_invoice_pdf(sale: Sale) -> str:
             qty = getattr(item, "quantity", 0)
 
             # Check how total is stored on item, recalculate if necessary
-            line_total = getattr(item, "total_price", (price * qty) + cgst + sgst)
+            line_total = getattr(item, "total_price", (price * Decimal(str(qty))) + cgst + sgst)
 
             data.append(
                 [

@@ -43,6 +43,15 @@ def test_login_valid_user(client: TestClient):
     assert response.status_code == 200
     assert "access_token" in response.json()
 
+def test_login_invalid_credentials(client: TestClient):
+    login_payload = {
+        "username": "nonexistentuser",
+        "password": "wrongpassword"
+    }
+    response = client.post("/auth/login", data=login_payload)
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid credentials"
+
 def test_access_protected_endpoint(client: TestClient):
     # Register and login to get token
     register_payload = {
@@ -59,3 +68,42 @@ def test_access_protected_endpoint(client: TestClient):
     response = client.get("/auth/me", headers=headers)
     assert response.status_code == 200
     assert response.json()["username"] == "protecteduser"
+
+def test_access_with_invalid_token(client: TestClient):
+    headers = {"Authorization": "Bearer invalid_token"}
+    response = client.get("/auth/me", headers=headers)
+    assert response.status_code == 401
+
+def test_access_with_expired_token(client: TestClient):
+    from app.core.security import SECRET_KEY, ALGORITHM
+    from jose import jwt
+    from datetime import datetime, timedelta
+    
+    expire = datetime.utcnow() - timedelta(minutes=1)
+    to_encode = {"sub": "testuser", "exp": expire}
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.get("/auth/me", headers=headers)
+    assert response.status_code == 401
+    assert "Invalid token" in response.json()["detail"]
+
+def test_role_based_access_owner(auth_client: TestClient):
+    payload = {
+        "name": "RBAC Material",
+        "unit": "kg",
+        "current_price": 10.5,
+        "stock": 100
+    }
+    response_owner = auth_client.post("/raw-materials/", json=payload)
+    assert response_owner.status_code == 200
+    
+def test_role_based_access_worker(worker_client: TestClient):
+    payload = {
+        "name": "RBAC Material 2",
+        "unit": "kg",
+        "current_price": 10.5,
+        "stock": 100
+    }
+    response_worker = worker_client.post("/raw-materials/", json=payload)
+    assert response_worker.status_code in [401, 403]

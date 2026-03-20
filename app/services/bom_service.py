@@ -7,7 +7,18 @@ from uuid import UUID
 from decimal import Decimal
 
 
+from fastapi import HTTPException
+
 def create_bom_entry(db: Session, bom_entry: BOMCreate) -> BillOfMaterials:
+    # Validate Item and Material exist
+    item = db.query(Item).filter(Item.id == bom_entry.item_id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    material = db.query(RawMaterial).filter(RawMaterial.id == bom_entry.material_id).first()
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
     db_entry = BillOfMaterials(**bom_entry.model_dump())
     db.add(db_entry)
     db.commit()

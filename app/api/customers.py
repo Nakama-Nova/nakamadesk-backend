@@ -17,6 +17,15 @@ def create_customer(
     current_user: str = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    existing_phone = db.query(Customer).filter(Customer.phone == customer.phone).first()
+    if existing_phone:
+        raise HTTPException(status_code=400, detail="Phone already exists")
+    
+    if customer.email:
+        existing_email = db.query(Customer).filter(Customer.email == customer.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already exists")
+    
     new_customer = Customer(**customer.model_dump())
     db.add(new_customer)
     db.commit()
