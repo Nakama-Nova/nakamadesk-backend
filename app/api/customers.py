@@ -20,12 +20,14 @@ def create_customer(
     existing_phone = db.query(Customer).filter(Customer.phone == customer.phone).first()
     if existing_phone:
         raise HTTPException(status_code=400, detail="Phone already exists")
-    
+
     if customer.email:
-        existing_email = db.query(Customer).filter(Customer.email == customer.email).first()
+        existing_email = (
+            db.query(Customer).filter(Customer.email == customer.email).first()
+        )
         if existing_email:
             raise HTTPException(status_code=400, detail="Email already exists")
-    
+
     new_customer = Customer(**customer.model_dump())
     db.add(new_customer)
     db.commit()
@@ -77,11 +79,11 @@ def update_customer(
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
-    
+
     update_data = customer_data.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(customer, key, value)
-    
+
     db.commit()
     db.refresh(customer)
     return customer

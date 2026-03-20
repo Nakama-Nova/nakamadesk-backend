@@ -7,13 +7,17 @@ from sqlalchemy.orm import Session
 from app.db.deps import get_db, get_current_user
 from app.models.sale_item import SaleItem
 from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse
-from app.services.sales_service import (create_sale_transaction, get_all_sales,
-                                        get_sale_by_id)
+from app.services.sales_service import (
+    create_sale_transaction,
+    get_all_sales,
+    get_sale_by_id,
+)
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
 
 
 from app.models.user import User
+
 
 @router.post("/", response_model=SaleResponse)
 def create_sale(

@@ -1,7 +1,5 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from uuid import UUID
-from datetime import date, datetime
-from typing import Optional, List
 from decimal import Decimal
 
 

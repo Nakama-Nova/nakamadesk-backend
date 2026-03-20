@@ -15,12 +15,12 @@ router = APIRouter(prefix="/wages", tags=["Workforce"])
 def list_pending_wages(
     user_id: Optional[UUID] = None,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     # RBAC: Non-admin see only their own pending wages
     if current_user.role not in ["owner", "manager"]:
         user_id = current_user.id
-        
+
     return workforce_service.get_pending_wages(db, user_id)
 
 
@@ -28,9 +28,11 @@ def list_pending_wages(
 def pay_worker_wages(
     payment_data: WagePaymentRequest,
     current_user: User = Depends(check_role(["owner", "manager"])),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     wages = workforce_service.pay_wages(db, payment_data)
     if not wages:
-        raise HTTPException(status_code=400, detail="No pending wages found for the given IDs")
+        raise HTTPException(
+            status_code=400, detail="No pending wages found for the given IDs"
+        )
     return wages

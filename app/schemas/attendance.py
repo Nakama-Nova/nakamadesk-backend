@@ -1,17 +1,17 @@
 from pydantic import BaseModel, ConfigDict, field_validator
 from uuid import UUID
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional
 from decimal import Decimal
 
 
 class AttendanceBase(BaseModel):
     user_id: UUID
     date: date
-    status: str # present, absent, half-day
+    status: str  # present, absent, half-day
     daily_wage: Decimal
     payment_status: str = "pending"
-    client_id: Optional[UUID] = None # For idempotency
+    client_id: Optional[UUID] = None  # For idempotency
 
     @field_validator("status")
     @classmethod

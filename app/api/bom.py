@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from uuid import UUID
 
 from app.db.deps import get_db, check_role
@@ -10,12 +9,20 @@ from app.services import bom_service as service
 router = APIRouter(prefix="/bom", tags=["Manufacturing - BOM"])
 
 
-@router.post("/", response_model=BOMResponse, dependencies=[Depends(check_role(["owner", "achari"]))])
+@router.post(
+    "/",
+    response_model=BOMResponse,
+    dependencies=[Depends(check_role(["owner", "achari"]))],
+)
 def create_bom_blueprint(bom_entry: BOMCreate, db: Session = Depends(get_db)):
     return service.create_bom_entry(db, bom_entry)
 
 
-@router.get("/item/{item_id}", response_model=BOMCostResponse, dependencies=[Depends(check_role(["owner", "manager", "achari"]))])
+@router.get(
+    "/item/{item_id}",
+    response_model=BOMCostResponse,
+    dependencies=[Depends(check_role(["owner", "manager", "achari"]))],
+)
 def get_item_bom(item_id: UUID, db: Session = Depends(get_db)):
     return service.calculate_item_cost(db, item_id)
 

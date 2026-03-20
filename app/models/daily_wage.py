@@ -10,8 +10,15 @@ from app.db.base import Base
 class DailyWage(Base):
     __tablename__ = "daily_wages"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=text("gen_random_uuid()"))
-    attendance_id = Column(UUID(as_uuid=True), ForeignKey("attendance.id"), unique=True, nullable=False)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    attendance_id = Column(
+        UUID(as_uuid=True), ForeignKey("attendance.id"), unique=True, nullable=False
+    )
     total_amount = Column(Numeric(10, 2), nullable=False)
     # payment_status: pending, paid
     payment_status = Column(String, default="pending")

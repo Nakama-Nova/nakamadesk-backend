@@ -9,22 +9,24 @@ from app.services.sync_service import process_push_sync, pull_sync
 
 router = APIRouter(prefix="/sync", tags=["Offline Sync"])
 
+
 @router.post("/push", response_model=SyncPushResponse)
 def push_sync_operations(
     request: SyncPushRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Client uploads its outbox. Backend processes sequentially in nested transactions.
     """
     return process_push_sync(db, request.operations)
 
+
 @router.get("/pull", response_model=SyncPullResponse)
 def pull_sync_updates(
     last_sync: datetime,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Client pulls incremental updates mapped since `last_sync`.
