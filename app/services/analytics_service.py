@@ -4,6 +4,8 @@ from datetime import date, datetime
 from typing import List, Optional
 from decimal import Decimal
 from uuid import UUID
+import pandas as pd
+from io import BytesIO
 
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
@@ -123,7 +125,7 @@ def get_gst_summary(db: Session, start_date: Optional[date] = None, end_date: Op
     if start_date:
         query = query.join(Sale).filter(func.date(Sale.created_at) >= start_date)
     if end_date:
-        query = query.join(Sale).filter(func.date(Sale.created_at) <= end_date)
+        query = query.filter(func.date(Sale.created_at) <= end_date)
         
     res = query.first()
     
@@ -142,3 +144,33 @@ def get_gst_summary(db: Session, start_date: Optional[date] = None, end_date: Op
         igst_total=igst,
         total_tax=total_tax
     )
+
+
+def export_sales_to_excel(db: Session, start_date: Optional[date] = None, end_date: Optional[date] = None) -> BytesIO:
+    query = db.query(Sale)
+    if start_date:
+        query = query.filter(func.date(Sale.created_at) >= start_date)
+    if end_date:
+        query = query.filter(func.date(Sale.created_at) <= end_date)
+        
+    sales = query.all()
+    
+    data = []
+    for s in sales:
+        data.append({
+            "Invoice No": s.invoice_number,
+            "Date": s.created_at.strftime("%Y-%m-%d"),
+            "Customer": s.customer.full_name if s.customer else "Walk-in",
+            "Taxable Value": float(s.total_amount - s.tax_amount),
+            "CGST": float(s.tax_amount / 2),
+            "SGST": float(s.tax_amount / 2),
+            "Total Amount": float(s.total_amount)
+        })
+        
+    df = pd.DataFrame(data)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sales Report")
+    
+    output.seek(0)
+    return output

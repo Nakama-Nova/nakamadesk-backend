@@ -1,6 +1,7 @@
 from datetime import date
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_db, get_current_user, check_role
@@ -62,3 +63,17 @@ def get_gst_summary_report(
     db: Session = Depends(get_db)
 ):
     return analytics_service.get_gst_summary(db, start_date, end_date)
+
+
+@router.get("/export/sales")
+def export_sales_excel(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user: User = Depends(check_role(["owner", "manager"])),
+    db: Session = Depends(get_db)
+):
+    excel_file = analytics_service.export_sales_to_excel(db, start_date, end_date)
+    headers = {
+        'Content-Disposition': 'attachment; filename="sales_report.xlsx"'
+    }
+    return StreamingResponse(excel_file, headers=headers, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
