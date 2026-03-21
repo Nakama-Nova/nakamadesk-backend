@@ -4,7 +4,7 @@ from decimal import Decimal
 
 
 class SalesReportResponse(BaseModel):
-    total_sales: int
+    total_sales: Decimal
     total_orders: int
     total_revenue: Decimal
     total_tax: Decimal

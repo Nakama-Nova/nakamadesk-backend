@@ -2,6 +2,7 @@ from typing import Optional
 from uuid import UUID
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, field_validator
+from decimal import Decimal
 
 from app.core.constants import GST_ALLOWED
 
@@ -13,14 +14,14 @@ class ItemBase(BaseModel):
     category_id: Optional[UUID] = None
     brand_id: Optional[UUID] = None
     unit: str = "pcs"
-    purchase_price: float = 0.0
-    selling_price: float = 0.0
-    gst_percent: float = 0.0
+    purchase_price: Decimal = Decimal("0.00")
+    selling_price: Decimal = Decimal("0.00")
+    gst_percent: Decimal = Decimal("0.00")
     hsn_code: Optional[str] = None
     current_stock: int = 0
     min_stock: int = 5
     image_url: Optional[str] = None
-    production_cost: float = 0.0
+    production_cost: Decimal = Decimal("0.00")
     is_active: bool = True
 
 
@@ -47,14 +48,14 @@ class ItemUpdate(BaseModel):
     category_id: Optional[UUID] = None
     brand_id: Optional[UUID] = None
     unit: Optional[str] = None
-    purchase_price: Optional[float] = None
-    selling_price: Optional[float] = None
-    gst_percent: Optional[float] = None
+    purchase_price: Optional[Decimal] = None
+    selling_price: Optional[Decimal] = None
+    gst_percent: Optional[Decimal] = None
     hsn_code: Optional[str] = None
     current_stock: Optional[int] = None
     min_stock: Optional[int] = None
     image_url: Optional[str] = None
-    production_cost: Optional[float] = None
+    production_cost: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
 

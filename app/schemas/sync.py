@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import List, Union, Dict, Any, Optional
 from datetime import datetime, date
 from uuid import UUID
@@ -53,12 +53,13 @@ class SyncOperation(BaseModel):
     payload: Union[SalePayload, ItemPayload, AttendancePayload, Dict[str, Any]]
     updated_at: datetime
 
-    @validator("payload", pre=True)
+    @field_validator("payload", mode="before")
+    @classmethod
     def validate_payload(cls, v, values):
         if isinstance(v, (SalePayload, ItemPayload, AttendancePayload)):
             return v
 
-        entity = values.get("entity")
+        entity = values.data.get("entity")
         if entity == "sale":
             return SalePayload(**v)
         elif entity == "item":

@@ -40,7 +40,7 @@ def get_sales_analytics(
     result = query.first()
 
     return SalesReportResponse(
-        total_sales=int(result.total_revenue or 0),
+        total_sales=Decimal(str(result.total_revenue or 0)),
         total_orders=result.total_orders or 0,
         total_revenue=Decimal(str(result.total_revenue or 0)),
         total_tax=Decimal(str(result.total_tax or 0)),

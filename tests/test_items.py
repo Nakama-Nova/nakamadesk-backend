@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from decimal import Decimal
 
 
 def test_create_item(auth_client: TestClient):
@@ -77,4 +78,4 @@ def test_update_item(auth_client: TestClient):
     response = auth_client.put(f"/items/{item_id}", json=update_payload)
     assert response.status_code == 200
     assert response.json()["name"] == "Updated Target"
-    assert response.json()["purchase_price"] == 50.0  # Unchanged
+    assert Decimal(response.json()["purchase_price"]) == Decimal("50.00")  # Unchanged

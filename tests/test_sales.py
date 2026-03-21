@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 import uuid
+from decimal import Decimal
 
 
 def test_create_sale_positive_flow(auth_client: TestClient):
@@ -22,10 +23,10 @@ def test_create_sale_positive_flow(auth_client: TestClient):
 
     # Step 3: Validate GST calculations (1000 * 2 = 2000, 18% GST = 360, Total = 2360)
     sale_item = sale["items"][0]
-    assert float(sale_item["cgst_amount"]) == 180.0
-    assert float(sale_item["sgst_amount"]) == 180.0
-    assert float(sale_item["total_price"]) == 2360.0
-    assert float(sale["total_amount"]) == 2360.0
+    assert Decimal(sale_item["cgst_amount"]) == Decimal("180.00")
+    assert Decimal(sale_item["sgst_amount"]) == Decimal("180.00")
+    assert Decimal(sale_item["total_price"]) == Decimal("2360.00")
+    assert Decimal(sale["total_amount"]) == Decimal("2360.00")
 
     # Step 4: Verify inventory was reduced
     stock_response = auth_client.get(f"/items/{item_id}")
@@ -110,4 +111,4 @@ def test_list_and_fetch_sale(auth_client: TestClient):
     assert fetch_resp.json()["id"] == sale_id
 
     # Ensure totals match decimal precision accurately
-    assert float(fetch_resp.json()["total_amount"]) == 100.0
+    assert Decimal(fetch_resp.json()["total_amount"]) == Decimal("100.00")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Float, ForeignKey, Integer, text
+from sqlalchemy import Column, ForeignKey, Integer, text, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -18,9 +18,9 @@ class PurchaseItem(Base):
     purchase_id = Column(UUID(as_uuid=True), ForeignKey("purchases.id"))
     item_id = Column(UUID(as_uuid=True), ForeignKey("items.id"))
     quantity = Column(Integer, nullable=False)
-    unit_price = Column(Float, nullable=False)
-    gst_percent = Column(Float, default=0.0)
-    line_total = Column(Float, default=0.0)
+    unit_price = Column(Numeric(10, 2), nullable=False)
+    gst_percent = Column(Numeric(10, 2), default=0.0)
+    line_total = Column(Numeric(10, 2), default=0.0)
 
     purchase = relationship("Purchase", back_populates="items")
     item = relationship("Item")

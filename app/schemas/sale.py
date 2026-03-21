@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, field_validator
+from decimal import Decimal
 
 
 class SaleItemCreate(BaseModel):
@@ -22,7 +23,7 @@ class SaleCreate(BaseModel):
     client_id: Optional[UUID] = None  # For idempotency
     items: List[SaleItemCreate]
     order_type: str = "in-store"
-    discount: float = 0.0
+    discount: Decimal = Decimal("0.00")
     payment_method: Optional[str] = None
     payment_status: str = "pending"
     order_status: str = "completed"
@@ -32,11 +33,11 @@ class SaleItemResponse(BaseModel):
     id: UUID
     item_id: UUID
     quantity: int
-    price_at_sale: float
-    gst_percent: float = 0.0
-    cgst_amount: float = 0.0
-    sgst_amount: float = 0.0
-    total_price: float = 0.0
+    price_at_sale: Decimal
+    gst_percent: Decimal = Decimal("0.00")
+    cgst_amount: Decimal = Decimal("0.00")
+    sgst_amount: Decimal = Decimal("0.00")
+    total_price: Decimal = Decimal("0.00")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -50,10 +51,10 @@ class SaleResponse(BaseModel):
     customer_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
     order_type: str
-    sub_total: float
-    tax_total: float
-    discount: float
-    total_amount: float
+    sub_total: Decimal
+    tax_total: Decimal
+    discount: Decimal
+    total_amount: Decimal
     payment_status: str
     payment_method: Optional[str] = None
     order_status: str

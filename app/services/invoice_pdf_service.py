@@ -93,7 +93,7 @@ def generate_invoice_pdf(sale: Sale) -> str:
             grand_total += line_total
 
     # Fallback to sale total amount if no items or line totals don't match
-    if grand_total == 0.0 and sale.total_amount:
+    if grand_total == Decimal("0.0") and sale.total_amount:
         grand_total = sale.total_amount
 
     # --- Table Styling ---

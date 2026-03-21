@@ -82,7 +82,13 @@ class StockDeltaResolver(ConflictResolver):
             if key in ["id", "user_id", "recorded_by"]:
                 continue
             if key == "current_stock":
-                db_obj.current_stock = getattr(db_obj, "current_stock", 0) + float(
+                # item.current_stock is Integer
+                db_obj.current_stock = getattr(db_obj, "current_stock", 0) + int(value)
+            elif key == "stock":
+                # raw_material.stock is Numeric
+                from app.utils.money import to_decimal
+
+                db_obj.stock = to_decimal(getattr(db_obj, "stock", 0)) + to_decimal(
                     value
                 )
             elif is_newer:
@@ -92,6 +98,7 @@ class StockDeltaResolver(ConflictResolver):
 
 CONFLICT_RESOLVER_REGISTRY = {
     "item": StockDeltaResolver(),
+    "raw_material": StockDeltaResolver(),
 }
 
 

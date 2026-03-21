@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Float, ForeignKey, String, text
+from sqlalchemy import Column, DateTime, ForeignKey, String, text, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -20,8 +20,8 @@ class Purchase(Base):
     purchase_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     supplier_id = Column(UUID(as_uuid=True), ForeignKey("suppliers.id"))
-    total_amount = Column(Float, default=0.0)
-    tax_total = Column(Float, default=0.0)
+    total_amount = Column(Numeric(10, 2), default=0.0)
+    tax_total = Column(Numeric(10, 2), default=0.0)
 
     payment_status = Column(String, default="pending")  # pending, paid, partial
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
