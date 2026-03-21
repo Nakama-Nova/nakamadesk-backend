@@ -60,7 +60,12 @@ def login(
     # Store user_id (UUID) in the token instead of just username
     token = create_access_token({"sub": str(user.id), "username": user.username})
 
-    return {"access_token": token, "token_type": "bearer"}
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "username": user.username,
+        "role": user.role,
+    }
 
 
 # get_current_user moved to app.db.deps to avoid circular imports

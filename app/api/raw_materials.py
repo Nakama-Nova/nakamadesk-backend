@@ -4,6 +4,7 @@ from typing import List
 from uuid import UUID
 
 from app.db.deps import get_db, check_role
+from app.models.enums import UserRole
 from app.schemas.raw_material import (
     RawMaterialCreate,
     RawMaterialUpdate,
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/raw-materials", tags=["Manufacturing - Raw Materials
 @router.post(
     "/",
     response_model=RawMaterialResponse,
-    dependencies=[Depends(check_role(["owner", "manager"]))],
+    dependencies=[Depends(check_role([UserRole.OWNER, UserRole.MANAGER]))],
 )
 def create_raw_material(material: RawMaterialCreate, db: Session = Depends(get_db)):
     return service.create_raw_material(db, material)
@@ -39,7 +40,7 @@ def get_raw_material(id: UUID, db: Session = Depends(get_db)):
 @router.patch(
     "/{id}",
     response_model=RawMaterialResponse,
-    dependencies=[Depends(check_role(["owner", "manager"]))],
+    dependencies=[Depends(check_role([UserRole.OWNER, UserRole.MANAGER]))],
 )
 def update_raw_material(
     id: UUID, material_update: RawMaterialUpdate, db: Session = Depends(get_db)
@@ -50,7 +51,7 @@ def update_raw_material(
     return db_material
 
 
-@router.delete("/{id}", dependencies=[Depends(check_role(["owner"]))])
+@router.delete("/{id}", dependencies=[Depends(check_role([UserRole.OWNER]))])
 def delete_raw_material(id: UUID, db: Session = Depends(get_db)):
     success = service.delete_raw_material(db, id)
     if not success:

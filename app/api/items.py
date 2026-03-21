@@ -4,8 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db, get_current_user
+from app.db.deps import get_db, get_current_user, check_role
+from app.models.enums import UserRole
 from app.models.item import Item
+from app.models.user import User
 from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.schemas.stock import StockUpdate
 from app.services.inventory_service import update_item_stock
@@ -16,7 +18,7 @@ router = APIRouter(prefix="/items", tags=["Items"])
 @router.post("/", response_model=ItemResponse)
 def create_item(
     item: ItemCreate,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     new_item = Item(**item.model_dump())
@@ -30,7 +32,7 @@ def create_item(
 def get_items(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     items = db.query(Item).limit(limit).offset(offset).all()
@@ -40,7 +42,7 @@ def get_items(
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(
     item_id: UUID,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     item = db.query(Item).filter(Item.id == item_id).first()
@@ -53,7 +55,7 @@ def get_item(
 def update_item(
     item_id: UUID,
     item_data: ItemUpdate,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     item = db.query(Item).filter(Item.id == item_id).first()
@@ -72,7 +74,7 @@ def update_item(
 @router.delete("/{item_id}")
 def delete_item(
     item_id: UUID,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     item = db.query(Item).filter(Item.id == item_id).first()
@@ -88,7 +90,7 @@ def delete_item(
 def adjust_stock(
     item_id: UUID,
     stock_update: StockUpdate,
-    current_user: str = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     return update_item_stock(db, item_id, stock_update)

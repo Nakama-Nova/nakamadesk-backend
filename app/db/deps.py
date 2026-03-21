@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.core.security import verify_token, oauth2_scheme
 from app.models.user import User
+from app.models.enums import UserRole
 
 
 def get_db():
@@ -28,7 +29,7 @@ def get_current_user(
     return user
 
 
-def check_role(allowed_roles: List[str]):
+def check_role(allowed_roles: List[UserRole]):
     def role_checker(current_user: User = Depends(get_current_user)):
         if current_user.role not in allowed_roles:
             raise HTTPException(

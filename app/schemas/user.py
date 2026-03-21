@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
+from app.models.enums import UserRole
 
 
 class UserBase(BaseModel):
@@ -9,7 +10,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     phone: Optional[str] = None
-    role: str = "worker"
+    role: UserRole = UserRole.WORKER
     status: str = "active"
     is_active: bool = True
 
