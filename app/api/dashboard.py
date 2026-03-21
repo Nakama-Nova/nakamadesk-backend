@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from app.db.deps import get_db, check_role
+from app.models.enums import UserRole
 from app.models.user import User
 from app.services import analytics_service
 
@@ -17,7 +18,7 @@ from app.models.item import Item
 
 @router.get("/summary")
 def get_dashboard_summary(
-    current_user: User = Depends(check_role(["owner", "manager"])),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     today = date.today()

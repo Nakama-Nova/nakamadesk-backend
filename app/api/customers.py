@@ -4,7 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db, get_current_user
+from app.db.deps import get_db, get_current_user, check_role
+from app.models.enums import UserRole
 from app.models.customer import Customer
 from app.schemas.customer import CustomerCreate, CustomerResponse
 

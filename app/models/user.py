@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db.base import Base
-
+from app.models.enums import UserRole
 
 class User(Base):
     __tablename__ = "users"
@@ -21,8 +21,8 @@ class User(Base):
     full_name = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     role = Column(
-        String, default="worker"
-    )  # owner, manager, sales, achari, worker, customer
+        String, nullable=False, default=UserRole.WORKER
+    )  # owner, manager, sales, achari, worker
     status = Column(String, default="active")  # active, inactive, suspended
     is_active = Column(Boolean, default=True)
     base_daily_wage = Column(Numeric(10, 2), default=0.0)

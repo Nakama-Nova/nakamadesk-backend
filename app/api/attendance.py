@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 
 from app.db.deps import get_db, get_current_user, check_role
+from app.models.enums import UserRole
 from app.models.user import User
 from app.models.attendance import Attendance
 from app.schemas.attendance import (
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/attendance", tags=["Workforce"])
 @router.post("/", response_model=AttendanceResponse)
 def record_attendance(
     attendance: AttendanceCreate,
-    current_user: User = Depends(check_role(["owner", "manager", "sales"])),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
     db: Session = Depends(get_db),
 ):
     return workforce_service.mark_attendance(db, attendance, current_user.id)
@@ -37,7 +38,7 @@ def list_attendance(
     query = db.query(Attendance)
 
     # RBAC: Non-admin can only see their own attendance
-    if current_user.role not in ["owner", "manager", "sales"]:
+    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]:
         user_id = current_user.id
 
     if user_id:
@@ -54,7 +55,7 @@ def list_attendance(
 def update_attendance_record(
     attendance_id: UUID,
     update_data: AttendanceUpdate,
-    current_user: User = Depends(check_role(["owner", "manager"])),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
     db_attendance = workforce_service.update_attendance(db, attendance_id, update_data)
