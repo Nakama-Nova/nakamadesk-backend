@@ -6,6 +6,7 @@ import uuid
 from app.db.base import Base
 from app.models.enums import UserRole
 
+
 class User(Base):
     __tablename__ = "users"
 

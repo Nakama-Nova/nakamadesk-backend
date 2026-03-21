@@ -24,7 +24,9 @@ from app.models.user import User
 @router.post("/", response_model=SaleResponse)
 def create_sale(
     sale_data: SaleCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
     db: Session = Depends(get_db),
 ):
     return create_sale_transaction(db, sale_data, current_user.id)
@@ -36,7 +38,9 @@ def get_sales(
     offset: int = Query(0, ge=0),
     customer_id: Optional[UUID] = None,
     date: str = None,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
     db: Session = Depends(get_db),
 ):
     return get_all_sales(
@@ -47,7 +51,9 @@ def get_sales(
 @router.get("/{sale_id}", response_model=SaleResponse)
 def get_sale(
     sale_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
     db: Session = Depends(get_db),
 ):
     sale = get_sale_by_id(db, sale_id)
@@ -59,7 +65,9 @@ def get_sale(
 @router.get("/{sale_id}/items", response_model=List[SaleItemResponse])
 def get_sale_items(
     sale_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
     db: Session = Depends(get_db),
 ):
     items = db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()

@@ -21,7 +21,9 @@ router = APIRouter(prefix="/attendance", tags=["Workforce"])
 @router.post("/", response_model=AttendanceResponse)
 def record_attendance(
     attendance: AttendanceCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
     db: Session = Depends(get_db),
 ):
     return workforce_service.mark_attendance(db, attendance, current_user.id)
