@@ -6,6 +6,7 @@ from app.db.deps import get_db, get_current_user
 from app.models.user import User
 from app.schemas.sync import SyncPushRequest, SyncPushResponse, SyncPullResponse
 from app.services.sync_service import process_push_sync, pull_sync
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 
 router = APIRouter(prefix="/sync", tags=["Offline Sync"])
 
@@ -19,7 +20,8 @@ def push_sync_operations(
     """
     Client uploads its outbox. Backend processes sequentially in nested transactions.
     """
-    return process_push_sync(db, request.operations)
+    uow = SQLAlchemyUnitOfWork(db)
+    return process_push_sync(uow, request.operations, current_user)
 
 
 @router.get("/pull", response_model=SyncPullResponse)
@@ -31,4 +33,5 @@ def pull_sync_updates(
     """
     Client pulls incremental updates mapped since `last_sync`.
     """
-    return pull_sync(db, last_sync)
+    uow = SQLAlchemyUnitOfWork(db)
+    return pull_sync(uow, last_sync)
