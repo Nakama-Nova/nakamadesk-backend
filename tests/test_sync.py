@@ -77,7 +77,13 @@ def test_sync_conflict_resolution(auth_client: TestClient):
         "id": str(uuid.uuid4()),
         "entity": "item",
         "action": "update",
-        "payload": {"id": item_id, "name": "Older Update", "sku": f"CONF-{uuid.uuid4().hex[:4]}", "selling_price": 50.0, "current_stock": 0},
+        "payload": {
+            "id": item_id,
+            "name": "Older Update",
+            "sku": f"CONF-{uuid.uuid4().hex[:4]}",
+            "selling_price": 50.0,
+            "current_stock": 0,
+        },
         "updated_at": client_a_time,
     }
     auth_client.post("/sync/push", json={"operations": [op_a]})
@@ -91,7 +97,13 @@ def test_sync_conflict_resolution(auth_client: TestClient):
         "id": str(uuid.uuid4()),
         "entity": "item",
         "action": "update",
-        "payload": {"id": item_id, "name": "Newer Update", "sku": f"CONF-{uuid.uuid4().hex[:4]}", "selling_price": 50.0, "current_stock": 0},
+        "payload": {
+            "id": item_id,
+            "name": "Newer Update",
+            "sku": f"CONF-{uuid.uuid4().hex[:4]}",
+            "selling_price": 50.0,
+            "current_stock": 0,
+        },
         "updated_at": client_b_time,
     }
     resp_b = auth_client.post("/sync/push", json={"operations": [op_b]})
@@ -108,7 +120,12 @@ def test_sync_partial_failure(auth_client: TestClient):
         "id": str(uuid.uuid4()),
         "entity": "item",
         "action": "create",
-        "payload": {"sku": str(uuid.uuid4()), "name": "Good", "selling_price": 10.0, "current_stock": 5},
+        "payload": {
+            "sku": str(uuid.uuid4()),
+            "name": "Good",
+            "selling_price": 10.0,
+            "current_stock": 5,
+        },
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     op_bad = {

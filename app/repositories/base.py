@@ -3,6 +3,7 @@ from typing import Any, List, Optional
 from uuid import UUID
 from datetime import datetime
 
+
 class BaseRepository(ABC):
     @abstractmethod
     def get_by_id(self, record_id: UUID) -> Any:
@@ -28,6 +29,7 @@ class BaseRepository(ABC):
     def get_by_client_id(self, client_id: str) -> Any:
         pass
 
+
 class AbstractUnitOfWork(ABC):
     items: BaseRepository
     sales: BaseRepository
@@ -48,7 +50,7 @@ class AbstractUnitOfWork(ABC):
     @abstractmethod
     def rollback(self):
         pass
-    
+
     @abstractmethod
     def begin_nested(self):
         pass

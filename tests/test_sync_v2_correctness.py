@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.sale import Sale
 
+
 def test_sync_invalid_action(auth_client: TestClient):
     """Test that invalid action strings are rejected by schema (Pydantic)."""
     payload = {
@@ -20,13 +21,14 @@ def test_sync_invalid_action(auth_client: TestClient):
                     "total_amount": 0.0,
                     "payment_method": "cash",
                 },
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().isoformat(),
             }
         ]
     }
     resp = auth_client.post("/sync/push", json=payload)
     # Pydantic validation error (422) is expected
     assert resp.status_code == 422
+
 
 def test_sync_unknown_entity(auth_client: TestClient):
     """Test that unknown entities are handled by the validator (service level)."""
@@ -38,7 +40,7 @@ def test_sync_unknown_entity(auth_client: TestClient):
                 "entity": "non_existent_entity",
                 "action": "create",
                 "payload": {"id": str(uuid4())},
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().isoformat(),
             }
         ]
     }
@@ -48,13 +50,14 @@ def test_sync_unknown_entity(auth_client: TestClient):
     assert len(failed) == 1
     assert "unknown entity" in failed[0]["error"].lower()
 
+
 def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClient):
     """Test that User B cannot update User A's created record."""
     # 1. Create User A manually
     user_a = User(
         username=f"usera_{uuid4().hex[:8]}",
         email=f"a_{uuid4().hex[:8]}@example.com",
-        password_hash="hash"
+        password_hash="hash",
     )
     db.add(user_a)
     db.commit()
@@ -66,7 +69,7 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
         id=record_id,
         user_id=user_a.id,
         total_amount=100.0,
-        invoice_number=f"INV-A-{uuid4().hex[:8]}"
+        invoice_number=f"INV-A-{uuid4().hex[:8]}",
     )
     db.add(sale)
     db.commit()
@@ -81,7 +84,9 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
                 "action": "update",
                 "payload": {
                     "id": str(record_id),
-                    "customer_id": str(uuid4()), # Partial update logic handles this if it doesn't exist? No, it needs to pass Pydantic.
+                    "customer_id": str(
+                        uuid4()
+                    ),  # Partial update logic handles this if it doesn't exist? No, it needs to pass Pydantic.
                     "items": [],
                     "total_amount": 200.0,
                     "payment_method": "card",
@@ -98,13 +103,14 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
     assert failed[0]["client_id"] == client_id_b
     assert "access denied" in failed[0]["error"].lower()
 
+
 def test_sync_cross_user_delete_restriction(db: Session, worker_client: TestClient):
     """Test that User B cannot delete User A's created record."""
     # 1. Create User A and record
     user_a = User(
         username=f"usera_{uuid4().hex[:8]}",
         email=f"a_{uuid4().hex[:8]}@example.com",
-        password_hash="hash"
+        password_hash="hash",
     )
     db.add(user_a)
     db.commit()
@@ -115,7 +121,7 @@ def test_sync_cross_user_delete_restriction(db: Session, worker_client: TestClie
         id=record_id,
         user_id=user_a.id,
         total_amount=100.0,
-        invoice_number=f"INV-B-{uuid4().hex[:8]}"
+        invoice_number=f"INV-B-{uuid4().hex[:8]}",
     )
     db.add(sale)
     db.commit()

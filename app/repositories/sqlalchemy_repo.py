@@ -10,6 +10,7 @@ from app.models.attendance import Attendance
 from app.models.raw_material import RawMaterial
 from app.models.sync import SyncLog
 
+
 class SQLAlchemyRepository(BaseRepository):
     def __init__(self, session: Session, model: Type[Any]):
         self.session = session
@@ -30,7 +31,11 @@ class SQLAlchemyRepository(BaseRepository):
 
     def get_by_client_id(self, client_id: str) -> Any:
         if hasattr(self.model, "client_id"):
-            return self.session.query(self.model).filter(self.model.client_id == client_id).first()
+            return (
+                self.session.query(self.model)
+                .filter(self.model.client_id == client_id)
+                .first()
+            )
         return None
 
     def get_by_id_scoped(self, record_id: UUID, user_id: UUID) -> Any:
@@ -39,28 +44,36 @@ class SQLAlchemyRepository(BaseRepository):
             query = query.filter(self.model.user_id == user_id)
         return query.first()
 
+
 class ItemRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, Item)
+
 
 class SaleRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, Sale)
 
+
 class AttendanceRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, Attendance)
+
 
 class RawMaterialRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, RawMaterial)
 
+
 class SyncLogRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, SyncLog)
-    
+
     def get_by_client_id(self, client_id: str) -> Optional[SyncLog]:
-        return self.session.query(SyncLog).filter(SyncLog.client_id == client_id).first()
+        return (
+            self.session.query(SyncLog).filter(SyncLog.client_id == client_id).first()
+        )
+
 
 class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     def __init__(self, session: Session):
@@ -76,7 +89,7 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
 
     def rollback(self):
         self.session.rollback()
-    
+
     def begin_nested(self):
         return self.session.begin_nested()
 

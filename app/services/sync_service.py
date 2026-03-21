@@ -309,9 +309,11 @@ class SyncLogWriter:
                     entity=op.entity,
                     record_id=record_id or uuid.uuid4(),
                     action=op.action,
-                    payload=op.payload.model_dump(mode="json")
-                    if hasattr(op.payload, "model_dump")
-                    else op.payload,
+                    payload=(
+                        op.payload.model_dump(mode="json")
+                        if hasattr(op.payload, "model_dump")
+                        else op.payload
+                    ),
                     status=status,
                     error_message=error,
                 )
