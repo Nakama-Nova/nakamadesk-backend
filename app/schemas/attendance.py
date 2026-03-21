@@ -9,6 +9,9 @@ class AttendanceBase(BaseModel):
     user_id: UUID
     date: date
     status: str  # present, absent, half-day
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    total_hours: Optional[Decimal] = None
     daily_wage: Decimal
     payment_status: str = "pending"
     client_id: Optional[UUID] = None  # For idempotency
@@ -34,6 +37,9 @@ class AttendanceCreate(AttendanceBase):
 
 class AttendanceUpdate(BaseModel):
     status: Optional[str] = None
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    total_hours: Optional[Decimal] = None
     daily_wage: Optional[Decimal] = None
     payment_status: Optional[str] = None
 

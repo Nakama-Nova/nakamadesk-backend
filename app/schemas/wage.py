@@ -7,13 +7,13 @@ from decimal import Decimal
 
 class WageBase(BaseModel):
     attendance_id: UUID
-    total_amount: Decimal
+    amount: Decimal
     payment_status: str = "pending"
 
 
 class WageResponse(WageBase):
     id: UUID
-    transaction_ref: Optional[str] = None
+    transaction_reference: Optional[str] = None
     paid_at: Optional[datetime] = None
     created_at: datetime
 
@@ -22,4 +22,4 @@ class WageResponse(WageBase):
 
 class WagePaymentRequest(BaseModel):
     attendance_ids: List[UUID]
-    transaction_ref: Optional[str] = None
+    transaction_reference: Optional[str] = None

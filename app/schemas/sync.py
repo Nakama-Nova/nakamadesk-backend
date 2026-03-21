@@ -40,6 +40,9 @@ class AttendancePayload(BaseModel):
     user_id: UUID
     date: date
     status: str
+    check_in: Optional[datetime] = None
+    check_out: Optional[datetime] = None
+    total_hours: Optional[Decimal] = None
     daily_wage: Decimal
 
 

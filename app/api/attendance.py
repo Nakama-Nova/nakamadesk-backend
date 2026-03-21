@@ -18,38 +18,57 @@ from app.services import workforce_service
 router = APIRouter(prefix="/attendance", tags=["Workforce"])
 
 
-@router.post("/", response_model=AttendanceResponse)
-def record_attendance(
-    attendance: AttendanceCreate,
+@router.post("/check-in", response_model=AttendanceResponse)
+def check_in(
+    user_id: UUID,
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
     db: Session = Depends(get_db),
 ):
-    return workforce_service.mark_attendance(db, attendance, current_user.id)
+    """Admin/Manager marks a user as checked in."""
+    return workforce_service.check_in(db, user_id, current_user.id)
 
 
-@router.get("/", response_model=List[AttendanceResponse])
-def list_attendance(
-    user_id: Optional[UUID] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+@router.post("/check-out", response_model=AttendanceResponse)
+def check_out(
+    attendance_id: UUID,
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
+    db: Session = Depends(get_db),
+):
+    """Admin/Manager marks a user as checked out."""
+    return workforce_service.check_out(db, attendance_id, current_user.id)
+
+
+@router.get("/my", response_model=List[AttendanceResponse])
+def get_my_attendance(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Users view their own attendance records."""
+    return db.query(Attendance).filter(Attendance.user_id == current_user.id).all()
+
+
+@router.get("/all", response_model=List[AttendanceResponse])
+def get_all_attendance(
+    user_id: Optional[UUID] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
+    db: Session = Depends(get_db),
+):
+    """Admin view all attendance records with filters."""
     query = db.query(Attendance)
-
-    # RBAC: Non-admin can only see their own attendance
-    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]:
-        user_id = current_user.id
-
     if user_id:
         query = query.filter(Attendance.user_id == user_id)
     if start_date:
         query = query.filter(Attendance.date >= start_date)
     if end_date:
         query = query.filter(Attendance.date <= end_date)
-
     return query.all()
 
 

@@ -22,6 +22,9 @@ class Attendance(Base):
     date = Column(Date, nullable=False, index=True)
     # status: present, absent, half-day
     status = Column(String, nullable=False)
+    check_in = Column(DateTime, nullable=True)
+    check_out = Column(DateTime, nullable=True)
+    total_hours = Column(Numeric(10, 2), nullable=True)
     daily_wage = Column(Numeric(10, 2), nullable=False)
     # payment_status: pending, paid
     payment_status = Column(String, default="pending")

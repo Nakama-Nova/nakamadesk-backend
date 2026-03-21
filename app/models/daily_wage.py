@@ -19,10 +19,10 @@ class DailyWage(Base):
     attendance_id = Column(
         UUID(as_uuid=True), ForeignKey("attendance.id"), unique=True, nullable=False
     )
-    total_amount = Column(Numeric(10, 2), nullable=False)
+    amount = Column(Numeric(10, 2), nullable=False)
     # payment_status: pending, paid
     payment_status = Column(String, default="pending")
-    transaction_ref = Column(String, nullable=True)
+    transaction_reference = Column(String, nullable=True)
     paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

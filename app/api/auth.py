@@ -1,4 +1,5 @@
 import logging
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -74,3 +75,19 @@ def login(
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/", response_model=List[UserResponse])
+def list_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin/Manager lists all users."""
+    from app.db.deps import check_role
+    from app.models.enums import UserRole
+
+    # Only allow OWNER, MANAGER, SALES to list all users
+    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]:
+        raise HTTPException(status_code=403, detail="Not authorized to list users")
+
+    return db.query(User).all()

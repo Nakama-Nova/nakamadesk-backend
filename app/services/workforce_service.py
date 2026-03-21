@@ -25,6 +25,88 @@ def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
         return Decimal("0.00")
 
 
+def check_in(db: Session, user_id: UUID, recorder_id: UUID) -> Attendance:
+    """Records the start of a workday. Status is 'absent' initially."""
+    from app.models.user import User
+    from fastapi import HTTPException
+
+    # Check for existing open attendance today
+    today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    existing = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.date == today,
+            Attendance.check_out == None,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="User already checked in today")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db_attendance = Attendance(
+        user_id=user_id,
+        date=today,
+        status="absent", # Initially absent until check-out
+        check_in=now,
+        daily_wage=user.base_daily_wage,
+        recorded_by=recorder_id,
+    )
+    db.add(db_attendance)
+    db.commit()
+    db.refresh(db_attendance)
+    return db_attendance
+
+
+def check_out(db: Session, attendance_id: UUID, recorder_id: UUID) -> Attendance:
+    """Records completion of a workday, calculates hours, status, and wage."""
+    from fastapi import HTTPException
+
+    db_attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    if not db_attendance:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+    if db_attendance.check_out:
+        raise HTTPException(status_code=400, detail="User already checked out")
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    db_attendance.check_out = now
+    
+    # Calculate hours
+    delta = db_attendance.check_out - db_attendance.check_in
+    hours = Decimal(delta.total_seconds() / 3600).quantize(Decimal("0.01"))
+    db_attendance.total_hours = hours
+
+    # Determine status
+    if hours >= 8:
+        db_attendance.status = "present"
+    elif hours >= 4:
+        db_attendance.status = "half-day"
+    else:
+        db_attendance.status = "absent"
+
+    # Calculate and create/update wage entry
+    amount = calculate_wage(db_attendance.status, db_attendance.daily_wage)
+    
+    if db_attendance.wage_entry:
+        db_attendance.wage_entry.amount = amount
+    else:
+        db_wage = DailyWage(
+            attendance_id=db_attendance.id,
+            amount=amount,
+            payment_status="pending",
+        )
+        db.add(db_wage)
+
+    db.commit()
+    db.refresh(db_attendance)
+    return db_attendance
+
+
 def mark_attendance(
     db: Session, attendance_data: AttendanceCreate, recorder_id: UUID
 ) -> Attendance:
@@ -61,10 +143,10 @@ def mark_attendance(
     db.flush()  # Get ID
 
     # 2. Calculate and create wage entry
-    total_amount = calculate_wage(db_attendance.status, db_attendance.daily_wage)
+    amount = calculate_wage(db_attendance.status, db_attendance.daily_wage)
     db_wage = DailyWage(
         attendance_id=db_attendance.id,
-        total_amount=total_amount,
+        amount=amount,
         payment_status="pending",
     )
     db.add(db_wage)
@@ -90,7 +172,7 @@ def pay_wages(db: Session, payment_data: WagePaymentRequest) -> List[DailyWage]:
         .all()
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     for wage in wages:
         wage.payment_status = "paid"
         wage.transaction_ref = payment_data.transaction_ref
@@ -119,7 +201,7 @@ def update_attendance(
     # If status or wage changed, re-calculate the linked wage entry
     if update_data.status or update_data.daily_wage:
         if db_attendance.wage_entry:
-            db_attendance.wage_entry.total_amount = calculate_wage(
+            db_attendance.wage_entry.amount = calculate_wage(
                 db_attendance.status, db_attendance.daily_wage
             )
 
