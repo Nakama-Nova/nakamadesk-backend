@@ -13,12 +13,10 @@ from app.services.sales_service import (
     create_sale_transaction,
     get_all_sales,
     get_sale_by_id,
+    get_sale_items_by_id,
 )
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
-
-
-from app.models.user import User
 
 
 @router.post("/", response_model=SaleResponse)
@@ -70,5 +68,4 @@ def get_sale_items(
     ),
     db: Session = Depends(get_db),
 ):
-    items = db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()
-    return items
+    return get_sale_items_by_id(db, sale_id)

@@ -204,3 +204,8 @@ def get_sale_by_id(db: Session, sale_id: UUID) -> Optional[Sale]:
         .first()
     )
     return sale
+
+
+def get_sale_items_by_id(db: Session, sale_id: UUID) -> List[SaleItem]:
+    """Retrieve all items for a specific sale."""
+    return db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()

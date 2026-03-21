@@ -9,7 +9,7 @@ from app.core.security import create_access_token
 from app.db.deps import get_db, get_current_user
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
-from app.services.auth_service import hash_password, verify_password
+from app.services import auth_service
 
 logger = logging.getLogger(__name__)
 
@@ -18,28 +18,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.username == user.username).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Username already exists")
-
-    hashed_pw = hash_password(user.password)
-
-    new_user = User(
-        username=user.username,
-        email=user.email,
-        password_hash=hashed_pw,
-        full_name=user.full_name,
-        phone=user.phone,
-        role=user.role,
-        status=user.status,
-        is_active=user.is_active,
-    )
-
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return new_user
+    return auth_service.register_user(db, user)
 
 
 @router.post("/login")
@@ -52,7 +31,7 @@ def login(
         logger.warning(f"Authentication failure: user '{form_data.username}' not found")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if not verify_password(form_data.password, user.password_hash):
+    if not auth_service.verify_password(form_data.password, user.password_hash):
         logger.warning(
             f"Authentication failure: invalid password for user '{form_data.username}'"
         )
@@ -67,9 +46,6 @@ def login(
         "username": user.username,
         "role": user.role,
     }
-
-
-# get_current_user moved to app.db.deps to avoid circular imports
 
 
 @router.get("/me", response_model=UserResponse)
@@ -90,4 +66,4 @@ def list_users(
     if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]:
         raise HTTPException(status_code=403, detail="Not authorized to list users")
 
-    return db.query(User).all()
+    return auth_service.list_users(db)

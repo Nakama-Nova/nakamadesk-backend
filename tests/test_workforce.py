@@ -1,12 +1,5 @@
 from fastapi.testclient import TestClient
 from app.models.user import User
-from datetime import date
-from uuid import uuid4
-from decimal import Decimal
-
-
-from fastapi.testclient import TestClient
-from app.models.user import User
 from datetime import date, datetime, timedelta, timezone
 from uuid import uuid4
 from decimal import Decimal

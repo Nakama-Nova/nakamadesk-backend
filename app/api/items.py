@@ -4,13 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db, get_current_user, check_role
+from app.db.deps import get_db, check_role
 from app.models.enums import UserRole
-from app.models.item import Item
 from app.models.user import User
 from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.schemas.stock import StockUpdate
-from app.services.inventory_service import update_item_stock
+from app.services import inventory_service
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
@@ -21,11 +20,7 @@ def create_item(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    new_item = Item(**item.model_dump())
-    db.add(new_item)
-    db.commit()
-    db.refresh(new_item)
-    return new_item
+    return inventory_service.create_item(db, item)
 
 
 @router.get("/", response_model=List[ItemResponse])
@@ -35,8 +30,7 @@ def get_items(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    items = db.query(Item).limit(limit).offset(offset).all()
-    return items
+    return inventory_service.get_items(db, limit, offset)
 
 
 @router.get("/{item_id}", response_model=ItemResponse)
@@ -45,7 +39,7 @@ def get_item(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    item = db.query(Item).filter(Item.id == item_id).first()
+    item = inventory_service.get_item(db, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
     return item
@@ -58,16 +52,9 @@ def update_item(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    item = db.query(Item).filter(Item.id == item_id).first()
+    item = inventory_service.update_item(db, item_id, item_data)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-
-    update_data = item_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(item, key, value)
-
-    db.commit()
-    db.refresh(item)
     return item
 
 
@@ -77,12 +64,9 @@ def delete_item(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    item = db.query(Item).filter(Item.id == item_id).first()
-    if not item:
+    success = inventory_service.delete_item(db, item_id)
+    if not success:
         raise HTTPException(status_code=404, detail="Item not found")
-
-    db.delete(item)
-    db.commit()
     return {"message": "Item deleted successfully"}
 
 
@@ -93,4 +77,4 @@ def adjust_stock(
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     db: Session = Depends(get_db),
 ):
-    return update_item_stock(db, item_id, stock_update)
+    return inventory_service.update_item_stock(db, item_id, stock_update)
