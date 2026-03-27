@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-03-19 21:45:54.708951
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
@@ -26,7 +27,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '47141285382d'
+revision: str = "47141285382d"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -38,93 +39,175 @@ def upgrade() -> None:
     op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
 
     # Table: users
-    op.execute(sa.text('CREATE TABLE users ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tusername VARCHAR NOT NULL,  \temail VARCHAR NOT NULL,  \tpassword_hash VARCHAR NOT NULL,  \tfull_name VARCHAR,  \tphone VARCHAR,  \trole VARCHAR,  \tstatus VARCHAR,  \tis_active BOOLEAN,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id) )'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_users_email ON users (email)'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_users_username ON users (username)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE users ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tusername VARCHAR NOT NULL,  \temail VARCHAR NOT NULL,  \tpassword_hash VARCHAR NOT NULL,  \tfull_name VARCHAR,  \tphone VARCHAR,  \trole VARCHAR,  \tstatus VARCHAR,  \tis_active BOOLEAN,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE UNIQUE INDEX ix_users_email ON users (email)"))
+    op.execute(sa.text("CREATE UNIQUE INDEX ix_users_username ON users (username)"))
 
     # Table: categories
-    op.execute(sa.text('CREATE TABLE categories ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription VARCHAR,  \tPRIMARY KEY (id) )'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_categories_name ON categories (name)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE categories ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription VARCHAR,  \tPRIMARY KEY (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE UNIQUE INDEX ix_categories_name ON categories (name)"))
 
     # Table: brands
-    op.execute(sa.text('CREATE TABLE brands ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription VARCHAR,  \tPRIMARY KEY (id) )'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_brands_name ON brands (name)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE brands ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription VARCHAR,  \tPRIMARY KEY (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE UNIQUE INDEX ix_brands_name ON brands (name)"))
 
     # Table: suppliers
-    op.execute(sa.text('CREATE TABLE suppliers ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tcontact_person VARCHAR,  \tphone VARCHAR,  \temail VARCHAR,  \taddress VARCHAR,  \tgstin VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_suppliers_name ON suppliers (name)'))
-    op.execute(sa.text('CREATE INDEX ix_suppliers_phone ON suppliers (phone)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE suppliers ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tcontact_person VARCHAR,  \tphone VARCHAR,  \temail VARCHAR,  \taddress VARCHAR,  \tgstin VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_suppliers_name ON suppliers (name)"))
+    op.execute(sa.text("CREATE INDEX ix_suppliers_phone ON suppliers (phone)"))
 
     # Table: raw_materials
-    op.execute(sa.text('CREATE TABLE raw_materials ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tunit VARCHAR,  \tcurrent_price FLOAT,  \tstock_quantity FLOAT,  \tPRIMARY KEY (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_raw_materials_name ON raw_materials (name)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE raw_materials ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tname VARCHAR NOT NULL,  \tunit VARCHAR,  \tcurrent_price FLOAT,  \tstock_quantity FLOAT,  \tPRIMARY KEY (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_raw_materials_name ON raw_materials (name)"))
 
     # Table: customers
-    op.execute(sa.text('CREATE TABLE customers ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \tname VARCHAR NOT NULL,  \tphone VARCHAR,  \temail VARCHAR,  \taddress VARCHAR,  \tpincode VARCHAR,  \tgstin VARCHAR,  \tcustomer_type VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_customers_email ON customers (email)'))
-    op.execute(sa.text('CREATE INDEX ix_customers_phone ON customers (phone)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE customers ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \tname VARCHAR NOT NULL,  \tphone VARCHAR,  \temail VARCHAR,  \taddress VARCHAR,  \tpincode VARCHAR,  \tgstin VARCHAR,  \tcustomer_type VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_customers_email ON customers (email)"))
+    op.execute(sa.text("CREATE INDEX ix_customers_phone ON customers (phone)"))
 
     # Table: items
-    op.execute(sa.text('CREATE TABLE items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tsku VARCHAR NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription TEXT,  \tcategory_id UUID,  \tbrand_id UUID,  \tunit VARCHAR,  \tpurchase_price FLOAT,  \tselling_price FLOAT,  \tgst_percent FLOAT,  \thsn_code VARCHAR,  \tcurrent_stock INTEGER,  \tmin_stock INTEGER,  \timage_url VARCHAR,  \tis_active BOOLEAN,  \tversion_id INTEGER,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(category_id) REFERENCES categories (id),  \tFOREIGN KEY(brand_id) REFERENCES brands (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_items_hsn_code ON items (hsn_code)'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_items_sku ON items (sku)'))
-    op.execute(sa.text('CREATE INDEX ix_items_name ON items (name)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tsku VARCHAR NOT NULL,  \tname VARCHAR NOT NULL,  \tdescription TEXT,  \tcategory_id UUID,  \tbrand_id UUID,  \tunit VARCHAR,  \tpurchase_price FLOAT,  \tselling_price FLOAT,  \tgst_percent FLOAT,  \thsn_code VARCHAR,  \tcurrent_stock INTEGER,  \tmin_stock INTEGER,  \timage_url VARCHAR,  \tis_active BOOLEAN,  \tversion_id INTEGER,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(category_id) REFERENCES categories (id),  \tFOREIGN KEY(brand_id) REFERENCES brands (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_items_hsn_code ON items (hsn_code)"))
+    op.execute(sa.text("CREATE UNIQUE INDEX ix_items_sku ON items (sku)"))
+    op.execute(sa.text("CREATE INDEX ix_items_name ON items (name)"))
 
     # Table: attendance
-    op.execute(sa.text('CREATE TABLE attendance ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \tdate DATE,  \tcheck_in TIMESTAMP WITHOUT TIME ZONE,  \tcheck_out TIMESTAMP WITHOUT TIME ZONE,  \tstatus VARCHAR,  \twage_rate_override FLOAT,  \trecorded_by UUID,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id),  \tFOREIGN KEY(recorded_by) REFERENCES users (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_attendance_user_id ON attendance (user_id)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE attendance ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \tdate DATE,  \tcheck_in TIMESTAMP WITHOUT TIME ZONE,  \tcheck_out TIMESTAMP WITHOUT TIME ZONE,  \tstatus VARCHAR,  \twage_rate_override FLOAT,  \trecorded_by UUID,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id),  \tFOREIGN KEY(recorded_by) REFERENCES users (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_attendance_user_id ON attendance (user_id)"))
 
     # Table: audit_logs
-    op.execute(sa.text('CREATE TABLE audit_logs ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \ttable_name VARCHAR,  \trow_id VARCHAR,  \taction VARCHAR,  \told_data JSONB,  \tnew_data JSONB,  \ttimestamp TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_audit_logs_row_id ON audit_logs (row_id)'))
-    op.execute(sa.text('CREATE INDEX ix_audit_logs_table_name ON audit_logs (table_name)'))
-    op.execute(sa.text('CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE audit_logs ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tuser_id UUID,  \ttable_name VARCHAR,  \trow_id VARCHAR,  \taction VARCHAR,  \told_data JSONB,  \tnew_data JSONB,  \ttimestamp TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_audit_logs_row_id ON audit_logs (row_id)"))
+    op.execute(
+        sa.text("CREATE INDEX ix_audit_logs_table_name ON audit_logs (table_name)")
+    )
+    op.execute(
+        sa.text("CREATE INDEX ix_audit_logs_timestamp ON audit_logs (timestamp)")
+    )
 
     # Table: price_history
-    op.execute(sa.text('CREATE TABLE price_history ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tmaterial_id UUID,  \tprice FLOAT NOT NULL,  \tsource VARCHAR,  \trecorded_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(material_id) REFERENCES raw_materials (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_price_history_material_id ON price_history (material_id)'))
-    op.execute(sa.text('CREATE INDEX ix_price_history_recorded_at ON price_history (recorded_at)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE price_history ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tmaterial_id UUID,  \tprice FLOAT NOT NULL,  \tsource VARCHAR,  \trecorded_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(material_id) REFERENCES raw_materials (id) )"
+        )
+    )
+    op.execute(
+        sa.text(
+            "CREATE INDEX ix_price_history_material_id ON price_history (material_id)"
+        )
+    )
+    op.execute(
+        sa.text(
+            "CREATE INDEX ix_price_history_recorded_at ON price_history (recorded_at)"
+        )
+    )
 
     # Table: purchases
-    op.execute(sa.text('CREATE TABLE purchases ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tinvoice_number VARCHAR,  \tpurchase_date TIMESTAMP WITHOUT TIME ZONE,  \tsupplier_id UUID,  \ttotal_amount FLOAT,  \ttax_total FLOAT,  \tpayment_status VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(supplier_id) REFERENCES suppliers (id) )'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_purchases_invoice_number ON purchases (invoice_number)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE purchases ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tinvoice_number VARCHAR,  \tpurchase_date TIMESTAMP WITHOUT TIME ZONE,  \tsupplier_id UUID,  \ttotal_amount FLOAT,  \ttax_total FLOAT,  \tpayment_status VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(supplier_id) REFERENCES suppliers (id) )"
+        )
+    )
+    op.execute(
+        sa.text(
+            "CREATE UNIQUE INDEX ix_purchases_invoice_number ON purchases (invoice_number)"
+        )
+    )
 
     # Table: bom
-    op.execute(sa.text('CREATE TABLE bom ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \titem_id UUID,  \tmaterial_id UUID,  \tquantity FLOAT NOT NULL,  \twastage_pct FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(item_id) REFERENCES items (id),  \tFOREIGN KEY(material_id) REFERENCES raw_materials (id) )'))
-    op.execute(sa.text('CREATE INDEX ix_bom_item_id ON bom (item_id)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE bom ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \titem_id UUID,  \tmaterial_id UUID,  \tquantity FLOAT NOT NULL,  \twastage_pct FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(item_id) REFERENCES items (id),  \tFOREIGN KEY(material_id) REFERENCES raw_materials (id) )"
+        )
+    )
+    op.execute(sa.text("CREATE INDEX ix_bom_item_id ON bom (item_id)"))
 
     # Table: daily_wages
-    op.execute(sa.text('CREATE TABLE daily_wages ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tattendance_id UUID,  \tamount FLOAT,  \tpayment_status VARCHAR,  \ttransaction_ref VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tUNIQUE (attendance_id),  \tFOREIGN KEY(attendance_id) REFERENCES attendance (id) )'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE daily_wages ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tattendance_id UUID,  \tamount FLOAT,  \tpayment_status VARCHAR,  \ttransaction_ref VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tUNIQUE (attendance_id),  \tFOREIGN KEY(attendance_id) REFERENCES attendance (id) )"
+        )
+    )
 
     # Table: sales
-    op.execute(sa.text('CREATE TABLE sales ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tinvoice_number VARCHAR,  \tinvoice_date TIMESTAMP WITHOUT TIME ZONE,  \tcustomer_id UUID,  \tuser_id UUID,  \torder_type VARCHAR,  \tsub_total FLOAT,  \ttax_total FLOAT,  \tdiscount FLOAT,  \ttotal_amount FLOAT,  \tpayment_status VARCHAR,  \tpayment_method VARCHAR,  \torder_status VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(customer_id) REFERENCES customers (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )'))
-    op.execute(sa.text('CREATE UNIQUE INDEX ix_sales_invoice_number ON sales (invoice_number)'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE sales ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tinvoice_number VARCHAR,  \tinvoice_date TIMESTAMP WITHOUT TIME ZONE,  \tcustomer_id UUID,  \tuser_id UUID,  \torder_type VARCHAR,  \tsub_total FLOAT,  \ttax_total FLOAT,  \tdiscount FLOAT,  \ttotal_amount FLOAT,  \tpayment_status VARCHAR,  \tpayment_method VARCHAR,  \torder_status VARCHAR,  \tcreated_at TIMESTAMP WITHOUT TIME ZONE,  \tPRIMARY KEY (id),  \tFOREIGN KEY(customer_id) REFERENCES customers (id),  \tFOREIGN KEY(user_id) REFERENCES users (id) )"
+        )
+    )
+    op.execute(
+        sa.text("CREATE UNIQUE INDEX ix_sales_invoice_number ON sales (invoice_number)")
+    )
 
     # Table: purchase_items
-    op.execute(sa.text('CREATE TABLE purchase_items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tpurchase_id UUID,  \titem_id UUID,  \tquantity INTEGER NOT NULL,  \tunit_price FLOAT NOT NULL,  \tgst_percent FLOAT,  \tline_total FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(purchase_id) REFERENCES purchases (id),  \tFOREIGN KEY(item_id) REFERENCES items (id) )'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE purchase_items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tpurchase_id UUID,  \titem_id UUID,  \tquantity INTEGER NOT NULL,  \tunit_price FLOAT NOT NULL,  \tgst_percent FLOAT,  \tline_total FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(purchase_id) REFERENCES purchases (id),  \tFOREIGN KEY(item_id) REFERENCES items (id) )"
+        )
+    )
 
     # Table: sale_items
-    op.execute(sa.text('CREATE TABLE sale_items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tsale_id UUID,  \titem_id UUID,  \tquantity INTEGER NOT NULL,  \tprice_at_sale FLOAT NOT NULL,  \tgst_percent FLOAT,  \tcgst_amount FLOAT,  \tsgst_amount FLOAT,  \ttotal_price FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(sale_id) REFERENCES sales (id),  \tFOREIGN KEY(item_id) REFERENCES items (id) )'))
+    op.execute(
+        sa.text(
+            "CREATE TABLE sale_items ( \tid UUID DEFAULT gen_random_uuid() NOT NULL,  \tsale_id UUID,  \titem_id UUID,  \tquantity INTEGER NOT NULL,  \tprice_at_sale FLOAT NOT NULL,  \tgst_percent FLOAT,  \tcgst_amount FLOAT,  \tsgst_amount FLOAT,  \ttotal_price FLOAT,  \tPRIMARY KEY (id),  \tFOREIGN KEY(sale_id) REFERENCES sales (id),  \tFOREIGN KEY(item_id) REFERENCES items (id) )"
+        )
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     # ### commands auto generated by Alembic - please adjust! ###
-    op.drop_table('sale_items')
-    op.drop_table('purchase_items')
-    op.drop_table('sales')
-    op.drop_table('daily_wages')
-    op.drop_table('bom')
-    op.drop_table('purchases')
-    op.drop_table('price_history')
-    op.drop_table('audit_logs')
-    op.drop_table('attendance')
-    op.drop_table('items')
-    op.drop_table('customers')
-    op.drop_table('raw_materials')
-    op.drop_table('suppliers')
-    op.drop_table('brands')
-    op.drop_table('categories')
-    op.drop_table('users')
+    op.drop_table("sale_items")
+    op.drop_table("purchase_items")
+    op.drop_table("sales")
+    op.drop_table("daily_wages")
+    op.drop_table("bom")
+    op.drop_table("purchases")
+    op.drop_table("price_history")
+    op.drop_table("audit_logs")
+    op.drop_table("attendance")
+    op.drop_table("items")
+    op.drop_table("customers")
+    op.drop_table("raw_materials")
+    op.drop_table("suppliers")
+    op.drop_table("brands")
+    op.drop_table("categories")
+    op.drop_table("users")
     # ### end Alembic commands ###

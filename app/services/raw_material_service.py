@@ -8,6 +8,16 @@ from uuid import UUID
 
 
 def create_raw_material(db: Session, material: RawMaterialCreate) -> RawMaterial:
+    """
+    Create a new raw material record and initialize its price history.
+
+    Args:
+        db (Session): Database session.
+        material (RawMaterialCreate): Payload containing material name, unit, and price.
+
+    Returns:
+        RawMaterial: The newly created material object.
+    """
     db_material = RawMaterial(**material.model_dump())
     db.add(db_material)
     db.commit()
@@ -24,16 +34,52 @@ def create_raw_material(db: Session, material: RawMaterialCreate) -> RawMaterial
 
 
 def get_raw_materials(db: Session, skip: int = 0, limit: int = 100):
+    """
+    Retrieve a list of all raw materials with pagination.
+
+    Args:
+        db (Session): Database session.
+        skip (int): Number of records to skip.
+        limit (int): Maximum number of records to return.
+
+    Returns:
+        List[RawMaterial]: List of raw material records.
+    """
     return db.query(RawMaterial).offset(skip).limit(limit).all()
 
 
 def get_raw_material(db: Session, material_id: UUID) -> RawMaterial:
+    """
+    Retrieve a single raw material by its unique identifier.
+
+    Args:
+        db (Session): Database session.
+        material_id (UUID): Unique ID of the raw material.
+
+    Returns:
+        RawMaterial: The material record, or None if not found.
+    """
     return db.query(RawMaterial).filter(RawMaterial.id == material_id).first()
 
 
 def update_raw_material(
     db: Session, material_id: UUID, material_update: RawMaterialUpdate
 ) -> RawMaterial:
+    """
+    Update a raw material's attributes and handle price changes.
+
+    If the price has changed, it records a new entry in price history
+    and triggers an update for all items whose production cost depends
+    on this material.
+
+    Args:
+        db (Session): Database session.
+        material_id (UUID): ID of the material to update.
+        material_update (RawMaterialUpdate): Updated fields.
+
+    Returns:
+        RawMaterial: The updated material object.
+    """
     db_material = get_raw_material(db, material_id)
     if not db_material:
         return None
@@ -74,6 +120,16 @@ def update_raw_material(
 
 
 def delete_raw_material(db: Session, material_id: UUID) -> bool:
+    """
+    Delete a raw material from the system.
+
+    Args:
+        db (Session): Database session.
+        material_id (UUID): Unique ID of the material to delete.
+
+    Returns:
+        bool: True if deleted successfully, False if not found.
+    """
     db_material = get_raw_material(db, material_id)
     if not db_material:
         return False

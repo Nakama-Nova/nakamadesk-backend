@@ -7,6 +7,13 @@ from app.db.base import Base
 
 
 class AuditLog(Base):
+    """
+    SQLAlchemy model for system-wide audit trails.
+
+    Captures changes to database records, including the action type (INSERT, UPDATE, DELETE),
+    the user responsible, and a JSON snapshot of the old and new data.
+    """
+
     __tablename__ = "audit_logs"
 
     id = Column(

@@ -6,6 +6,10 @@ from decimal import Decimal
 
 
 class SaleItemCreate(BaseModel):
+    """
+    Schema for adding a product to a new sale transaction.
+    """
+
     item_id: UUID
     quantity: int
 
@@ -18,6 +22,10 @@ class SaleItemCreate(BaseModel):
 
 
 class SaleCreate(BaseModel):
+    """
+    Schema for creating a new sales transaction.
+    """
+
     customer_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
     client_id: Optional[UUID] = None  # For idempotency
@@ -30,6 +38,10 @@ class SaleCreate(BaseModel):
 
 
 class SaleItemResponse(BaseModel):
+    """
+    Data Transfer Object for item details within a sale.
+    """
+
     id: UUID
     item_id: UUID
     quantity: int
@@ -45,6 +57,10 @@ class SaleItemResponse(BaseModel):
 
 
 class SaleResponse(BaseModel):
+    """
+    Data Transfer Object for a complete sales transaction.
+    """
+
     id: UUID
     invoice_number: Optional[str] = None
     invoice_date: Optional[datetime] = None

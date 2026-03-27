@@ -1,3 +1,9 @@
+"""
+NakamaDesk FastAPI Application Entry Point.
+
+Initializes the FastAPI app, registers middleware, and includes all API routers.
+"""
+
 from fastapi import FastAPI
 
 from app.core.middleware import TimingMiddleware
@@ -39,4 +45,10 @@ app.include_router(sync.router)
 
 @app.get("/")
 def root():
+    """
+    Root endpoint for health check and API status.
+
+    Returns:
+        dict: A simple status message.
+    """
     return {"message": "NakamaDesk Backend Running"}

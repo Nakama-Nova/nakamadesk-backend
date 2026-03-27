@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class RawMaterialPriceHistory(Base):
+    """
+    SQLAlchemy model for tracking raw material price fluctuations.
+
+    Maintains a historical log of prices for a material, enabling audit trails
+    and time-based cost analysis.
+    """
+
     __tablename__ = "raw_material_price_history"
 
     id = Column(

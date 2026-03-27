@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class Sale(Base):
+    """
+    SQLAlchemy model for sales transactions.
+
+    The primary record for client transactions, storing invoice numbers,
+    totals, taxes, and payment/order status.
+    """
+
     __tablename__ = "sales"
 
     id = Column(

@@ -5,6 +5,10 @@ from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class CustomerBase(BaseModel):
+    """
+    Base attributes for customer profiles.
+    """
+
     name: str
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -16,10 +20,16 @@ class CustomerBase(BaseModel):
 
 
 class CustomerCreate(CustomerBase):
-    pass
+    """
+    Schema for registering a new customer.
+    """
 
 
 class CustomerResponse(CustomerBase):
+    """
+    Data Transfer Object for customer details in API responses.
+    """
+
     id: UUID
     created_at: datetime
 

@@ -18,6 +18,16 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
+    """
+    Register a new user in the system.
+
+    Args:
+        user (UserCreate): User registration data.
+        db (Session): Database session.
+
+    Returns:
+        UserResponse: The newly created user.
+    """
     return auth_service.register_user(db, user)
 
 
@@ -25,6 +35,19 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
+    """
+    Authenticate a user and return an access token.
+
+    Args:
+        form_data (OAuth2PasswordRequestForm): Login credentials (username, password).
+        db (Session): Database session.
+
+    Returns:
+        dict: Access token and user information.
+
+    Raises:
+        HTTPException: If credentials are invalid.
+    """
     user = db.query(User).filter(User.username == form_data.username).first()
 
     if not user:
@@ -50,6 +73,15 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
+    """
+    Get the profile of the currently authenticated user.
+
+    Args:
+        current_user (User): The authenticated user.
+
+    Returns:
+        User: The current user object.
+    """
     return current_user
 
 
@@ -58,8 +90,21 @@ def list_users(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin/Manager lists all users."""
-    from app.db.deps import check_role
+    """
+    List all users in the system.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        db (Session): Database session.
+        current_user (User): Authenticated user performing the request.
+
+    Returns:
+        List[UserResponse]: A list of all registered users.
+
+    Raises:
+        HTTPException: If the user is not authorized.
+    """
     from app.models.enums import UserRole
 
     # Only allow OWNER, MANAGER, SALES to list all users

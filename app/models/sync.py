@@ -7,6 +7,13 @@ from app.db.base import Base
 
 
 class SyncLog(Base):
+    """
+    SQLAlchemy model for tracking offline synchronization.
+
+    Logs incoming operations from mobile/offline clients, providing a
+    registry for idempotency and conflict resolution audit trails.
+    """
+
     __tablename__ = "sync_logs"
 
     id = Column(

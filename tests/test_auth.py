@@ -79,9 +79,9 @@ def test_access_with_invalid_token(client: TestClient):
 def test_access_with_expired_token(client: TestClient):
     from app.core.security import SECRET_KEY, ALGORITHM
     from jose import jwt
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
 
-    expire = datetime.utcnow() - timedelta(minutes=1)
+    expire = datetime.now(timezone.utc) - timedelta(minutes=1)
     to_encode = {"sub": "testuser", "exp": expire}
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 

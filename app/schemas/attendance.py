@@ -6,6 +6,10 @@ from decimal import Decimal
 
 
 class AttendanceBase(BaseModel):
+    """
+    Base attributes for workforce attendance records.
+    """
+
     user_id: UUID
     date: date
     status: str  # present, absent, half-day
@@ -32,10 +36,16 @@ class AttendanceBase(BaseModel):
 
 
 class AttendanceCreate(AttendanceBase):
-    pass
+    """
+    Schema for recording new attendance (Check-in or Manual entry).
+    """
 
 
 class AttendanceUpdate(BaseModel):
+    """
+    Schema for modifying existing attendance records (Check-out or Correction).
+    """
+
     status: Optional[str] = None
     check_in: Optional[datetime] = None
     check_out: Optional[datetime] = None
@@ -45,6 +55,10 @@ class AttendanceUpdate(BaseModel):
 
 
 class AttendanceResponse(AttendanceBase):
+    """
+    Data Transfer Object for attendance history and details.
+    """
+
     id: UUID
     recorded_by: UUID
     created_at: datetime

@@ -3,8 +3,12 @@ import concurrent.futures
 import time
 import uuid
 
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
+from app.core.config import settings
+
 # Reusing the nullpool thread safe db from earlier
-from tests.test_concurrency import _setup_thread_safe_db
+load_engine = create_engine(settings.DATABASE_URL, poolclass=NullPool)
 
 
 def _track_metrics(latencies, name="API"):
@@ -28,9 +32,8 @@ def _track_metrics(latencies, name="API"):
 
 def test_load_sales_api(auth_client: TestClient):
     """Stress test the core Sales creation endpoint."""
-    _setup_thread_safe_db(auth_client)
 
-    # Setup master constraints
+    # Setup master constraints using the main client
     customer_id = auth_client.post(
         "/customers/",
         json={"name": "Load Test Customer", "phone": f"111{uuid.uuid4().hex[:7]}"},
@@ -47,25 +50,34 @@ def test_load_sales_api(auth_client: TestClient):
 
     latencies = []
 
-    def fire_sale():
-        payload = {
-            "customer_id": customer_id,
-            "items": [{"item_id": item_id, "quantity": 1}],
-        }
-        start = time.time()
-        resp = auth_client.post("/sales/", json=payload)
-        t = time.time() - start
-        if resp.status_code == 200:
-            return t
-        return None
+    def run_worker(request_count):
+        # Fresh client per thread hitting the app directly
+        with TestClient(auth_client.app) as local_client:
+            local_client.headers = auth_client.headers
+            worker_latencies = []
+            for _ in range(request_count):
+                payload = {
+                    "customer_id": customer_id,
+                    "items": [{"item_id": item_id, "quantity": 1}],
+                }
+                start = time.time()
+                resp = local_client.post("/sales/", json=payload)
+                t = time.time() - start
+                if resp.status_code == 200:
+                    worker_latencies.append(t)
+                else:
+                    print(f"FAILED SALE: {resp.text}")
+            return worker_latencies
 
-    # Simulate 200 requests representing moderate load spikes
+    # Simulate 200 requests representing moderate load spikes among 20 workers
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(fire_sale) for _ in range(200)]
+        futures = [executor.submit(run_worker, 10) for _ in range(20)]
         for future in concurrent.futures.as_completed(futures):
             res = future.result()
-            if res is not None:
-                latencies.append(res)
+            if res:
+                latencies.extend(res)
 
-    assert len(latencies) > 180, "Too many failed requests during load test"
+    assert (
+        len(latencies) > 180
+    ), f"Too many failed requests during load test: {200 - len(latencies)} failed"
     _track_metrics(latencies, "Sales Create API")

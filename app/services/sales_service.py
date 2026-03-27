@@ -1,13 +1,18 @@
 import logging
+import time
+import uuid
 from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
+from sqlalchemy.exc import IntegrityError, InternalError
 from sqlalchemy.orm.exc import StaleDataError
+from sqlalchemy import text
 
-from app.models.item import Item
+from app.repositories.base import AbstractUnitOfWork
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
+from app.db.session import SessionLocal
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.schemas.sale import SaleCreate, SaleItemCreate
@@ -18,27 +23,36 @@ logger = logging.getLogger(__name__)
 
 
 def create_sale_transaction(
-    db: Session, sale_data: SaleCreate, current_user_id: UUID
+    uow: AbstractUnitOfWork, sale_data: SaleCreate, current_user_id: UUID
 ) -> Sale:
-    """Handles the business logic for creating a sale, verifying stock, and calculating GST."""
+    """
+    Execute a complex sale transaction with concurrency protection.
 
-    # 1. Idempotency Check
-    if sale_data.client_id:
-        existing_sale = (
-            db.query(Sale).filter(Sale.client_id == sale_data.client_id).first()
-        )
-        if existing_sale:
-            logger.info(
-                f"Duplicate sale request for client_id {sale_data.client_id}, returning existing sale {existing_sale.id}"
-            )
-            return existing_sale
+    This method performs the following:
+    1. Validates quantities and items.
+    2. Checks for idempotency using `client_id`.
+    3. Performs atomic database-level stock decrements with retries.
+    4. Calculates line totals, taxes (CGST/SGST), and grand totals.
+    5. Persists the sale and its items.
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+        sale_data (SaleCreate): Payload including items, discount, and payment info.
+        current_user_id (UUID): ID of the user creating the sale.
+
+    Returns:
+        Sale: The fully created and refreshed sale object.
+
+    Raises:
+        HTTPException: If stock is insufficient, items are missing, or a conflict persists.
+    """
 
     if not sale_data.items:
         raise HTTPException(
             status_code=400, detail="Sale must contain at least one item"
         )
 
-    # Group requested items
+    # Group requested items for validation
     item_requests: Dict[UUID, SaleItemCreate] = {}
     for item_data in sale_data.items:
         if item_data.quantity <= 0:
@@ -50,133 +64,168 @@ def create_sale_transaction(
         else:
             item_requests[item_data.item_id] = item_data
 
-    for attempt in range(3):
+    max_retries = 5
+    base_delay = 0.1
+
+    for attempt in range(max_retries):
+        # 1. Fresh session and UoW per attempt - CRITICAL for retry stability
+        session = SessionLocal()
+        local_uow = SQLAlchemyUnitOfWork(session)
+
         try:
-            with db.begin_nested():
-                # Fetch all items in a single query with row-level locks to prevent stock race conditions
-                item_ids = list(item_requests.keys())
-                items = (
-                    db.query(Item).filter(Item.id.in_(item_ids)).with_for_update().all()
+            # 2. Idempotency Check INSIDE transaction boundary
+            if sale_data.client_id:
+                existing_sale = local_uow.sales.get_by_client_id_eager(
+                    str(sale_data.client_id)
                 )
-                items_map = {item.id: item for item in items}
+                if existing_sale:
+                    logger.info(
+                        f"Duplicate sale found for client_id {sale_data.client_id}"
+                    )
+                    return existing_sale
 
-                # Verify all items exist
-                for item_id in item_ids:
-                    if item_id not in items_map:
+            # 3. Create Sale object (Wait to link items until they are validated)
+            new_sale = Sale(
+                id=uuid.uuid4(),
+                invoice_number=generate_invoice_number(session),
+                customer_id=sale_data.customer_id,
+                user_id=current_user_id,
+                client_id=sale_data.client_id,
+                order_type=sale_data.order_type,
+                discount=to_decimal(sale_data.discount),
+                payment_method=sale_data.payment_method,
+                payment_status=sale_data.payment_status,
+                order_status=sale_data.order_status,
+            )
+
+            # 4. Atomic Stock update and calculation preparation
+            sub_total = to_decimal(0)
+            tax_total = to_decimal(0)
+            sale_items = []
+
+            for item_id, req_data in item_requests.items():
+                # Perform atomic decrement at the database level to prevent lost updates
+                result = session.execute(
+                    text(
+                        "UPDATE items SET current_stock = current_stock - :qty "
+                        "WHERE id = :id AND current_stock >= :qty"
+                    ),
+                    {"qty": req_data.quantity, "id": item_id},
+                )
+
+                if result.rowcount == 0:
+                    # Conflict or insufficient stock - trigger retry or error
+                    item = local_uow.items.get_by_id(item_id)
+                    if not item:
                         raise HTTPException(
-                            status_code=404, detail=f"Item with ID {item_id} not found"
+                            status_code=404, detail=f"Item {item_id} not found"
                         )
 
-                try:
-                    with db.begin_nested():
-                        new_sale = Sale(
-                            invoice_number=generate_invoice_number(db),
-                            customer_id=sale_data.customer_id,
-                            user_id=current_user_id,
-                            client_id=sale_data.client_id,
-                            order_type=sale_data.order_type,
-                            discount=to_decimal(sale_data.discount),
-                            payment_method=sale_data.payment_method,
-                            payment_status=sale_data.payment_status,
-                            order_status=sale_data.order_status,
+                    # If stock is fine but update failed, it's a concurrency conflict
+                    if item.current_stock >= req_data.quantity:
+                        raise StaleDataError(
+                            f"Concurrency conflict on item {item.name}"
                         )
-                        db.add(new_sale)
-                        db.flush()
-                except IntegrityError as e:
-                    if "client_id" in str(e):
-                        existing_sale = (
-                            db.query(Sale)
-                            .filter(Sale.client_id == sale_data.client_id)
-                            .first()
-                        )
-                        if existing_sale:
-                            logger.info(
-                                f"Idempotency retry triggered. Returning existing sale {existing_sale.id}"
-                            )
-                            return existing_sale
-                    # If it's another constraint (though UUID makes this extremely rare), raise generic 409
+
                     raise HTTPException(
-                        status_code=409,
-                        detail="Database integrity collision occurred. Please verify your payload and try again.",
+                        status_code=400,
+                        detail=f"Insufficient stock for item '{item.name}'",
                     )
 
-                sub_total = to_decimal(0)
-                tax_total = to_decimal(0)
+                # Fetch item details for calculations after locking/updating
+                item = local_uow.items.get_by_id(item_id)
+                price_at_sale = to_decimal(item.selling_price)
+                gst_percent = to_decimal(item.gst_percent)
+                quantity = to_decimal(req_data.quantity)
 
-                for item_id, req_data in item_requests.items():
-                    item = items_map[item_id]
+                line_base = price_at_sale * quantity
+                line_tax = line_base * (gst_percent / to_decimal(100))
 
-                    current_stock = item.current_stock or 0
-                    if current_stock < req_data.quantity:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Insufficient stock for item '{item.name}'",
-                        )
+                sub_total += line_base
+                tax_total += line_tax
 
-                    # Deduct stock
-                    item.current_stock = current_stock - req_data.quantity
-
-                    price_at_sale = to_decimal(item.selling_price)
-                    gst_percent = to_decimal(item.gst_percent)
-                    quantity = to_decimal(req_data.quantity)
-
-                    line_base = price_at_sale * quantity
-                    line_tax = line_base * (gst_percent / to_decimal(100))
-                    cgst_amount = line_tax / to_decimal(2)
-                    sgst_amount = line_tax / to_decimal(2)
-                    line_total = line_base + line_tax
-
-                    sub_total += line_base
-                    tax_total += line_tax
-
-                    sale_item = SaleItem(
-                        sale_id=new_sale.id,
-                        item_id=item.id,
-                        quantity=req_data.quantity,
-                        price_at_sale=price_at_sale,
-                        gst_percent=gst_percent,
-                        cgst_amount=cgst_amount,
-                        sgst_amount=sgst_amount,
-                        total_price=line_total,
-                    )
-                    db.add(sale_item)
-
-                new_sale.sub_total = sub_total
-                new_sale.tax_total = tax_total
-                new_sale.total_amount = (
-                    sub_total + tax_total - to_decimal(sale_data.discount)
+                sale_item = SaleItem(
+                    id=uuid.uuid4(),
+                    sale_id=new_sale.id,  # Link by ID to avoid accidental relationship triggers during flush
+                    item_id=item.id,
+                    quantity=req_data.quantity,
+                    price_at_sale=price_at_sale,
+                    gst_percent=gst_percent,
+                    cgst_amount=line_tax / to_decimal(2),
+                    sgst_amount=line_tax / to_decimal(2),
+                    total_price=line_base + line_tax,
                 )
-                db.flush()
+                sale_items.append(sale_item)
 
-            # If we reached here, nested transactions successfully executed
-            db.commit()
-            db.refresh(new_sale)
-            logger.info(
-                f"Sale created: {new_sale.id} with invoice {new_sale.invoice_number}"
+            new_sale.sub_total = sub_total
+            new_sale.tax_total = tax_total
+            new_sale.total_amount = (
+                sub_total + tax_total - to_decimal(sale_data.discount)
             )
-            return new_sale
 
-        except StaleDataError:
-            db.rollback()
+            # 5. Attach items to relationship BEFORE commit
+            # This ensures they are all part of the same flush cycle
+            new_sale.items = sale_items
+
+            # 6. Add to session and commit
+            local_uow.sales.add(new_sale)
+            local_uow.commit()
+
+            # Success - return refreshed object
+            return local_uow.sales.get_by_id_eager(new_sale.id)
+
+        except (StaleDataError, InternalError, IntegrityError) as e:
+            # Handle potential concurrency issues with rollback and retry
+            local_uow.rollback()
             logger.warning(
-                f"StaleDataError caught attempting to evaluate volatile inventory logic on attempt {attempt+1}/3"
+                f"Transaction conflict on attempt {attempt + 1}/{max_retries}: {str(e)}"
             )
-            if attempt == 2:
+            if attempt == max_retries - 1:
                 raise HTTPException(
                     status_code=409,
-                    detail="High concurrency blocked sale due to volatile inventory. Please try again.",
+                    detail="High concurrency error. Please retry later.",
                 )
+
+            # Exponential backoff: sleep(2^attempt * base_delay)
+            time.sleep(base_delay * (2**attempt))
+
+        except HTTPException:
+            local_uow.rollback()
+            raise
+        except Exception as e:
+            local_uow.rollback()
+            logger.error(f"Unexpected error in create_sale_transaction: {str(e)}")
+            raise
+        finally:
+            # Always close session to prevent connection leaks
+            session.close()
 
 
 def get_all_sales(
-    db: Session,
+    uow: AbstractUnitOfWork,
     limit: int = 50,
     offset: int = 0,
     customer_id: Optional[UUID] = None,
     date: Optional[str] = None,
 ) -> List[Sale]:
-    """Retrieve paginated sales with optional filtering and eager loading of items."""
-    query = db.query(Sale).options(joinedload(Sale.items).joinedload(SaleItem.item))
+    """
+    Retrieve a list of sales with optional filtering and pagination.
+
+    Loads related items and item details efficiently (eager loading).
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work for database access.
+        limit (int): Maximum records to return.
+        offset (int): Records to skip.
+        customer_id (Optional[UUID]): Filter by customer.
+        date (Optional[str]): Filter by date (YYYY-MM-DD).
+
+    Returns:
+        List[Sale]: List of sale records.
+    """
+    query = uow.sales.session.query(Sale).options(
+        joinedload(Sale.items).joinedload(SaleItem.item)
+    )
 
     if customer_id:
         query = query.filter(Sale.customer_id == customer_id)
@@ -195,10 +244,19 @@ def get_all_sales(
     return sales
 
 
-def get_sale_by_id(db: Session, sale_id: UUID) -> Optional[Sale]:
-    """Retrieve a single sale by ID."""
+def get_sale_by_id(uow: AbstractUnitOfWork, sale_id: UUID) -> Optional[Sale]:
+    """
+    Retrieve a specific sale by its unique ID, including all line items.
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work for database access.
+        sale_id (UUID): Unique identifier of the sale.
+
+    Returns:
+        Optional[Sale]: The sale object with items, or None if not found.
+    """
     sale = (
-        db.query(Sale)
+        uow.sales.session.query(Sale)
         .options(joinedload(Sale.items).joinedload(SaleItem.item))
         .filter(Sale.id == sale_id)
         .first()
@@ -206,6 +264,15 @@ def get_sale_by_id(db: Session, sale_id: UUID) -> Optional[Sale]:
     return sale
 
 
-def get_sale_items_by_id(db: Session, sale_id: UUID) -> List[SaleItem]:
-    """Retrieve all items for a specific sale."""
-    return db.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()
+def get_sale_items_by_id(uow: AbstractUnitOfWork, sale_id: UUID) -> List[SaleItem]:
+    """
+    Retrieve only the line items associated with a specific sale.
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work for database access.
+        sale_id (UUID): Unique identifier of the sale.
+
+    Returns:
+        List[SaleItem]: List of items in the sale.
+    """
+    return uow.sales.session.query(SaleItem).filter(SaleItem.sale_id == sale_id).all()

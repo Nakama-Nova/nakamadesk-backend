@@ -6,6 +6,10 @@ from app.models.enums import UserRole
 
 
 class UserBase(BaseModel):
+    """
+    Base attributes for user accounts and profiles.
+    """
+
     username: str
     email: EmailStr
     full_name: Optional[str] = None
@@ -16,10 +20,18 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
+    """
+    Schema for creating a new user with a password.
+    """
+
     password: str
 
 
 class UserResponse(UserBase):
+    """
+    Data Transfer Object for user profile information.
+    """
+
     id: UUID
     created_at: datetime
 

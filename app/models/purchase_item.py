@@ -7,6 +7,13 @@ from app.db.base import Base
 
 
 class PurchaseItem(Base):
+    """
+    SQLAlchemy model for individual items in a purchase.
+
+    Links specific inventory items to a purchase record and stores
+    the unit price and quantity at the time of procurement.
+    """
+
     __tablename__ = "purchase_items"
 
     id = Column(

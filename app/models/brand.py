@@ -6,6 +6,13 @@ from app.db.base import Base
 
 
 class Brand(Base):
+    """
+    SQLAlchemy model for product brands.
+
+    Provides a simple registry for manufacturers or brand names to
+    categorize inventory items.
+    """
+
     __tablename__ = "brands"
 
     id = Column(

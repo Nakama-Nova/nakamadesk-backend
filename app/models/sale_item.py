@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class SaleItem(Base):
+    """
+    SQLAlchemy model for individual items in a sale.
+
+    Links inventory items to a sale record and captures the static price
+    and tax amounts at the time of the transaction.
+    """
+
     __tablename__ = "sale_items"
 
     id = Column(

@@ -36,7 +36,7 @@ def test_sales_and_gst_reports(auth_client: TestClient):
     assert sales_rep.status_code == 200
     sr_data = sales_rep.json()
     assert (
-        sr_data["total_sales"] >= 2
+        float(sr_data["total_sales"]) >= 2
     )  # could be more from other tests if DB not clean, but at least 2
     # Ensure current totals are incorporated
     assert float(sr_data["total_revenue"]) >= 5900.0

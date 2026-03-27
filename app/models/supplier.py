@@ -7,6 +7,13 @@ from app.db.base import Base
 
 
 class Supplier(Base):
+    """
+    SQLAlchemy model for suppliers/vendors.
+
+    Stores contact information, GSTIN, and address for entities from whom
+    the business procures materials or goods.
+    """
+
     __tablename__ = "suppliers"
 
     id = Column(

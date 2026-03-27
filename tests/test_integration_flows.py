@@ -108,7 +108,7 @@ def test_workforce_and_sales_flow(auth_client: TestClient, db):
     # 4. Check wages updated
     wages = auth_client.get(f"/wages/pending?user_id={worker.id}").json()
     assert len(wages) == 1
-    assert float(wages[0]["total_amount"]) == 500.0
+    assert float(wages[0]["amount"]) == 500.0
 
     # 5. Check dashboard reflects both missing wage and sales
     dash_data = auth_client.get("/dashboard/summary").json()

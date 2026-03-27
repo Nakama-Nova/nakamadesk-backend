@@ -8,6 +8,13 @@ from app.models.enums import UserRole
 
 
 class User(Base):
+    """
+    SQLAlchemy model for system users and workforce.
+
+    Manages authentication credentials, Role-Based Access Control (RBAC) levels,
+    and profile data for both administrative staff and field workers.
+    """
+
     __tablename__ = "users"
 
     id = Column(

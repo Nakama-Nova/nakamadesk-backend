@@ -13,7 +13,16 @@ INVOICES_DIR = os.path.join(BASE_DIR, "invoices")
 
 def generate_invoice_pdf(sale: Sale) -> str:
     """
-    Generates a PDF invoice for a given sale and returns the file path.
+    Generate a professional PDF invoice for a completed sale transaction.
+
+    The PDF includes company branding, customer details, line items with taxes,
+    and a summary of totals. Files are stored in the `invoices/` directory.
+
+    Args:
+        sale (Sale): The sale model instance containing transaction data and items.
+
+    Returns:
+        str: Absolute file path to the generated PDF document.
     """
     # Ensure directory exists
     os.makedirs(INVOICES_DIR, exist_ok=True)

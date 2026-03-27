@@ -16,3 +16,5 @@ pycodestyle==2.14.0
 pyflakes==3.4.0
 pytokens==0.4.1
 librt==0.8.1
+ruff==0.4.0
+pre-commit==3.7.0

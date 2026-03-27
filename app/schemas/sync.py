@@ -13,12 +13,20 @@ class SyncAction(str, Enum):
 
 
 class SaleItemPayload(BaseModel):
+    """
+    Schema for sale item data in a synchronization payload.
+    """
+
     product_id: UUID
     quantity: int
     price: Decimal
 
 
 class SalePayload(BaseModel):
+    """
+    Schema for sales transaction data in a synchronization payload.
+    """
+
     id: Optional[UUID] = None
     customer_id: UUID
     items: List[SaleItemPayload]
@@ -28,6 +36,10 @@ class SalePayload(BaseModel):
 
 
 class ItemPayload(BaseModel):
+    """
+    Schema for inventory item data in a synchronization payload.
+    """
+
     id: Optional[UUID] = None
     name: str
     sku: str
@@ -36,6 +48,10 @@ class ItemPayload(BaseModel):
 
 
 class AttendancePayload(BaseModel):
+    """
+    Schema for workforce attendance data in a synchronization payload.
+    """
+
     id: Optional[UUID] = None
     user_id: UUID
     date: date
@@ -47,6 +63,10 @@ class AttendancePayload(BaseModel):
 
 
 class SyncOperation(BaseModel):
+    """
+    Schema representing a single database operation for synchronization.
+    """
+
     id: str  # Client's local operation ID / client_id
     entity: str  # "sale", "item", "attendance", "raw_material"
     action: SyncAction
@@ -70,10 +90,18 @@ class SyncOperation(BaseModel):
 
 
 class SyncPushRequest(BaseModel):
+    """
+    Request schema for a batch of sync operations from a client.
+    """
+
     operations: List[SyncOperation]
 
 
 class SyncOperationResult(BaseModel):
+    """
+    Schema for describing the outcome of a single sync operation.
+    """
+
     client_id: str
     record_id: Optional[UUID] = None
     status: str
@@ -81,11 +109,19 @@ class SyncOperationResult(BaseModel):
 
 
 class SyncPushResponse(BaseModel):
+    """
+    Response schema summarizing the results of a batch sync push.
+    """
+
     success: List[SyncOperationResult]
     failed: List[SyncOperationResult]
 
 
 class SyncPullResponse(BaseModel):
+    """
+    Response schema providing new/updated data for client synchronization.
+    """
+
     items: List[Dict[str, Any]]
     sales: List[Dict[str, Any]]
     attendance: List[Dict[str, Any]]

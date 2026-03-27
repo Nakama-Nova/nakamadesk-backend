@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class BillOfMaterials(Base):
+    """
+    SQLAlchemy model representing the Bill of Materials (BOM) for an inventory item.
+
+    Defines the relationship between a finished product and its raw material components,
+    specifying the quantity and estimated wastage for production cost calculations.
+    """
+
     __tablename__ = "bill_of_materials"
 
     id = Column(

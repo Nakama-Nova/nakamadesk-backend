@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class DailyWage(Base):
+    """
+    SQLAlchemy model for daily wage records.
+
+    Tracks the calculated amount for a specific attendance record,
+    along with payment status and transaction references.
+    """
+
     __tablename__ = "daily_wages"
 
     id = Column(

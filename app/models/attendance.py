@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class Attendance(Base):
+    """
+    SQLAlchemy model for tracking workforce attendance.
+
+    Stores check-in and check-out times, calculates total working hours,
+    and links to the corresponding wage entry for the day.
+    """
+
     __tablename__ = "attendance"
 
     id = Column(

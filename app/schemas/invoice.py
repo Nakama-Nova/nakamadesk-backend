@@ -8,6 +8,10 @@ from app.schemas.customer import CustomerResponse
 
 
 class InvoiceItemResponse(BaseModel):
+    """
+    Schema for an itemized line entry within an invoice response.
+    """
+
     item_id: UUID
     item_name: str
     quantity: int
@@ -21,6 +25,10 @@ class InvoiceItemResponse(BaseModel):
 
 
 class InvoiceResponse(BaseModel):
+    """
+    Data Transfer Object for a complete invoice, including items and customer info.
+    """
+
     id: UUID
     invoice_number: str
     invoice_date: datetime

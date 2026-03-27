@@ -10,7 +10,8 @@ os.environ["ENV"] = "test"
 
 from app.main import app
 from app.db.base import Base
-from app.db.deps import get_db, get_current_user
+from app.db.deps import get_db, get_current_user, get_uow
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 from app.core.config import settings
 from app.models.user import User
 
@@ -56,7 +57,11 @@ def client(db):
         finally:
             pass
 
+    def override_get_uow():
+        yield SQLAlchemyUnitOfWork(db)
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_uow] = override_get_uow
     yield TestClient(app)
     app.dependency_overrides.clear()
 

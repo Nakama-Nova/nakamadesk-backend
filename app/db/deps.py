@@ -6,6 +6,9 @@ from app.core.security import verify_token, oauth2_scheme
 from app.models.user import User
 from app.models.enums import UserRole
 
+from app.repositories.base import AbstractUnitOfWork
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
+
 
 def get_db():
     db = SessionLocal()
@@ -15,15 +18,19 @@ def get_db():
         db.close()
 
 
+def get_uow(db: Session = Depends(get_db)):
+    return SQLAlchemyUnitOfWork(db)
+
+
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme), uow: AbstractUnitOfWork = Depends(get_uow)
 ) -> User:
     payload = verify_token(token)
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-    user = db.query(User).filter(User.id == user_id).first()
+    user = uow.users.get_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user

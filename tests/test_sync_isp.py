@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 from pydantic import ValidationError
 from uuid import uuid4, UUID
@@ -27,6 +28,11 @@ class MockUnitOfWork(AbstractUnitOfWork):
         self.committed = False
         self.rolled_back = False
         self.nested = False
+        self._session = MagicMock()
+
+    @property
+    def session(self):
+        return self._session
 
     def commit(self):
         self.committed = True
@@ -39,6 +45,9 @@ class MockUnitOfWork(AbstractUnitOfWork):
         return self
 
     def flush(self):
+        pass
+
+    def refresh(self, entity: Any):
         pass
 
 

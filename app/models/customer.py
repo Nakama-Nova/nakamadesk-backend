@@ -7,6 +7,13 @@ from app.db.base import Base
 
 
 class Customer(Base):
+    """
+    SQLAlchemy model for customer information.
+
+    Stores profile data, contact details, GSTIN, and classification (retail vs wholesale)
+    for both walk-in and registered customers.
+    """
+
     __tablename__ = "customers"
 
     id = Column(

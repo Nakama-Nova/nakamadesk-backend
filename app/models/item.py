@@ -1,6 +1,5 @@
 from sqlalchemy import (
     Column,
-    Float,
     String,
     Text,
     Boolean,
@@ -20,6 +19,13 @@ from app.db.base import Base
 
 
 class Item(Base):
+    """
+    SQLAlchemy model for inventory items.
+
+    Stores product details, pricing, stock levels, GST info, and production cost.
+    Uses version-based optimistic locking for concurrent stock updates.
+    """
+
     __tablename__ = "items"
 
     id = Column(

@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class Purchase(Base):
+    """
+    SQLAlchemy model for procurement transactions.
+
+    Tracks purchases from suppliers, including invoice details, totals,
+    and payment status.
+    """
+
     __tablename__ = "purchases"
 
     id = Column(

@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.db.deps import get_db, get_current_user
 from app.models.user import User
@@ -17,7 +17,18 @@ def push_sync_operations(
     db: Session = Depends(get_db),
 ):
     """
-    Client uploads its outbox. Backend processes sequentially in nested transactions.
+    Upload and process a batch of offline operations from the client outbox.
+
+    Operations are processed sequentially in nested transactions to maintain consistency.
+    Conflict resolution and idempotency are handled by the sync service.
+
+    Args:
+        request (SyncPushRequest): Payload containing a list of sync operations.
+        current_user (User): Authenticated user uploading the data.
+        db (Session): Database session.
+
+    Returns:
+        SyncPushResponse: Results of the processed operations, including any conflicts.
     """
     uow = SQLAlchemyUnitOfWork(db)
     return process_push_sync(uow, request.operations, current_user)
@@ -30,7 +41,15 @@ def pull_sync_updates(
     db: Session = Depends(get_db),
 ):
     """
-    Client pulls incremental updates mapped since `last_sync`.
+    Retrieve incremental updates from the server since the last successful sync.
+
+    Args:
+        last_sync (datetime): Timestamp of the client's last synchronization.
+        current_user (User): Authenticated user requesting updates.
+        db (Session): Database session.
+
+    Returns:
+        SyncPullResponse: List of updated records since `last_sync`.
     """
     uow = SQLAlchemyUnitOfWork(db)
     return pull_sync(uow, last_sync)

@@ -1,17 +1,17 @@
-from app.models.customer import Customer
-from app.models.item import Item
-from app.models.sale import Sale
-from app.models.sale_item import SaleItem
-from app.models.user import User
-from app.models.category import Category
-from app.models.brand import Brand
-from app.models.supplier import Supplier
-from app.models.purchase import Purchase
-from app.models.purchase_item import PurchaseItem
-from app.models.raw_material import RawMaterial
-from app.models.bom import BillOfMaterials
-from app.models.sync import SyncLog
-from app.models.attendance import Attendance
-from app.models.daily_wage import DailyWage
-from app.models.audit_log import AuditLog
-from app.models.price_history import RawMaterialPriceHistory
+from app.models.customer import Customer  # noqa: F401
+from app.models.item import Item  # noqa: F401
+from app.models.sale import Sale  # noqa: F401
+from app.models.sale_item import SaleItem  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.brand import Brand  # noqa: F401
+from app.models.supplier import Supplier  # noqa: F401
+from app.models.purchase import Purchase  # noqa: F401
+from app.models.purchase_item import PurchaseItem  # noqa: F401
+from app.models.raw_material import RawMaterial  # noqa: F401
+from app.models.bom import BillOfMaterials  # noqa: F401
+from app.models.sync import SyncLog  # noqa: F401
+from app.models.attendance import Attendance  # noqa: F401
+from app.models.daily_wage import DailyWage  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+from app.models.price_history import RawMaterialPriceHistory  # noqa: F401

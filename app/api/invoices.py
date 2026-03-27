@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 # from app.api.auth import get_current_user moved to deps
-from app.db.deps import get_db, get_current_user, check_role
+from app.db.deps import get_db, check_role
 from app.models.enums import UserRole
 from app.models.sale import Sale
 from app.models.user import User
@@ -23,6 +23,20 @@ def list_invoices(
     ),
     db: Session = Depends(get_db),
 ):
+    """
+    List all invoices with pagination.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        limit (int): Maximum number of invoices to return.
+        offset (int): Number of invoices to skip.
+        current_user (User): Authenticated user.
+        db (Session): Database session.
+
+    Returns:
+        List[InvoiceResponse]: List of invoices.
+    """
     return get_all_invoices(db, limit, offset)
 
 
@@ -34,6 +48,22 @@ def get_invoice(
     ),
     db: Session = Depends(get_db),
 ):
+    """
+    Retrieve a specific invoice by its invoice number.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        invoice_number (str): The unique invoice number.
+        current_user (User): Authenticated user.
+        db (Session): Database session.
+
+    Returns:
+        InvoiceResponse: Detailed invoice information.
+
+    Raises:
+        HTTPException: If invoice is not found.
+    """
     invoice = get_invoice_by_number(db, invoice_number)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -55,6 +85,22 @@ def get_invoice_pdf(
     ),
     db: Session = Depends(get_db),
 ):
+    """
+    Generate and retrieve the PDF version of a specific invoice.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        invoice_number (str): The unique invoice number.
+        current_user (User): Authenticated user.
+        db (Session): Database session.
+
+    Returns:
+        FileResponse: The generated PDF file.
+
+    Raises:
+        HTTPException: If invoice is not found or PDF generation fails.
+    """
     sale = db.query(Sale).filter(Sale.invoice_number == invoice_number).first()
     if not sale:
         raise HTTPException(status_code=404, detail="Invoice not found")

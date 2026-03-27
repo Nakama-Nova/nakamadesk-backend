@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -17,6 +18,11 @@ class MockUnitOfWork(AbstractUnitOfWork):
         self.sync_logs = MagicMock(spec=BaseRepository)
         self.committed = False
         self.rolled_back = False
+        self._session = MagicMock()
+
+    @property
+    def session(self):
+        return self._session
 
     def commit(self):
         self.committed = True
@@ -28,6 +34,9 @@ class MockUnitOfWork(AbstractUnitOfWork):
         return MagicMock()
 
     def flush(self):
+        pass
+
+    def refresh(self, entity: Any):
         pass
 
 

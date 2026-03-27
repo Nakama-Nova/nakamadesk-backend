@@ -28,6 +28,15 @@ from app.repositories.base import AbstractUnitOfWork
 
 
 def _get_model_class(entity: str):
+    """
+    Internal helper to map an entity name to its corresponding model class.
+
+    Args:
+        entity (str): Name of the entity (e.g., 'sale', 'item').
+
+    Returns:
+        Type: The SQLAlchemy model class or None.
+    """
     handler = SYNC_HANDLER_REGISTRY.get(entity)
     if handler:
         return handler.model_class
@@ -35,18 +44,30 @@ def _get_model_class(entity: str):
 
 
 class OperationValidator:
+    """Validator for incoming sync operations from clients."""
+
     @staticmethod
     def validate(op: SyncOperation) -> Optional[str]:
+        """
+        Validate that the sync operation is targeting a known entity.
+
+        Args:
+            op (SyncOperation): The operation to validate.
+
+        Returns:
+            Optional[str]: Error message if invalid, else None.
+        """
         if op.entity not in SYNC_HANDLER_REGISTRY:
             return f"Unknown entity: {op.entity}"
         return None
 
 
 class ConflictResolver(ABC):
+    """Abstract base class for resolving synchronization conflicts."""
+
     @abstractmethod
     def resolve(self, db_obj: Any, op: SyncOperation) -> bool:
         """Returns True if the update was applied."""
-        pass
 
 
 class LWWResolver(ConflictResolver):
@@ -107,6 +128,8 @@ def _get_resolver(entity: str) -> ConflictResolver:
 
 
 class BaseSyncHandler(ABC):
+    """Abstract base for handling entity-specific sync logic (CRUD)."""
+
     @abstractmethod
     def apply_create(
         self, uow: AbstractUnitOfWork, payload: Any, current_user: User
@@ -131,6 +154,12 @@ class BaseSyncHandler(ABC):
 
 
 class GenericSyncHandler(BaseSyncHandler):
+    """
+    Standard implementation for syncing most database entities.
+
+    Uses a repository-based approach to apply create, update, and delete actions.
+    """
+
     def __init__(self, model_class: Any, repo_name: str):
         self.model_class = model_class
         self.repo_name = repo_name
@@ -276,10 +305,23 @@ SYNC_HANDLER_REGISTRY = {
 
 
 class SyncExecutor:
+    """Executes validated sync operations using the appropriate handlers."""
+
     @staticmethod
     def execute(
         uow: AbstractUnitOfWork, op: SyncOperation, current_user: User
     ) -> Tuple[Optional[UUID], Optional[str]]:
+        """
+        Run a single sync operation within a nested transaction.
+
+        Args:
+            uow (AbstractUnitOfWork): Unit of Work.
+            op (SyncOperation): The sync operation (CREATE/UPDATE/DELETE).
+            current_user (User): The user performing the sync.
+
+        Returns:
+            Tuple[Optional[UUID], Optional[str]]: (record_id, error_message).
+        """
         handler = SYNC_HANDLER_REGISTRY.get(op.entity)
         if not handler:
             return None, f"Unsupported entity: {op.entity}"
@@ -300,6 +342,8 @@ class SyncExecutor:
 
 
 class SyncLogWriter:
+    """Records sync results into the audit log for idempotency and debugging."""
+
     @staticmethod
     def write(
         uow: AbstractUnitOfWork,
@@ -308,6 +352,16 @@ class SyncLogWriter:
         status: str,
         error: Optional[str],
     ):
+        """
+        Create or update a sync log entry for a client-side operation.
+
+        Args:
+            uow (AbstractUnitOfWork): Unit of Work.
+            op (SyncOperation): The client operation.
+            record_id (Optional[UUID]): ID of the record in the server database.
+            status (str): Outcome status (success/failed).
+            error (Optional[str]): Error details if failed.
+        """
         existing_log = uow.sync_logs.get_by_client_id(op.id)
         if not existing_log:
             uow.sync_logs.add(
@@ -356,10 +410,23 @@ class ResponseAggregator:
 
 
 class OperationDispatcher:
+    """Main entry point for processing batches of sync operations."""
+
     @staticmethod
     def dispatch(
         uow: AbstractUnitOfWork, operations: List[SyncOperation], current_user: User
     ) -> SyncPushResponse:
+        """
+        Process multiple sync operations, handling idempotency and validation.
+
+        Args:
+            uow (AbstractUnitOfWork): Unit of Work.
+            operations (List[SyncOperation]): Batch of client-side changes.
+            current_user (User): User pushing the changes.
+
+        Returns:
+            SyncPushResponse: Aggregated results of all operations.
+        """
         aggregator = ResponseAggregator()
         for op in operations:
             # 1. Idempotency Check
@@ -392,10 +459,34 @@ class OperationDispatcher:
 def process_push_sync(
     uow: AbstractUnitOfWork, operations: List[SyncOperation], current_user: User
 ) -> SyncPushResponse:
+    """
+    Public entry point for mobile clients to push offline changes.
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work.
+        operations (List[SyncOperation]): List of changes to apply.
+        current_user (User): Authenticated user.
+
+    Returns:
+        SyncPushResponse: Results for each operation in the batch.
+    """
     return OperationDispatcher.dispatch(uow, operations, current_user)
 
 
 def pull_sync(uow: AbstractUnitOfWork, last_sync: datetime) -> SyncPullResponse:
+    """
+    Retrieve all server-side changes since the client's last synchronization.
+
+    Enables clients to update their local database with new or modified records.
+
+    Args:
+        uow (AbstractUnitOfWork): Unit of Work.
+        last_sync (datetime): Timestamp of the last successful sync.
+
+    Returns:
+        SyncPullResponse: Dictionaries of changed items, sales, attendance, and materials.
+    """
+
     # helper row to dict
     def to_dict_list(rows):
         res = []
@@ -404,11 +495,13 @@ def pull_sync(uow: AbstractUnitOfWork, last_sync: datetime) -> SyncPullResponse:
             res.append(d)
         return res
 
-    items = uow.query(Item).filter(Item.updated_at > last_sync).all()
-    sales = uow.query(Sale).filter(Sale.updated_at > last_sync).all()
-    attendance = uow.query(Attendance).filter(Attendance.updated_at > last_sync).all()
+    items = uow.session.query(Item).filter(Item.updated_at > last_sync).all()
+    sales = uow.session.query(Sale).filter(Sale.updated_at > last_sync).all()
+    attendance = (
+        uow.session.query(Attendance).filter(Attendance.updated_at > last_sync).all()
+    )
     raw_materials = (
-        uow.query(RawMaterial).filter(RawMaterial.updated_at > last_sync).all()
+        uow.session.query(RawMaterial).filter(RawMaterial.updated_at > last_sync).all()
     )
 
     return SyncPullResponse(

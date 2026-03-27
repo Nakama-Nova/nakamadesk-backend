@@ -8,6 +8,10 @@ from app.core.constants import GST_ALLOWED
 
 
 class ItemBase(BaseModel):
+    """
+    Base attributes for inventory item records.
+    """
+
     sku: str
     name: str
     description: Optional[str] = None
@@ -26,6 +30,10 @@ class ItemBase(BaseModel):
 
 
 class ItemCreate(ItemBase):
+    """
+    Schema for adding a new item to the inventory.
+    """
+
     @field_validator("gst_percent")
     @classmethod
     def validate_gst(cls, v):
@@ -42,6 +50,10 @@ class ItemCreate(ItemBase):
 
 
 class ItemUpdate(BaseModel):
+    """
+    Schema for updating individual fields of an inventory item.
+    """
+
     sku: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
@@ -60,6 +72,10 @@ class ItemUpdate(BaseModel):
 
 
 class ItemResponse(ItemBase):
+    """
+    Data Transfer Object for inventory items in API responses.
+    """
+
     id: UUID
     version_id: int
     created_at: datetime

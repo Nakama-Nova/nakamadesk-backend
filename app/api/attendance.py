@@ -1,10 +1,10 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from datetime import date
 
-from app.db.deps import get_db, get_current_user, check_role
+from app.db.deps import get_uow, get_current_user, check_role
+from app.repositories.base import AbstractUnitOfWork
 from app.models.enums import UserRole
 from app.models.user import User
 from app.models.attendance import Attendance
@@ -18,16 +18,52 @@ from app.services import workforce_service
 router = APIRouter(prefix="/attendance", tags=["Workforce"])
 
 
+@router.post("/", response_model=AttendanceResponse)
+def mark_attendance(
+    attendance: AttendanceCreate,
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Mark attendance for a specific user.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        attendance (AttendanceCreate): Attendance data.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        AttendanceResponse: The created attendance record.
+    """
+    return workforce_service.mark_attendance(uow, attendance, current_user.id)
+
+
 @router.post("/check-in", response_model=AttendanceResponse)
 def check_in(
     user_id: UUID,
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    """Admin/Manager marks a user as checked in."""
-    return workforce_service.check_in(db, user_id, current_user.id)
+    """
+    Mark a user as checked in.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        user_id (UUID): ID of the user to check in.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        AttendanceResponse: The created attendance record.
+    """
+    return workforce_service.check_in(uow, user_id, current_user.id)
 
 
 @router.post("/check-out", response_model=AttendanceResponse)
@@ -36,19 +72,44 @@ def check_out(
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    """Admin/Manager marks a user as checked out."""
-    return workforce_service.check_out(db, attendance_id, current_user.id)
+    """
+    Mark a user as checked out.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        attendance_id (UUID): ID of the attendance record to check out.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        AttendanceResponse: The updated attendance record.
+    """
+    return workforce_service.check_out(uow, attendance_id, current_user.id)
 
 
 @router.get("/my", response_model=List[AttendanceResponse])
 def get_my_attendance(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    """Users view their own attendance records."""
-    return db.query(Attendance).filter(Attendance.user_id == current_user.id).all()
+    """
+    Retrieve attendance records for the currently authenticated user.
+
+    Args:
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        List[AttendanceResponse]: List of attendance records for the user.
+    """
+    return (
+        uow.attendance.session.query(Attendance)
+        .filter(Attendance.user_id == current_user.id)
+        .all()
+    )
 
 
 @router.get("/all", response_model=List[AttendanceResponse])
@@ -59,10 +120,24 @@ def get_all_attendance(
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    """Admin view all attendance records with filters."""
-    query = db.query(Attendance)
+    """
+    Retrieve all attendance records with optional filters.
+
+    RBAC: Restricted to OWNER, MANAGER, and SALES roles.
+
+    Args:
+        user_id (Optional[UUID]): Filter by user ID.
+        start_date (Optional[date]): Filter by start date.
+        end_date (Optional[date]): Filter by end date.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        List[AttendanceResponse]: List of attendance records matching the filters.
+    """
+    query = uow.attendance.session.query(Attendance)
     if user_id:
         query = query.filter(Attendance.user_id == user_id)
     if start_date:
@@ -77,9 +152,26 @@ def update_attendance_record(
     attendance_id: UUID,
     update_data: AttendanceUpdate,
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    db_attendance = workforce_service.update_attendance(db, attendance_id, update_data)
+    """
+    Update an existing attendance record.
+
+    RBAC: Restricted to OWNER and MANAGER roles.
+
+    Args:
+        attendance_id (UUID): ID of the attendance record to update.
+        update_data (AttendanceUpdate): Updated data.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
+
+    Returns:
+        AttendanceResponse: The updated attendance record.
+
+    Raises:
+        HTTPException: If attendance record is not found.
+    """
+    db_attendance = workforce_service.update_attendance(uow, attendance_id, update_data)
     if not db_attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
     return db_attendance

@@ -8,6 +8,13 @@ from app.db.base import Base
 
 
 class RawMaterial(Base):
+    """
+    SQLAlchemy model for raw materials.
+
+    Represents bulk resources (e.g., Timber) used in the manufacturing
+    of finished inventory items. Tracks stock levels and current pricing.
+    """
+
     __tablename__ = "raw_materials"
 
     id = Column(

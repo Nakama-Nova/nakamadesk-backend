@@ -6,6 +6,13 @@ from app.db.base import Base
 
 
 class Category(Base):
+    """
+    SQLAlchemy model for product categories.
+
+    Defines broad groupings for inventory (e.g., 'Timber', 'Hardware')
+    to aid in organization and reporting.
+    """
+
     __tablename__ = "categories"
 
     id = Column(
