@@ -3,10 +3,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import get_uow, check_role
-from app.repositories.base import AbstractUnitOfWork
+from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse
 from app.services.sales_service import (
     create_sale_transaction,

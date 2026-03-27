@@ -1,10 +1,11 @@
-from fastapi.testclient import TestClient
-from uuid import uuid4
 from datetime import datetime
-import pytest
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.user import User
+
 from app.models.sale import Sale
+from app.models.user import User
 
 
 def test_sync_invalid_action(auth_client: TestClient):

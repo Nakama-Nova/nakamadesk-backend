@@ -1,12 +1,13 @@
 from typing import List, Optional
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.db.deps import get_uow, get_current_user, check_role
-from app.repositories.base import AbstractUnitOfWork
+from app.db.deps import check_role, get_current_user, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.wage import WageResponse, WagePaymentRequest
+from app.repositories.base import AbstractUnitOfWork
+from app.schemas.wage import WagePaymentRequest, WageResponse
 from app.services import workforce_service
 
 router = APIRouter(prefix="/wages", tags=["Workforce"])

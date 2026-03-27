@@ -1,13 +1,15 @@
 from fastapi.testclient import TestClient
+
 from app.models.enums import UserRole
 
 
 def test_achari_cannot_create_sale(client: TestClient, db):
     # Setup Achari user
-    from app.models.user import User
+    import uuid
+
     from app.db.deps import get_current_user
     from app.main import app
-    import uuid
+    from app.models.user import User
 
     unique_id = uuid.uuid4().hex[:8]
     achari = User(
@@ -40,10 +42,11 @@ def test_achari_cannot_create_sale(client: TestClient, db):
 
 def test_worker_cannot_access_reports(client: TestClient, db):
     # Setup Worker user
-    from app.models.user import User
+    import uuid
+
     from app.db.deps import get_current_user
     from app.main import app
-    import uuid
+    from app.models.user import User
 
     unique_id = uuid.uuid4().hex[:8]
     worker = User(
@@ -70,10 +73,11 @@ def test_worker_cannot_access_reports(client: TestClient, db):
 
 def test_sales_can_create_sale(client: TestClient, db):
     # Setup Sales user
-    from app.models.user import User
+    import uuid
+
     from app.db.deps import get_current_user
     from app.main import app
-    import uuid
+    from app.models.user import User
 
     unique_id = uuid.uuid4().hex[:8]
     sales = User(
@@ -88,8 +92,9 @@ def test_sales_can_create_sale(client: TestClient, db):
     db.refresh(sales)
 
     # We also need a real item to avoid 404/validation errors in services
-    from app.models.item import Item
     import uuid
+
+    from app.models.item import Item
 
     item = Item(
         sku=f"SKU_{uuid.uuid4().hex[:6]}",
@@ -135,10 +140,11 @@ def test_owner_can_access_reports(auth_client: TestClient):
 def test_invalid_role_rejected(client: TestClient, db):
     # This is tricky because Pydantic might catch it first if we go through /auth/register
     # but let's test the dependency directly with a manually created user with bad role
-    from app.models.user import User
+    import uuid
+
     from app.db.deps import get_current_user
     from app.main import app
-    import uuid
+    from app.models.user import User
 
     unique_id = uuid.uuid4().hex[:8]
     bad_user = User(

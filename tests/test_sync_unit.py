@@ -1,12 +1,12 @@
+from datetime import datetime
 from typing import Any
-import pytest
 from unittest.mock import MagicMock
 from uuid import uuid4
-from datetime import datetime
-from app.services.sync_service import SyncExecutor
-from app.repositories.base import AbstractUnitOfWork, BaseRepository
-from app.schemas.sync import SyncOperation, SyncAction
+
 from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork, BaseRepository
+from app.schemas.sync import SyncAction, SyncOperation
+from app.services.sync_service import SyncExecutor
 
 
 class MockUnitOfWork(AbstractUnitOfWork):

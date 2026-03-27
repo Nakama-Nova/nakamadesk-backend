@@ -1,26 +1,26 @@
-from datetime import datetime
-import uuid
 import logging
+import uuid
 from abc import ABC, abstractmethod
-from typing import List, Optional, Tuple, Any
+from datetime import datetime
+from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
-logger = logging.getLogger(__name__)
-
-from app.models.sync import SyncLog
-from app.models.item import Item
-from app.models.sale import Sale
 from app.models.attendance import Attendance
+from app.models.item import Item
 from app.models.raw_material import RawMaterial
-from app.schemas.sync import (
-    SyncOperation,
-    SyncPushResponse,
-    SyncOperationResult,
-    SyncPullResponse,
-    SyncAction,
-)
+from app.models.sale import Sale
+from app.models.sync import SyncLog
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
+from app.schemas.sync import (
+    SyncAction,
+    SyncOperation,
+    SyncOperationResult,
+    SyncPullResponse,
+    SyncPushResponse,
+)
+
+logger = logging.getLogger(__name__)
 
 # Note: Ideally these handlers would dispatch to specific services (e.g. sales_service.create_sale)
 # But for outbox parsing dynamically with LWW conflicts, we construct them inline mapping here to avoid

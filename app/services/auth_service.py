@@ -1,9 +1,11 @@
+from typing import List
+
+from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from fastapi import HTTPException
+
 from app.models.user import User
 from app.schemas.user import UserCreate
-from typing import List
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

@@ -1,14 +1,17 @@
+import os
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 # from app.api.auth import get_current_user moved to deps
-from app.db.deps import get_db, check_role
+from app.db.deps import check_role, get_db
 from app.models.enums import UserRole
 from app.models.sale import Sale
 from app.models.user import User
 from app.schemas.invoice import InvoiceResponse
+from app.services.invoice_pdf_service import generate_invoice_pdf
 from app.services.invoice_service import get_all_invoices, get_invoice_by_number
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -68,13 +71,6 @@ def get_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
-
-
-import os
-
-from fastapi.responses import FileResponse
-
-from app.services.invoice_pdf_service import generate_invoice_pdf
 
 
 @router.get("/{invoice_number}/pdf")

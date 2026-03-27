@@ -1,11 +1,12 @@
+import logging
 from typing import List, Optional
 from uuid import UUID
-from fastapi import HTTPException
-from app.repositories.base import AbstractUnitOfWork
-from app.models.customer import Customer
-from app.schemas.customer import CustomerCreate
 
-import logging
+from fastapi import HTTPException
+
+from app.models.customer import Customer
+from app.repositories.base import AbstractUnitOfWork
+from app.schemas.customer import CustomerCreate
 
 logger = logging.getLogger(__name__)
 

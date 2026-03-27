@@ -1,6 +1,7 @@
-from fastapi.testclient import TestClient
 import concurrent.futures
 import time
+
+from fastapi.testclient import TestClient
 
 from tests.performance.test_load_sales import _track_metrics
 

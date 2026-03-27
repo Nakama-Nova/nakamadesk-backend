@@ -1,5 +1,6 @@
-from fastapi.testclient import TestClient
 import uuid
+
+from fastapi.testclient import TestClient
 
 
 def test_create_customer(auth_client: TestClient):

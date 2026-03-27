@@ -6,23 +6,22 @@ Initializes the FastAPI app, registers middleware, and includes all API routers.
 
 from fastapi import FastAPI
 
-from app.core.middleware import TimingMiddleware
-
 from app.api import (
+    attendance,
     auth,
+    bom,
     customers,
     dashboard,
     health,
     invoices,
     items,
+    raw_materials,
     reports,
     sales,
-    raw_materials,
-    bom,
-    attendance,
-    wages,
     sync,
+    wages,
 )
+from app.core.middleware import TimingMiddleware
 
 app = FastAPI(title="NakamaDesk API", version="0.1.0")
 

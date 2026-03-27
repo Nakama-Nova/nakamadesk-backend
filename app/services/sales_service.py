@@ -5,16 +5,16 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.orm import joinedload
-from sqlalchemy.exc import IntegrityError, InternalError
-from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError, InternalError
+from sqlalchemy.orm import joinedload
+from sqlalchemy.orm.exc import StaleDataError
 
-from app.repositories.base import AbstractUnitOfWork
-from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 from app.db.session import SessionLocal
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
+from app.repositories.base import AbstractUnitOfWork
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemCreate
 from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
@@ -184,7 +184,7 @@ def create_sale_transaction(
                 raise HTTPException(
                     status_code=409,
                     detail="High concurrency error. Please retry later.",
-                )
+                ) from e
 
             # Exponential backoff: sleep(2^attempt * base_delay)
             time.sleep(base_delay * (2**attempt))
@@ -232,6 +232,7 @@ def get_all_sales(
 
     if date:
         from datetime import datetime
+
         from sqlalchemy import func
 
         try:

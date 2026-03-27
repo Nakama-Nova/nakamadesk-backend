@@ -1,8 +1,10 @@
-from fastapi.testclient import TestClient
-from app.models.user import User
-from datetime import date, datetime, timedelta, timezone
-from uuid import uuid4
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
+
+from app.models.user import User
 
 
 def test_check_in_out_wage_flow(auth_client: TestClient, db):
@@ -72,10 +74,6 @@ def test_rbac_check_in_out(worker_client: TestClient):
 
 def test_my_attendance(worker_client: TestClient, db):
     # Setup: Create a record for the worker
-    from app.models.attendance import Attendance
-    from app.db.deps import (
-        get_current_user,
-    )  # This might be tricky in tests, use db directly
 
     # We need the worker's ID from the client context.
     # Usually the test setup handles this.

@@ -13,5 +13,7 @@ exclude = '''
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.ruff.lint]
 select = ["E", "F", "B", "I"]
-ignore = ["E501"] # Black handles line length
+ignore = ["E501", "B008"]

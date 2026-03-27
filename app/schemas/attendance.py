@@ -1,8 +1,9 @@
-from pydantic import BaseModel, ConfigDict, field_validator
-from uuid import UUID
 from datetime import date, datetime
-from typing import Optional
 from decimal import Decimal
+from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class AttendanceBase(BaseModel):

@@ -1,5 +1,6 @@
-from fastapi.testclient import TestClient
 from decimal import Decimal
+
+from fastapi.testclient import TestClient
 
 
 def test_manufacturing_flow(auth_client: TestClient):
@@ -63,7 +64,7 @@ def test_multi_material_bom_calculation(auth_client: TestClient):
     ).json()["id"]
 
     for m_id, qty, wst in zip(
-        mat_ids, ["5.00", "0.50", "0.20"], ["5.00", "0.00", "10.00"]
+        mat_ids, ["5.00", "0.50", "0.20"], ["5.00", "0.00", "10.00"], strict=False
     ):
         auth_client.post(
             "/bom/",

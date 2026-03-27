@@ -1,14 +1,15 @@
-from fastapi import APIRouter, Depends
 from datetime import date
-from sqlalchemy import func, case
 
-from app.db.deps import get_uow, check_role
-from app.repositories.base import AbstractUnitOfWork
-from app.models.enums import UserRole
-from app.models.user import User
-from app.services import analytics_service
+from fastapi import APIRouter, Depends
+from sqlalchemy import case, func
+
+from app.db.deps import check_role, get_uow
 from app.models.attendance import Attendance
+from app.models.enums import UserRole
 from app.models.item import Item
+from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork
+from app.services import analytics_service
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 

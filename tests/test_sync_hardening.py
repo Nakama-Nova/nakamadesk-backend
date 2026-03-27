@@ -1,7 +1,8 @@
-from fastapi.testclient import TestClient
-from uuid import uuid4
-from decimal import Decimal
 import time
+from decimal import Decimal
+from uuid import uuid4
+
+from fastapi.testclient import TestClient
 
 
 def test_sale_idempotency(auth_client: TestClient):

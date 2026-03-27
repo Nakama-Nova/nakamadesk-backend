@@ -1,12 +1,13 @@
-from app.repositories.base import AbstractUnitOfWork
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import List, Optional
+from uuid import UUID
+
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
 from app.schemas.wage import WagePaymentRequest
-from uuid import UUID
-from decimal import Decimal
-from datetime import datetime, timezone
-from typing import List, Optional
 
 
 def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:

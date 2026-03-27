@@ -1,20 +1,16 @@
-from fastapi.testclient import TestClient
 import concurrent.futures
 import uuid
-from app.db.deps import get_db
+from uuid import UUID
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-
-
-from app.services.sales_service import create_sale_transaction
 from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemCreate
-from sqlalchemy.orm import sessionmaker
-from app.db.session import SessionLocal
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-import time
-from uuid import UUID
+from app.services.sales_service import create_sale_transaction
 
 # For concurrency tests, we use a separate engine with NullPool
 # to ensure we don't hit pool exhaustion hangs

@@ -1,7 +1,9 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
-from uuid import UUID
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr
+
 from app.models.enums import UserRole
 
 

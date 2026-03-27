@@ -1,6 +1,10 @@
-from fastapi.testclient import TestClient
-from datetime import date
 import uuid
+from datetime import date
+
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models.user import User
 
 
 def test_sales_edge_cases(auth_client: TestClient):
@@ -63,10 +67,6 @@ def test_sales_edge_cases(auth_client: TestClient):
     assert (
         pass1.json()["id"] == pass2.json()["id"]
     )  # Safely returned existing record without throwing error or duplicating
-
-
-from app.models.user import User
-from sqlalchemy.orm import Session
 
 
 def test_workforce_edge_cases(auth_client: TestClient, db: Session):

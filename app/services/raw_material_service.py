@@ -1,10 +1,12 @@
+from uuid import UUID
+
 from sqlalchemy.orm import Session
-from app.models.raw_material import RawMaterial
-from app.models.price_history import RawMaterialPriceHistory
+
 from app.models.bom import BillOfMaterials
+from app.models.price_history import RawMaterialPriceHistory
+from app.models.raw_material import RawMaterial
 from app.schemas.raw_material import RawMaterialCreate, RawMaterialUpdate
 from app.services.bom_service import update_item_production_cost
-from uuid import UUID
 
 
 def create_raw_material(db: Session, material: RawMaterialCreate) -> RawMaterial:

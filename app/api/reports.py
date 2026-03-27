@@ -1,18 +1,19 @@
 from datetime import date
 from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 
-from app.db.deps import get_uow, check_role
-from app.repositories.base import AbstractUnitOfWork
+from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.report import (
-    SalesReportResponse,
-    TopProductResponse,
+    GSTSummaryResponse,
     InventoryReportResponse,
     ProfitLossResponse,
-    GSTSummaryResponse,
+    SalesReportResponse,
+    TopProductResponse,
 )
 from app.services import analytics_service
 

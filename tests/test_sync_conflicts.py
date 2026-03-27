@@ -1,8 +1,9 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from uuid import uuid4
+
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
 from app.models.item import Item
 from app.models.sale import Sale
 

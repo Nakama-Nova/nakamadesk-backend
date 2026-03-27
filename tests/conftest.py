@@ -1,4 +1,6 @@
 import os
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,12 +10,12 @@ from sqlalchemy.sql import text
 # Force ENV to test before any other imports
 os.environ["ENV"] = "test"
 
-from app.main import app
-from app.db.base import Base
-from app.db.deps import get_db, get_current_user, get_uow
-from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
-from app.core.config import settings
-from app.models.user import User
+from app.core.config import settings  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.db.deps import get_current_user, get_db, get_uow  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models.user import User  # noqa: E402
+from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork  # noqa: E402
 
 # Use the configured TEST_DATABASE_URL from settings
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
@@ -64,9 +66,6 @@ def client(db):
     app.dependency_overrides[get_uow] = override_get_uow
     yield TestClient(app)
     app.dependency_overrides.clear()
-
-
-import uuid
 
 
 @pytest.fixture

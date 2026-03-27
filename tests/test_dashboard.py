@@ -1,5 +1,6 @@
-from fastapi.testclient import TestClient
 from decimal import Decimal
+
+from fastapi.testclient import TestClient
 
 
 def test_get_dashboard_summary(auth_client: TestClient):

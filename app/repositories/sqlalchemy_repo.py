@@ -1,18 +1,19 @@
-from sqlalchemy.orm import Session
 from typing import Any, Optional, Type
 from uuid import UUID
-from app.repositories.base import BaseRepository, AbstractUnitOfWork
-from app.models.item import Item
-from app.models.sale import Sale
-from app.models.attendance import Attendance
-from app.models.raw_material import RawMaterial
-from app.models.sync import SyncLog
 
-from app.models.user import User
+from sqlalchemy.orm import Session
+
+from app.models.attendance import Attendance
 from app.models.customer import Customer
 from app.models.daily_wage import DailyWage
+from app.models.item import Item
 from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
+from app.models.raw_material import RawMaterial
+from app.models.sale import Sale
+from app.models.sync import SyncLog
+from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork, BaseRepository
 
 
 class SQLAlchemyRepository(BaseRepository):
@@ -66,6 +67,7 @@ class SaleRepository(SQLAlchemyRepository):
 
     def get_by_id_eager(self, sale_id: UUID) -> Optional[Sale]:
         from sqlalchemy.orm import joinedload
+
         from app.models.sale_item import SaleItem
 
         return (
@@ -80,6 +82,7 @@ class SaleRepository(SQLAlchemyRepository):
 
     def get_by_client_id_eager(self, client_id: str) -> Optional[Sale]:
         from sqlalchemy.orm import joinedload
+
         from app.models.sale_item import SaleItem
 
         return (

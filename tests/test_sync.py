@@ -1,6 +1,7 @@
-from fastapi.testclient import TestClient
-from datetime import datetime, timezone, timedelta
 import uuid
+from datetime import datetime, timedelta, timezone
+
+from fastapi.testclient import TestClient
 
 
 def test_push_sync_create_and_idempotency(auth_client: TestClient):

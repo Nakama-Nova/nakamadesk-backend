@@ -1,11 +1,13 @@
 from datetime import datetime
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.db.deps import get_db, get_current_user
+
+from app.db.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.sync import SyncPushRequest, SyncPushResponse, SyncPullResponse
-from app.services.sync_service import process_push_sync, pull_sync
 from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
+from app.schemas.sync import SyncPullResponse, SyncPushRequest, SyncPushResponse
+from app.services.sync_service import process_push_sync, pull_sync
 
 router = APIRouter(prefix="/sync", tags=["Offline Sync"])
 

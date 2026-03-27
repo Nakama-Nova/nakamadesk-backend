@@ -1,6 +1,7 @@
-from fastapi.testclient import TestClient
 import uuid
 from decimal import Decimal
+
+from fastapi.testclient import TestClient
 
 
 def test_create_sale_positive_flow(auth_client: TestClient):

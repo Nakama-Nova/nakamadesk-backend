@@ -1,10 +1,11 @@
 import uuid
-import pytest
+
 from fastapi.testclient import TestClient
-from app.models.enums import UserRole
-from app.models.user import User
+
 from app.db.deps import get_current_user
 from app.main import app
+from app.models.enums import UserRole
+from app.models.user import User
 
 
 def create_test_user(db, role: UserRole):

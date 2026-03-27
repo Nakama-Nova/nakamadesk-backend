@@ -1,10 +1,11 @@
-from fastapi.testclient import TestClient
 import concurrent.futures
 import time
 import uuid
 
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
+
 from app.core.config import settings
 
 # Reusing the nullpool thread safe db from earlier

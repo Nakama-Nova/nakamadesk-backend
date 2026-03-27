@@ -1,21 +1,19 @@
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
+from unittest.mock import MagicMock
+from uuid import UUID, uuid4
+
 import pytest
 from pydantic import ValidationError
-from uuid import uuid4, UUID
-from datetime import datetime, date
-from decimal import Decimal
+
+from app.models.user import User
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sync import (
-    SyncOperation,
     SyncAction,
-    SalePayload,
-    ItemPayload,
-    AttendancePayload,
+    SyncOperation,
 )
 from app.services.sync_service import SyncExecutor
-from app.repositories.base import AbstractUnitOfWork, BaseRepository
-from app.models.user import User
-
-from unittest.mock import MagicMock
 
 
 class MockUnitOfWork(AbstractUnitOfWork):

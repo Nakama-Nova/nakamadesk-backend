@@ -1,11 +1,12 @@
 from typing import List
+
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.session import SessionLocal
-from app.core.security import verify_token, oauth2_scheme
-from app.models.user import User
-from app.models.enums import UserRole
 
+from app.core.security import oauth2_scheme, verify_token
+from app.db.session import SessionLocal
+from app.models.enums import UserRole
+from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 
