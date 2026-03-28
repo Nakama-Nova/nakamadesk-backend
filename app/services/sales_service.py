@@ -10,11 +10,9 @@ from sqlalchemy.exc import IntegrityError, InternalError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import StaleDataError
 
-from app.db.session import SessionLocal
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.repositories.base import AbstractUnitOfWork
-from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemCreate
 from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
@@ -68,14 +66,10 @@ def create_sale_transaction(
     base_delay = 0.1
 
     for attempt in range(max_retries):
-        # 1. Fresh session and UoW per attempt - CRITICAL for retry stability
-        session = SessionLocal()
-        local_uow = SQLAlchemyUnitOfWork(session)
-
         try:
             # 2. Idempotency Check INSIDE transaction boundary
             if sale_data.client_id:
-                existing_sale = local_uow.sales.get_by_client_id_eager(
+                existing_sale = uow.sales.get_by_client_id_eager(
                     str(sale_data.client_id)
                 )
                 if existing_sale:
@@ -87,7 +81,7 @@ def create_sale_transaction(
             # 3. Create Sale object (Wait to link items until they are validated)
             new_sale = Sale(
                 id=uuid.uuid4(),
-                invoice_number=generate_invoice_number(session),
+                invoice_number=generate_invoice_number(uow.session),
                 customer_id=sale_data.customer_id,
                 user_id=current_user_id,
                 client_id=sale_data.client_id,
@@ -105,7 +99,7 @@ def create_sale_transaction(
 
             for item_id, req_data in item_requests.items():
                 # Perform atomic decrement at the database level to prevent lost updates
-                result = session.execute(
+                result = uow.session.execute(
                     text(
                         "UPDATE items SET current_stock = current_stock - :qty "
                         "WHERE id = :id AND current_stock >= :qty"
@@ -114,26 +108,24 @@ def create_sale_transaction(
                 )
 
                 if result.rowcount == 0:
-                    # Conflict or insufficient stock - trigger retry or error
-                    item = local_uow.items.get_by_id(item_id)
+                    # Conflict or insufficient stock - fetch latest to confirm
+                    item = uow.items.get_by_id(item_id)
                     if not item:
                         raise HTTPException(
                             status_code=404, detail=f"Item {item_id} not found"
                         )
 
-                    # If stock is fine but update failed, it's a concurrency conflict
-                    if item.current_stock >= req_data.quantity:
-                        raise StaleDataError(
-                            f"Concurrency conflict on item {item.name}"
+                    if item.current_stock < req_data.quantity:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Insufficient stock for item '{item.name}'",
                         )
 
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Insufficient stock for item '{item.name}'",
-                    )
+                    # If stock is fine but update failed, it's a concurrency conflict
+                    raise StaleDataError(f"Concurrency conflict on item {item.name}")
 
                 # Fetch item details for calculations after locking/updating
-                item = local_uow.items.get_by_id(item_id)
+                item = uow.items.get_by_id(item_id)
                 price_at_sale = to_decimal(item.selling_price)
                 gst_percent = to_decimal(item.gst_percent)
                 quantity = to_decimal(req_data.quantity)
@@ -146,7 +138,7 @@ def create_sale_transaction(
 
                 sale_item = SaleItem(
                     id=uuid.uuid4(),
-                    sale_id=new_sale.id,  # Link by ID to avoid accidental relationship triggers during flush
+                    sale_id=new_sale.id,
                     item_id=item.id,
                     quantity=req_data.quantity,
                     price_at_sale=price_at_sale,
@@ -163,42 +155,49 @@ def create_sale_transaction(
                 sub_total + tax_total - to_decimal(sale_data.discount)
             )
 
-            # 5. Attach items to relationship BEFORE commit
-            # This ensures they are all part of the same flush cycle
+            # 5. Attach items and persist
             new_sale.items = sale_items
-
-            # 6. Add to session and commit
-            local_uow.sales.add(new_sale)
-            local_uow.commit()
+            uow.sales.add(new_sale)
+            uow.commit()
 
             # Success - return refreshed object
-            return local_uow.sales.get_by_id_eager(new_sale.id)
+            return uow.sales.get_by_id_eager(new_sale.id)
 
         except (StaleDataError, InternalError, IntegrityError) as e:
             # Handle potential concurrency issues with rollback and retry
-            local_uow.rollback()
+            uow.rollback()
             logger.warning(
                 f"Transaction conflict on attempt {attempt + 1}/{max_retries}: {str(e)}"
             )
+
+            # If this was a UniqueViolation on client_id, a concurrent thread already
+            # created the sale. Re-query immediately to honor idempotency.
+            if sale_data.client_id and isinstance(e, IntegrityError):
+                try:
+                    existing_sale = uow.sales.get_by_client_id_eager(
+                        str(sale_data.client_id)
+                    )
+                    if existing_sale:
+                        return existing_sale
+                except Exception:
+                    pass  # Session might still be dirty; fall through to retry
+
             if attempt == max_retries - 1:
                 raise HTTPException(
                     status_code=409,
-                    detail="High concurrency error. Please retry later.",
+                    detail="High concurrency error after multiple retries. Please try again.",
                 ) from e
 
-            # Exponential backoff: sleep(2^attempt * base_delay)
+            # Exponential backoff
             time.sleep(base_delay * (2**attempt))
 
         except HTTPException:
-            local_uow.rollback()
+            uow.rollback()
             raise
         except Exception as e:
-            local_uow.rollback()
+            uow.rollback()
             logger.error(f"Unexpected error in create_sale_transaction: {str(e)}")
             raise
-        finally:
-            # Always close session to prevent connection leaks
-            session.close()
 
 
 def get_all_sales(

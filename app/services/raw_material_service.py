@@ -1,140 +1,147 @@
+from typing import List, Optional
 from uuid import UUID
-
-from sqlalchemy.orm import Session
 
 from app.models.bom import BillOfMaterials
 from app.models.price_history import RawMaterialPriceHistory
 from app.models.raw_material import RawMaterial
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.raw_material import RawMaterialCreate, RawMaterialUpdate
-from app.services.bom_service import update_item_production_cost
 
 
-def create_raw_material(db: Session, material: RawMaterialCreate) -> RawMaterial:
+def create_raw_material(
+    uow: AbstractUnitOfWork, material: RawMaterialCreate
+) -> RawMaterial:
     """
     Create a new raw material record and initialize its price history.
 
     Args:
-        db (Session): Database session.
-        material (RawMaterialCreate): Payload containing material name, unit, and price.
+        uow (AbstractUnitOfWork): Unit of Work.
+        material (RawMaterialCreate): Payload containing material details.
 
     Returns:
         RawMaterial: The newly created material object.
     """
-    db_material = RawMaterial(**material.model_dump())
-    db.add(db_material)
-    db.commit()
-    db.refresh(db_material)
+    with uow:
+        db_material = RawMaterial(**material.model_dump())
+        uow.raw_materials.add(db_material)
+        uow.flush()
 
-    # Initial price history
-    history = RawMaterialPriceHistory(
-        material_id=db_material.id, price=db_material.current_price, source="MANUAL"
-    )
-    db.add(history)
-    db.commit()
+        # Initial price history
+        history = RawMaterialPriceHistory(
+            material_id=db_material.id, price=db_material.current_price, source="MANUAL"
+        )
+        uow.session.add(history)
+        uow.commit()
 
+    uow.refresh(db_material)
     return db_material
 
 
-def get_raw_materials(db: Session, skip: int = 0, limit: int = 100):
+def get_raw_materials(
+    uow: AbstractUnitOfWork, skip: int = 0, limit: int = 100
+) -> List[RawMaterial]:
     """
     Retrieve a list of all raw materials with pagination.
 
     Args:
-        db (Session): Database session.
-        skip (int): Number of records to skip.
-        limit (int): Maximum number of records to return.
+        uow (AbstractUnitOfWork): Unit of Work.
+        skip (int): Records to skip.
+        limit (int): Maximum records to return.
 
     Returns:
-        List[RawMaterial]: List of raw material records.
+        List[RawMaterial]: List of records.
     """
-    return db.query(RawMaterial).offset(skip).limit(limit).all()
+    return uow.raw_materials.session.query(RawMaterial).offset(skip).limit(limit).all()
 
 
-def get_raw_material(db: Session, material_id: UUID) -> RawMaterial:
+def get_raw_material(
+    uow: AbstractUnitOfWork, material_id: UUID
+) -> Optional[RawMaterial]:
     """
     Retrieve a single raw material by its unique identifier.
 
     Args:
-        db (Session): Database session.
-        material_id (UUID): Unique ID of the raw material.
+        uow (AbstractUnitOfWork): Unit of Work.
+        material_id (UUID): ID of the material.
 
     Returns:
-        RawMaterial: The material record, or None if not found.
+        Optional[RawMaterial]: The material record, or None if not found.
     """
-    return db.query(RawMaterial).filter(RawMaterial.id == material_id).first()
+    return uow.raw_materials.get_by_id(material_id)
 
 
 def update_raw_material(
-    db: Session, material_id: UUID, material_update: RawMaterialUpdate
-) -> RawMaterial:
+    uow: AbstractUnitOfWork, material_id: UUID, material_update: RawMaterialUpdate
+) -> Optional[RawMaterial]:
     """
-    Update a raw material's attributes and handle price changes.
-
-    If the price has changed, it records a new entry in price history
-    and triggers an update for all items whose production cost depends
-    on this material.
+    Update a raw material's attributes and handle price history tracking.
 
     Args:
-        db (Session): Database session.
-        material_id (UUID): ID of the material to update.
+        uow (AbstractUnitOfWork): Unit of Work.
+        material_id (UUID): ID of the material.
         material_update (RawMaterialUpdate): Updated fields.
 
     Returns:
-        RawMaterial: The updated material object.
+        Optional[RawMaterial]: Updated record.
     """
-    db_material = get_raw_material(db, material_id)
-    if not db_material:
-        return None
+    from app.services.bom_service import update_item_production_cost
 
-    update_data = material_update.model_dump(exclude_unset=True)
+    with uow:
+        db_material = uow.raw_materials.get_by_id(material_id)
+        if not db_material:
+            return None
 
-    price_changed = False
-    if (
-        "current_price" in update_data
-        and update_data["current_price"] != db_material.current_price
-    ):
-        price_changed = True
+        update_data = material_update.model_dump(exclude_unset=True)
+        price_changed = False
 
-    for key, value in update_data.items():
-        setattr(db_material, key, value)
+        if (
+            "current_price" in update_data
+            and update_data["current_price"] != db_material.current_price
+        ):
+            price_changed = True
 
-    db.commit()
-    db.refresh(db_material)
+        for key, value in update_data.items():
+            setattr(db_material, key, value)
 
-    if price_changed:
-        history = RawMaterialPriceHistory(
-            material_id=db_material.id, price=db_material.current_price, source="MANUAL"
-        )
-        db.add(history)
-        db.commit()
+        if price_changed:
+            history = RawMaterialPriceHistory(
+                material_id=db_material.id,
+                price=db_material.current_price,
+                source="MANUAL",
+            )
+            uow.session.add(history)
 
-        # Update all items that use this material
-        affected_items = (
-            db.query(BillOfMaterials.item_id)
-            .filter(BillOfMaterials.material_id == material_id)
-            .distinct()
-            .all()
-        )
-        for (item_id,) in affected_items:
-            update_item_production_cost(db, item_id)
+            # Update all items that use this material
+            affected_items = (
+                uow.session.query(BillOfMaterials.item_id)
+                .filter(BillOfMaterials.material_id == material_id)
+                .distinct()
+                .all()
+            )
+            for (item_id,) in affected_items:
+                update_item_production_cost(uow, item_id)
 
+        uow.commit()
+
+    uow.refresh(db_material)
     return db_material
 
 
-def delete_raw_material(db: Session, material_id: UUID) -> bool:
+def delete_raw_material(uow: AbstractUnitOfWork, material_id: UUID) -> bool:
     """
-    Delete a raw material from the system.
+    Delete a raw material record.
 
     Args:
-        db (Session): Database session.
-        material_id (UUID): Unique ID of the material to delete.
+        uow (AbstractUnitOfWork): Unit of Work.
+        material_id (UUID): ID to delete.
 
     Returns:
-        bool: True if deleted successfully, False if not found.
+        bool: True if deleted.
     """
-    db_material = get_raw_material(db, material_id)
-    if not db_material:
-        return False
-    db.delete(db_material)
-    db.commit()
+    with uow:
+        db_material = uow.raw_materials.get_by_id(material_id)
+        if not db_material:
+            return False
+        uow.raw_materials.delete(db_material)
+        uow.commit()
     return True

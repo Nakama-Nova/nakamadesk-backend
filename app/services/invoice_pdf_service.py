@@ -37,7 +37,10 @@ def generate_invoice_pdf(sale: Sale) -> str:
 
     # --- Header ---
     title_style = ParagraphStyle(
-        "MainTitle", parent=styles["Heading1"], alignment=1, spaceAfter=5  # Center
+        "MainTitle",
+        parent=styles["Heading1"],
+        alignment=1,
+        spaceAfter=5,  # Center
     )
     subtitle_style = ParagraphStyle(
         "SubTitle", parent=styles["Heading2"], alignment=1, spaceAfter=20
@@ -125,7 +128,9 @@ def generate_invoice_pdf(sale: Sale) -> str:
 
     # --- Footer (Totals) ---
     right_align_style = ParagraphStyle(
-        "RightAlign", parent=styles["Normal"], alignment=2  # Right
+        "RightAlign",
+        parent=styles["Normal"],
+        alignment=2,  # Right
     )
     elements.append(
         Paragraph(f"<b>CGST Total:</b> Rs. {total_cgst:.2f}", right_align_style)

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock
@@ -63,7 +63,7 @@ def test_valid_item_payload_processed_successfully():
         entity="item",
         action=SyncAction.CREATE,
         payload=payload,
-        updated_at=datetime.now(),
+        updated_at=datetime.now(timezone.utc),
     )
     # Mock repository behavior
     uow.items.get_by_id_scoped = lambda rid, uid: None
@@ -89,5 +89,5 @@ def test_invalid_sale_payload_raises_validation_error():
             entity="sale",
             action=SyncAction.CREATE,
             payload=payload,
-            updated_at=datetime.now(),
+            updated_at=datetime.now(timezone.utc),
         )

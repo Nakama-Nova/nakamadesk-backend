@@ -72,8 +72,18 @@ class ConflictResolver(ABC):
 
 class LWWResolver(ConflictResolver):
     def resolve(self, db_obj: Any, op: SyncOperation) -> bool:
-        local_op_time = op.updated_at.astimezone(None).replace(tzinfo=None)
-        if db_obj.updated_at and local_op_time < db_obj.updated_at:
+        # Client timestamp (SyncOperation and Pydantic handle TZ if provided)
+        # Ensure it's treated as UTC (Issue #9)
+        from datetime import timezone
+
+        local_op_time = op.updated_at.astimezone(timezone.utc)
+        db_updated_at = db_obj.updated_at
+
+        # Ensure db_updated_at is timezone-aware if it's not (SQLAlchemy might return naive UTC)
+        if db_updated_at and not db_updated_at.tzinfo:
+            db_updated_at = db_updated_at.replace(tzinfo=timezone.utc)
+
+        if db_updated_at and local_op_time < db_updated_at:
             return False
 
         payload_data = (
@@ -91,8 +101,15 @@ class LWWResolver(ConflictResolver):
 class StockDeltaResolver(ConflictResolver):
     def resolve(self, db_obj: Any, op: SyncOperation) -> bool:
         # Stock updates apply delta; other fields use LWW
-        local_op_time = op.updated_at.astimezone(None).replace(tzinfo=None)
-        is_newer = not db_obj.updated_at or local_op_time >= db_obj.updated_at
+        from datetime import timezone
+
+        local_op_time = op.updated_at.astimezone(timezone.utc)
+        db_updated_at = db_obj.updated_at
+
+        if db_updated_at and not db_updated_at.tzinfo:
+            db_updated_at = db_updated_at.replace(tzinfo=timezone.utc)
+
+        is_newer = not db_updated_at or local_op_time >= db_updated_at
 
         payload_data = (
             op.payload.model_dump(exclude_unset=True)
@@ -103,10 +120,8 @@ class StockDeltaResolver(ConflictResolver):
             if key in ["id", "user_id", "recorded_by"]:
                 continue
             if key == "current_stock":
-                # item.current_stock is Integer
                 db_obj.current_stock = getattr(db_obj, "current_stock", 0) + int(value)
             elif key == "stock":
-                # raw_material.stock is Numeric
                 from app.utils.money import to_decimal
 
                 db_obj.stock = to_decimal(getattr(db_obj, "stock", 0)) + to_decimal(
@@ -132,7 +147,11 @@ class BaseSyncHandler(ABC):
 
     @abstractmethod
     def apply_create(
-        self, uow: AbstractUnitOfWork, payload: Any, current_user: User
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
     ) -> Tuple[Optional[UUID], Optional[str]]:
         pass
 
@@ -168,7 +187,11 @@ class GenericSyncHandler(BaseSyncHandler):
         return getattr(uow, self.repo_name)
 
     def apply_create(
-        self, uow: AbstractUnitOfWork, payload: Any, current_user: User
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional[SyncOperation] = None,
     ) -> Tuple[Optional[UUID], Optional[str]]:
         # Convert payload to dict if it's a Pydantic model
         payload_data = (
@@ -200,6 +223,8 @@ class GenericSyncHandler(BaseSyncHandler):
         # This prevents issues with relationships like 'items' being passed as dicts
         valid_columns = {c.name for c in self.model_class.__table__.columns}
         filtered_data = {k: v for k, v in obj_data.items() if k in valid_columns}
+        # Capture the op timestamp so the client's time is stored (makes LWW deterministic)
+        op_updated_at = op.updated_at if op is not None else None
 
         existing_obj = (
             repo.get_by_id_scoped(record_id, current_user.id)
@@ -208,6 +233,13 @@ class GenericSyncHandler(BaseSyncHandler):
         )
         if not existing_obj:
             new_obj = self.model_class(**filtered_data)
+            # Persist the client's timestamp so future LWW comparisons are deterministic
+            if hasattr(new_obj, "updated_at") and op_updated_at is not None:
+                from datetime import timezone as _tz
+
+                new_obj.updated_at = op_updated_at.astimezone(_tz.utc).replace(
+                    tzinfo=None
+                )
             repo.add(new_obj)
             uow.flush()
         return record_id, None
@@ -243,6 +275,13 @@ class GenericSyncHandler(BaseSyncHandler):
 
         resolver = _get_resolver(op.entity)
         if resolver.resolve(db_obj, op):
+            # Stamp the server record with the client's winning timestamp
+            if hasattr(db_obj, "updated_at"):
+                from datetime import timezone
+
+                db_obj.updated_at = op.updated_at.astimezone(timezone.utc).replace(
+                    tzinfo=None
+                )
             uow.flush()
 
         return record_id, None
@@ -329,7 +368,7 @@ class SyncExecutor:
         try:
             with uow.begin_nested():
                 if op.action == SyncAction.CREATE:
-                    return handler.apply_create(uow, op.payload, current_user)
+                    return handler.apply_create(uow, op.payload, current_user, op)
                 elif op.action == SyncAction.UPDATE:
                     return handler.apply_update(uow, op.payload, current_user, op)
 
@@ -473,35 +512,80 @@ def process_push_sync(
     return OperationDispatcher.dispatch(uow, operations, current_user)
 
 
-def pull_sync(uow: AbstractUnitOfWork, last_sync: datetime) -> SyncPullResponse:
+def pull_sync(
+    uow: AbstractUnitOfWork,
+    last_sync: datetime,
+    limit: int = 100,
+    offset: int = 0,
+) -> SyncPullResponse:
     """
-    Retrieve all server-side changes since the client's last synchronization.
+    Retrieve incremental updates from the server since the client's last synchronization.
 
     Enables clients to update their local database with new or modified records.
+    Uses eager loading (joinedload) to prevent N+1 queries for sales items.
 
     Args:
         uow (AbstractUnitOfWork): Unit of Work.
         last_sync (datetime): Timestamp of the last successful sync.
+        limit (int): Maximum records per entity.
+        offset (int): Records to skip.
 
     Returns:
         SyncPullResponse: Dictionaries of changed items, sales, attendance, and materials.
     """
+    # Enforce global max limit for stability
+    limit = min(limit, 100)
 
     # helper row to dict
     def to_dict_list(rows):
         res = []
         for r in rows:
+            # Basic columns
             d = {c.name: getattr(r, c.name) for c in r.__table__.columns}
+
+            # Handle nested relationships if they exist (e.g. Sale -> items)
+            if isinstance(r, Sale):
+                d["items"] = []
+                for item in r.items:
+                    item_dict = {
+                        c.name: getattr(item, c.name) for c in item.__table__.columns
+                    }
+                    d["items"].append(item_dict)
+
             res.append(d)
         return res
 
-    items = uow.session.query(Item).filter(Item.updated_at > last_sync).all()
-    sales = uow.session.query(Sale).filter(Sale.updated_at > last_sync).all()
+    # Optimization: Use joinedload to fetch sale items in a single hit (Issue #15)
+    from sqlalchemy.orm import joinedload
+
+    items = (
+        uow.session.query(Item)
+        .filter(Item.updated_at > last_sync)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    sales = (
+        uow.session.query(Sale)
+        .options(joinedload(Sale.items))
+        .filter(Sale.updated_at > last_sync)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
     attendance = (
-        uow.session.query(Attendance).filter(Attendance.updated_at > last_sync).all()
+        uow.session.query(Attendance)
+        .filter(Attendance.updated_at > last_sync)
+        .limit(limit)
+        .offset(offset)
+        .all()
     )
     raw_materials = (
-        uow.session.query(RawMaterial).filter(RawMaterial.updated_at > last_sync).all()
+        uow.session.query(RawMaterial)
+        .filter(RawMaterial.updated_at > last_sync)
+        .limit(limit)
+        .offset(offset)
+        .all()
     )
 
     return SyncPullResponse(

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -22,7 +22,7 @@ def test_sync_invalid_action(auth_client: TestClient):
                     "total_amount": 0.0,
                     "payment_method": "cash",
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
     }
@@ -41,7 +41,7 @@ def test_sync_unknown_entity(auth_client: TestClient):
                 "entity": "non_existent_entity",
                 "action": "create",
                 "payload": {"id": str(uuid4())},
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
     }
@@ -92,7 +92,7 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
                     "total_amount": 200.0,
                     "payment_method": "card",
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
     }
@@ -142,7 +142,7 @@ def test_sync_cross_user_delete_restriction(db: Session, worker_client: TestClie
                     "total_amount": 100.0,
                     "payment_method": "cash",
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
     }

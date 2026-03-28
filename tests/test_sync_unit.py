@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -56,7 +56,7 @@ def test_sync_executor_create_calls_repository():
             "total_amount": 100.0,
             "payment_method": "cash",
         },
-        updated_at=datetime.now(),
+        updated_at=datetime.now(timezone.utc),
     )
 
     # Mock repository behavior
@@ -79,7 +79,7 @@ def test_sync_executor_update_calls_repository():
     # Mock existing object
     mock_sale = MagicMock()
     mock_sale.id = record_id
-    mock_sale.updated_at = datetime.now()
+    mock_sale.updated_at = datetime.now(timezone.utc)
     uow.sales.get_by_id_scoped.return_value = mock_sale
 
     op = SyncOperation(
@@ -93,7 +93,9 @@ def test_sync_executor_update_calls_repository():
             "total_amount": 200.0,
             "payment_method": "card",
         },
-        updated_at=datetime.now(),  # Newer by default in this test setup if we don't fix times
+        updated_at=datetime.now(
+            timezone.utc
+        ),  # Newer by default in this test setup if we don't fix times
     )
 
     record_id_res, error = SyncExecutor.execute(uow, op, user)

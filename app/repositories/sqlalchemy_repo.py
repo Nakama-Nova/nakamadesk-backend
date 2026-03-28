@@ -181,17 +181,11 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
                 raise
 
     def rollback(self):
-        """Rolls back the current transaction safely if the session is active."""
-        if self._session.is_active:
-            try:
-                if self._session.in_transaction():
-                    self._session.rollback()
-                else:
-                    # If not in transaction but active, we might still want to ensure a clean state
-                    self._session.expire_all()
-            except Exception:
-                # Silent failure on rollback as we are likely already handling an exception
-                pass
+        """Rolls back the current transaction unconditionally. SQLAlchemy handles redundant rollbacks safely."""
+        try:
+            self._session.rollback()
+        except Exception:
+            pass
 
     def reset(self):
         """

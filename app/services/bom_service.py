@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.bom import BillOfMaterials
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.bom import BOMCreate, BOMResponse
 
 
@@ -153,18 +154,22 @@ def calculate_item_cost(db: Session, item_id: UUID) -> dict:
     }
 
 
-def update_item_production_cost(db: Session, item_id: UUID):
+def update_item_production_cost(db, item_id: UUID):
     """
     Recalculate and update the production cost stored on an item.
 
     Fetches current BOM data and updates the `production_cost` field of the item.
+    Accepts either a raw SQLAlchemy Session or a SQLAlchemyUnitOfWork.
 
     Args:
-        db (Session): Database session.
+        db: Database session or Unit of Work.
         item_id (UUID): Unique ID of the item to update.
     """
-    cost_data = calculate_item_cost(db, item_id)
-    item = db.query(Item).filter(Item.id == item_id).first()
+    session = db.session if isinstance(db, AbstractUnitOfWork) else db
+    cost_data = calculate_item_cost(session, item_id)
+    item = session.query(Item).filter(Item.id == item_id).first()
     if item:
         item.production_cost = cost_data["total_cost"]
-        db.commit()
+        # If called with a UoW, commit is the caller's responsibility (already committed)
+        if not isinstance(db, AbstractUnitOfWork):
+            db.commit()

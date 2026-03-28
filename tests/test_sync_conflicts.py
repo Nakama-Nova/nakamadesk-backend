@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -20,7 +20,7 @@ def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
     customer_id = cust_resp.json()["id"]
 
     # 1. Create a sale via sync first (ensures correct user ownership)
-    initial_time = datetime.now() - timedelta(minutes=10)
+    initial_time = datetime.now(timezone.utc) - timedelta(minutes=10)
     create_payload = {
         "operations": [
             {
@@ -41,7 +41,7 @@ def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
     auth_client.post("/sync/push", json=create_payload)
 
     # 2. Push a newer update
-    newer_time = datetime.now()
+    newer_time = datetime.now(timezone.utc)
     update_payload = {
         "operations": [
             {
@@ -69,7 +69,7 @@ def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
 def test_conflict_lww_older_ignored(auth_client: TestClient, db: Session):
     """Test that an older timestamp update is ignored (LWW)."""
     sale_id = str(uuid4())
-    current_time = datetime.now()
+    current_time = datetime.now(timezone.utc)
 
     # 0. Create a customer to satisfy FK constraint
     cust_resp = auth_client.post(
@@ -143,7 +143,7 @@ def test_conflict_stock_delta(auth_client: TestClient, db: Session):
                     "selling_price": 10.0,
                     "current_stock": 10,
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
         ]
     }
@@ -163,7 +163,7 @@ def test_conflict_stock_delta(auth_client: TestClient, db: Session):
                     "selling_price": 10.0,
                     "current_stock": 5,
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             {
                 "id": str(uuid4()),
@@ -176,7 +176,7 @@ def test_conflict_stock_delta(auth_client: TestClient, db: Session):
                     "selling_price": 10.0,
                     "current_stock": 3,
                 },
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             },
         ]
     }

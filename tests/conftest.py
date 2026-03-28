@@ -60,7 +60,11 @@ def client(db):
             pass
 
     def override_get_uow():
-        yield SQLAlchemyUnitOfWork(db)
+        session = TestingSessionLocal()
+        try:
+            yield SQLAlchemyUnitOfWork(session)
+        finally:
+            session.close()
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_uow] = override_get_uow

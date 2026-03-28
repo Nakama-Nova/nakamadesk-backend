@@ -1,30 +1,16 @@
 """initial clean schema
 
 Revision ID: 47141285382d
-Revises: 
+Revises:
 Create Date: 2026-03-19 21:45:54.708951
 
 """
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
 
-
-# revision identifiers, used by Alembic.
-"""initial clean schema
-
-Revision ID: 47141285382d
-Revises: 
-Create Date: 2026-03-19 21:45:54.708951
-
-"""
-from typing import Sequence, Union
-
 from alembic import op
-import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
 revision: str = "47141285382d"

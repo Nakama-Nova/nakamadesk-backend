@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-# from app.api.auth import get_current_user moved to deps
 from app.db.deps import check_role, get_db
 from app.models.enums import UserRole
 from app.models.sale import Sale

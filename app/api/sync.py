@@ -39,6 +39,8 @@ def push_sync_operations(
 @router.get("/pull", response_model=SyncPullResponse)
 def pull_sync_updates(
     last_sync: datetime,
+    limit: int = 100,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -47,6 +49,8 @@ def pull_sync_updates(
 
     Args:
         last_sync (datetime): Timestamp of the client's last synchronization.
+        limit (int): Maximum records per entity.
+        offset (int): Records to skip.
         current_user (User): Authenticated user requesting updates.
         db (Session): Database session.
 
@@ -54,4 +58,4 @@ def pull_sync_updates(
         SyncPullResponse: List of updated records since `last_sync`.
     """
     uow = SQLAlchemyUnitOfWork(db)
-    return pull_sync(uow, last_sync)
+    return pull_sync(uow, last_sync, limit, offset)

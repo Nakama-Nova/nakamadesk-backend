@@ -1,12 +1,15 @@
+import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
-SECRET_KEY = "supersecretkey"  # In production, use an environment variable
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+SECRET_KEY = os.getenv(
+    "SECRET_KEY", "supersecretkey_dev"
+)  # Use a secure env var in prod
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 

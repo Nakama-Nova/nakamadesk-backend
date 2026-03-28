@@ -11,6 +11,8 @@ class Settings:
     ENV: str = os.getenv("ENV", "dev")
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DEV_DATABASE_URL: str = os.getenv("DEV_DATABASE_URL", "")
+    TEST_DATABASE_URL: str = os.getenv("TEST_DATABASE_URL", "")
 
     if not DATABASE_URL:
         if ENV == "test":

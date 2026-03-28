@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 
 from sqlalchemy import desc
@@ -23,7 +23,7 @@ def generate_invoice_number(db: Session) -> str:
     Returns:
         str: A unique invoice identifier.
     """
-    current_year = datetime.now().year
+    current_year = datetime.now(timezone.utc).year
     import uuid
 
     suffix = uuid.uuid4().hex[:8].upper()

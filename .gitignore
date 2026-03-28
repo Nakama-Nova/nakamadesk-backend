@@ -2,4 +2,14 @@ venv/
 __pycache__/
 *.pyc
 .env
-invoices/
+invoices/*.pdf
+
+# Cache & Temporary files
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+.DS_Store
+*.swp

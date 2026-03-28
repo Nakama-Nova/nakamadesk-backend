@@ -54,8 +54,8 @@ def check_in(uow: AbstractUnitOfWork, user_id: UUID, recorder_id: UUID) -> Atten
     from fastapi import HTTPException
 
     # Check for existing open attendance today
-    today = datetime.now(timezone.utc).date()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.now(timezone.utc)
+    today = now.date()
 
     with uow:
         existing = (
@@ -117,11 +117,16 @@ def check_out(
         if db_attendance.check_out:
             raise HTTPException(status_code=400, detail="User already checked out")
 
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
         db_attendance.check_out = now
 
         # Calculate hours
-        delta = db_attendance.check_out - db_attendance.check_in
+        # In SQLA, if columns are naive, we make them aware for comparison if needed
+        ci = db_attendance.check_in
+        if ci and not ci.tzinfo:
+            ci = ci.replace(tzinfo=timezone.utc)
+
+        delta = now - ci
         hours = Decimal(delta.total_seconds() / 3600).quantize(Decimal("0.01"))
         db_attendance.total_hours = hours
 
@@ -260,10 +265,11 @@ def pay_wages(
             .all()
         )
 
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        now = datetime.now(timezone.utc)
         for wage in wages:
             wage.payment_status = "paid"
-            wage.transaction_ref = payment_data.transaction_ref
+            wage.transaction_reference = payment_data.transaction_reference
+            # Convert to naive if needed by model default, but here we provide aware
             wage.paid_at = now
 
             # Also update the parent attendance record for consistency if needed
