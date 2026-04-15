@@ -93,6 +93,10 @@ class AbstractUnitOfWork(ABC):
     wages: BaseRepository
     purchases: BaseRepository
     purchase_items: BaseRepository
+    # Day 1 additions
+    orders: BaseRepository
+    production_jobs: BaseRepository
+    job_assignments: BaseRepository
 
     def __enter__(self) -> "AbstractUnitOfWork":
         return self

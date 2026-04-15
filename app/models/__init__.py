@@ -6,7 +6,11 @@ from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
 from app.models.item import Item  # noqa: F401
+from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
+from app.models.order import Order  # noqa: F401
+from app.models.order_item import OrderItem  # noqa: F401
 from app.models.price_history import RawMaterialPriceHistory  # noqa: F401
+from app.models.production_job import ProductionJob  # noqa: F401
 from app.models.purchase import Purchase  # noqa: F401
 from app.models.purchase_item import PurchaseItem  # noqa: F401
 from app.models.raw_material import RawMaterial  # noqa: F401

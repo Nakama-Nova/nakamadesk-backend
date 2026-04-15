@@ -7,6 +7,9 @@ from app.models.attendance import Attendance
 from app.models.customer import Customer
 from app.models.daily_wage import DailyWage
 from app.models.item import Item
+from app.models.job_assignment import JobWorkerAssignment
+from app.models.order import Order
+from app.models.production_job import ProductionJob
 from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.raw_material import RawMaterial
@@ -141,6 +144,27 @@ class PurchaseItemRepository(SQLAlchemyRepository):
         super().__init__(session, PurchaseItem)
 
 
+class OrderRepository(SQLAlchemyRepository):
+    """Repository for customer Order records."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, Order)
+
+
+class ProductionJobRepository(SQLAlchemyRepository):
+    """Repository for ProductionJob records."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, ProductionJob)
+
+
+class JobWorkerAssignmentRepository(SQLAlchemyRepository):
+    """Repository for JobWorkerAssignment records."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, JobWorkerAssignment)
+
+
 class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     """
     SQLAlchemy-backed implementation of the Unit of Work pattern.
@@ -160,6 +184,10 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self.wages = DailyWageRepository(session)
         self.purchases = PurchaseRepository(session)
         self.purchase_items = PurchaseItemRepository(session)
+        # Day 1 additions
+        self.orders = OrderRepository(session)
+        self.production_jobs = ProductionJobRepository(session)
+        self.job_assignments = JobWorkerAssignmentRepository(session)
 
     @property
     def session(self):
