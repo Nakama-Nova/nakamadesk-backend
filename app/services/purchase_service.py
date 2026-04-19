@@ -25,9 +25,7 @@ from app.services import inventory_service
 logger = logging.getLogger(__name__)
 
 
-def create_purchase(
-    uow: AbstractUnitOfWork, purchase_data: PurchaseCreate
-) -> Purchase:
+def create_purchase(uow: AbstractUnitOfWork, purchase_data: PurchaseCreate) -> Purchase:
     """
     Create a new purchase record with line items.
 
@@ -209,7 +207,10 @@ def confirm_purchase(
                     reference_type="purchase",
                     reference_id=purchase_id,
                     created_by=confirmed_by,
-                    notes=f"Purchase confirmation: {purchase.invoice_number or purchase_id}",
+                    notes=(
+                        f"Purchase confirmation: "
+                        f"{purchase.invoice_number or purchase_id}"
+                    ),
                 )
 
         # ITC placeholder — log to logger for now; full ITC table is a future sprint
