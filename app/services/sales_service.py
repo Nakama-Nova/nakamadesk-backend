@@ -100,7 +100,7 @@ def create_sale_transaction(
 
             for item_id, req_data in item_requests.items():
                 # Deduction via inventory_service — creates 'finished_out' movement
-                # If stock insufficient, raises 400. If concurrent update, uow.commit() 
+                # If stock insufficient, raises 400. If concurrent update, uow.commit()
                 # will raise StaleDataError, which is caught and retried below.
                 item = inventory_service.remove_finished_goods(
                     uow=uow,
