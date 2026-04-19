@@ -6,10 +6,12 @@ from sqlalchemy.orm import Session
 from app.models.attendance import Attendance
 from app.models.customer import Customer
 from app.models.daily_wage import DailyWage
+from app.models.inventory_movement import InventoryMovement
 from app.models.item import Item
 from app.models.job_assignment import JobWorkerAssignment
 from app.models.order import Order
 from app.models.production_job import ProductionJob
+from app.models.production_material_allocation import ProductionMaterialAllocation
 from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.raw_material import RawMaterial
@@ -165,6 +167,20 @@ class JobWorkerAssignmentRepository(SQLAlchemyRepository):
         super().__init__(session, JobWorkerAssignment)
 
 
+class InventoryMovementRepository(SQLAlchemyRepository):
+    """Repository for InventoryMovement audit ledger records."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, InventoryMovement)
+
+
+class ProductionMaterialAllocationRepository(SQLAlchemyRepository):
+    """Repository for ProductionMaterialAllocation records."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, ProductionMaterialAllocation)
+
+
 class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
     """
     SQLAlchemy-backed implementation of the Unit of Work pattern.
@@ -188,6 +204,9 @@ class SQLAlchemyUnitOfWork(AbstractUnitOfWork):
         self.orders = OrderRepository(session)
         self.production_jobs = ProductionJobRepository(session)
         self.job_assignments = JobWorkerAssignmentRepository(session)
+        # Day 2 additions
+        self.inventory_movements = InventoryMovementRepository(session)
+        self.material_allocations = ProductionMaterialAllocationRepository(session)
 
     @property
     def session(self):

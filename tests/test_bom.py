@@ -97,12 +97,15 @@ def test_invalid_material_in_bom(auth_client: TestClient):
     # Since material does not exist, it should throw foreign key constraint or 404 validation
     # Actually, SQLAlchemy might throw a 500 if unhandled, or FastAPI might catch it depending on implementation.
     # Currently, BOM service should raise 404
-    assert response.status_code in [
-        404,
-        400,
-        500,
-        422,
-    ]  # Accepting ranges depending on current unhardened implementation, but testing the flow
+    assert (
+        response.status_code
+        in [
+            404,
+            400,
+            500,
+            422,
+        ]
+    )  # Accepting ranges depending on current unhardened implementation, but testing the flow
 
 
 def test_fractional_precision_and_rounding(auth_client: TestClient):

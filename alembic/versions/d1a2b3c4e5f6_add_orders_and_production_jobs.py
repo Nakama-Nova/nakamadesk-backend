@@ -46,7 +46,9 @@ def upgrade() -> None:
         sa.Column("customer_id", sa.UUID(), nullable=True),
         sa.Column("order_type", sa.String(), nullable=False, server_default="standard"),
         sa.Column("status", sa.String(), nullable=False, server_default="draft"),
-        sa.Column("custom_specs", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "custom_specs", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("reference_image_url", sa.String(), nullable=True),
         sa.Column("estimated_amount", sa.Numeric(precision=12, scale=2), nullable=True),
         sa.Column("advance_paid", sa.Numeric(precision=12, scale=2), nullable=True),
@@ -64,8 +66,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["sale_id"], ["sales.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_orders_order_number"), "orders", ["order_number"], unique=True)
-    op.create_index(op.f("ix_orders_customer_id"), "orders", ["customer_id"], unique=False)
+    op.create_index(
+        op.f("ix_orders_order_number"), "orders", ["order_number"], unique=True
+    )
+    op.create_index(
+        op.f("ix_orders_customer_id"), "orders", ["customer_id"], unique=False
+    )
     op.create_index(op.f("ix_orders_status"), "orders", ["status"], unique=False)
 
     # ------------------------------------------------------------------
@@ -83,7 +89,12 @@ def upgrade() -> None:
         sa.Column("item_id", sa.UUID(), nullable=True),
         sa.Column("item_name", sa.String(), nullable=True),
         sa.Column("quantity", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("unit_price", sa.Numeric(precision=12, scale=2), nullable=False, server_default="0"),
+        sa.Column(
+            "unit_price",
+            sa.Numeric(precision=12, scale=2),
+            nullable=False,
+            server_default="0",
+        ),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("updated_at", sa.DateTime(), nullable=True),
@@ -91,7 +102,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["order_id"], ["orders.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_order_items_order_id"), "order_items", ["order_id"], unique=False)
+    op.create_index(
+        op.f("ix_order_items_order_id"), "order_items", ["order_id"], unique=False
+    )
 
     # ------------------------------------------------------------------
     # Table: production_jobs
@@ -131,16 +144,25 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_production_jobs_job_number"), "production_jobs", ["job_number"], unique=True
+        op.f("ix_production_jobs_job_number"),
+        "production_jobs",
+        ["job_number"],
+        unique=True,
     )
     op.create_index(
-        op.f("ix_production_jobs_order_id"), "production_jobs", ["order_id"], unique=False
+        op.f("ix_production_jobs_order_id"),
+        "production_jobs",
+        ["order_id"],
+        unique=False,
     )
     op.create_index(
         op.f("ix_production_jobs_status"), "production_jobs", ["status"], unique=False
     )
     op.create_index(
-        op.f("ix_production_jobs_assigned_to"), "production_jobs", ["assigned_to"], unique=False
+        op.f("ix_production_jobs_assigned_to"),
+        "production_jobs",
+        ["assigned_to"],
+        unique=False,
     )
 
     # ------------------------------------------------------------------

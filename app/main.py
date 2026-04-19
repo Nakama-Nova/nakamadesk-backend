@@ -17,6 +17,7 @@ from app.api import (
     items,
     orders,
     production,
+    purchases,
     raw_materials,
     reports,
     sales,
@@ -44,6 +45,7 @@ app.include_router(wages.router)
 app.include_router(sync.router)
 app.include_router(orders.router)
 app.include_router(production.router)
+app.include_router(purchases.router)
 
 
 @app.get("/")

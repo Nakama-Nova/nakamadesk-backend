@@ -14,6 +14,7 @@ from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemCreate
+from app.services import inventory_service
 from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
 
@@ -92,40 +93,24 @@ def create_sale_transaction(
                 order_status=sale_data.order_status,
             )
 
-            # 4. Atomic Stock update and calculation preparation
+            # 4. Stock update (via movement engine) and calculation preparation
             sub_total = to_decimal(0)
             tax_total = to_decimal(0)
             sale_items = []
 
             for item_id, req_data in item_requests.items():
-                # Perform atomic decrement at the database level to prevent lost updates
-                result = uow.session.execute(
-                    text(
-                        "UPDATE items SET current_stock = current_stock - :qty "
-                        "WHERE id = :id AND current_stock >= :qty"
-                    ),
-                    {"qty": req_data.quantity, "id": item_id},
+                # Deduction via inventory_service — creates 'finished_out' movement
+                # If stock insufficient, raises 400. If concurrent update, uow.commit() 
+                # will raise StaleDataError, which is caught and retried below.
+                item = inventory_service.remove_finished_goods(
+                    uow=uow,
+                    item_id=item_id,
+                    quantity=req_data.quantity,
+                    sale_id=new_sale.id,
+                    created_by=current_user_id,
                 )
 
-                if result.rowcount == 0:
-                    # Conflict or insufficient stock - fetch latest to confirm
-                    item = uow.items.get_by_id(item_id)
-                    if not item:
-                        raise HTTPException(
-                            status_code=404, detail=f"Item {item_id} not found"
-                        )
-
-                    if item.current_stock < req_data.quantity:
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Insufficient stock for item '{item.name}'",
-                        )
-
-                    # If stock is fine but update failed, it's a concurrency conflict
-                    raise StaleDataError(f"Concurrency conflict on item {item.name}")
-
-                # Fetch item details for calculations after locking/updating
-                item = uow.items.get_by_id(item_id)
+                # Calculations using the fetched item
                 price_at_sale = to_decimal(item.selling_price)
                 gst_percent = to_decimal(item.gst_percent)
                 quantity = to_decimal(req_data.quantity)

@@ -1,11 +1,10 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query
 
-from app.db.deps import get_current_user, get_db
+from app.db.deps import get_current_user, get_uow
 from app.models.user import User
-from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
+from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sync import SyncPullResponse, SyncPushRequest, SyncPushResponse
 from app.services.sync_service import process_push_sync, pull_sync
 
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/sync", tags=["Offline Sync"])
 def push_sync_operations(
     request: SyncPushRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
     Upload and process a batch of offline operations from the client outbox.
@@ -27,22 +26,21 @@ def push_sync_operations(
     Args:
         request (SyncPushRequest): Payload containing a list of sync operations.
         current_user (User): Authenticated user uploading the data.
-        db (Session): Database session.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
 
     Returns:
         SyncPushResponse: Results of the processed operations, including any conflicts.
     """
-    uow = SQLAlchemyUnitOfWork(db)
     return process_push_sync(uow, request.operations, current_user)
 
 
 @router.get("/pull", response_model=SyncPullResponse)
 def pull_sync_updates(
     last_sync: datetime,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
     Retrieve incremental updates from the server since the last successful sync.
@@ -52,10 +50,9 @@ def pull_sync_updates(
         limit (int): Maximum records per entity.
         offset (int): Records to skip.
         current_user (User): Authenticated user requesting updates.
-        db (Session): Database session.
+        uow (AbstractUnitOfWork): Unit of Work for database operations.
 
     Returns:
         SyncPullResponse: List of updated records since `last_sync`.
     """
-    uow = SQLAlchemyUnitOfWork(db)
     return pull_sync(uow, last_sync, limit, offset)

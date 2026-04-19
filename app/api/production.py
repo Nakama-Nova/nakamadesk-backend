@@ -15,6 +15,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
@@ -29,6 +30,12 @@ from app.schemas.production import (
 from app.services import production_service
 
 router = APIRouter(prefix="/production", tags=["Production"])
+
+
+class CompleteJobRequest(BaseModel):
+    """Request body for completing a production job."""
+
+    produced_quantity: int = Field(..., ge=1, description="Number of units produced")
 
 
 @router.post("/jobs", response_model=ProductionJobResponse, status_code=201)
@@ -197,3 +204,76 @@ def remove_worker_from_job(
         HTTPException 404: If no active assignment is found.
     """
     return production_service.remove_worker(uow, job_id, worker_id)
+
+
+# ---------------------------------------------------------------------------
+# Day 2: Job lifecycle transitions
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/jobs/{job_id}/start", response_model=ProductionJobResponse)
+def start_production_job(
+    job_id: UUID,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Start a production job.
+
+    Fetches the BOM for the job's item, consumes raw material stock for
+    each BOM entry (including wastage), creates material allocation records,
+    and transitions the job status from 'pending' → 'in_progress'.
+
+    Fails atomically if any material has insufficient stock.
+
+    RBAC: OWNER, MANAGER.
+
+    Args:
+        job_id (UUID): Unique identifier of the production job.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work.
+
+    Returns:
+        ProductionJobResponse: Job with updated status and started_at.
+
+    Raises:
+        HTTPException 404: If job not found.
+        HTTPException 400: If job is not 'pending' or stock is insufficient.
+    """
+    return production_service.start_job(uow, job_id, started_by=current_user.id)
+
+
+@router.patch("/jobs/{job_id}/complete", response_model=ProductionJobResponse)
+def complete_production_job(
+    job_id: UUID,
+    body: CompleteJobRequest,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Complete a production job and add finished goods to stock.
+
+    Transitions job from 'in_progress' → 'completed' and increments
+    the catalogue item's current_stock by produced_quantity.
+
+    RBAC: OWNER, MANAGER.
+
+    Args:
+        job_id (UUID): Unique identifier of the production job.
+        body (CompleteJobRequest): Contains produced_quantity.
+        current_user (User): Authenticated user.
+        uow (AbstractUnitOfWork): Unit of Work.
+
+    Returns:
+        ProductionJobResponse: Job with updated status and completed_at.
+
+    Raises:
+        HTTPException 404: If job not found.
+        HTTPException 400: If job is not 'in_progress'.
+    """
+    return production_service.complete_job(
+        uow,
+        job_id,
+        produced_quantity=body.produced_quantity,
+        completed_by=current_user.id,
+    )

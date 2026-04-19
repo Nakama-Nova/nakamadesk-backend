@@ -100,8 +100,28 @@ def update_raw_material(
         ):
             price_changed = True
 
+        stock_changed = False
+        old_stock = db_material.stock
+        new_stock = None
+
+        if "stock" in update_data and update_data["stock"] != db_material.stock:
+            stock_changed = True
+            new_stock = update_data.pop("stock")
+
         for key, value in update_data.items():
             setattr(db_material, key, value)
+
+        if stock_changed:
+            from app.services import inventory_service
+
+            # Calculate the delta for the movement engine
+            quantity_change = new_stock - (old_stock or 0)
+            inventory_service.record_raw_material_adjustment(
+                uow=uow,
+                material_id=material_id,
+                quantity_change=quantity_change,
+                notes="Manual adjustment via RawMaterialService",
+            )
 
         if price_changed:
             history = RawMaterialPriceHistory(

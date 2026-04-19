@@ -98,3 +98,9 @@ class ProductionJob(Base):
         back_populates="job",
         cascade="all, delete-orphan",
     )
+    # Day 2: raw material allocations created when job is started
+    material_allocations = relationship(
+        "ProductionMaterialAllocation",
+        back_populates="job",
+        cascade="all, delete-orphan",
+    )
