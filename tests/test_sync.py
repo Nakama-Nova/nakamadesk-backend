@@ -208,3 +208,82 @@ def test_attendance_sync_update_scoped_by_recorded_by(auth_client: TestClient, d
 
     att = db.query(Attendance).filter(Attendance.id == uuid.UUID(attendance_id)).first()
     assert att.status == "half-day"
+
+
+def test_sync_push_incomplete_item_does_not_422_whole_batch(auth_client: TestClient):
+    """
+    Regression test for issue #18: a stock-only (delta) item update with no
+    `name`/`sku` used to 422 the entire push batch, because ItemPayload
+    required those fields on every operation. It should now fail just that
+    one operation while the rest of the batch still processes.
+    """
+    # A well-formed item create, in the same batch as the delta-only update.
+    op_good = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {
+            "sku": f"OK-{uuid.uuid4().hex[:8]}",
+            "name": "Fine Item",
+            "selling_price": 25.0,
+            "current_stock": 3,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # A delta-only stock update with no name/sku — previously would 422 the
+    # whole request at the FastAPI/Pydantic layer before any op ran.
+    op_partial_update = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "update",
+        "payload": {
+            "id": str(uuid.uuid4()),
+            "current_stock": 2,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    resp = auth_client.post(
+        "/sync/push", json={"operations": [op_good, op_partial_update]}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert any(r["client_id"] == op_good["id"] for r in data["success"])
+
+
+def test_sync_item_create_missing_required_fields_fails_only_that_op(
+    auth_client: TestClient,
+):
+    """
+    Regression test for issue #18: an item *create* missing name/sku is a
+    real error, but it should only fail that operation, not the batch.
+    """
+    op_good = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {
+            "sku": f"OK-{uuid.uuid4().hex[:8]}",
+            "name": "Fine Item 2",
+            "selling_price": 10.0,
+            "current_stock": 1,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    op_bad_create = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {"selling_price": 10.0, "current_stock": 1},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    resp = auth_client.post(
+        "/sync/push", json={"operations": [op_good, op_bad_create]}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["failed"]) == 1
+    assert data["failed"][0]["client_id"] == op_bad_create["id"]
+    assert "name" in data["failed"][0]["error"] or "sku" in data["failed"][0]["error"]
+    assert any(r["client_id"] == op_good["id"] for r in data["success"])

@@ -324,6 +324,22 @@ class ItemSyncHandler(GenericSyncHandler):
     def __init__(self):
         super().__init__(Item, "items")
 
+    def apply_create(
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
+    ) -> Tuple[Optional[UUID], Optional[str]]:
+        payload_data = (
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload
+        )
+        if not payload_data.get("name") or not payload_data.get("sku"):
+            return None, "'name' and 'sku' are required to create an item"
+        return super().apply_create(uow, payload, current_user, op)
+
 
 class AttendanceSyncHandler(GenericSyncHandler):
     def __init__(self):
