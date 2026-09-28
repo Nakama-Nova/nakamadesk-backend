@@ -374,6 +374,22 @@ class RawMaterialSyncHandler(GenericSyncHandler):
     def __init__(self):
         super().__init__(RawMaterial, "raw_materials")
 
+    def apply_create(
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
+    ) -> Tuple[Optional[UUID], Optional[str]]:
+        payload_data = (
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload
+        )
+        if not payload_data.get("name"):
+            return None, "'name' is required to create a raw material"
+        return super().apply_create(uow, payload, current_user, op)
+
 
 SYNC_HANDLER_REGISTRY = {
     "sale": SaleSyncHandler(),

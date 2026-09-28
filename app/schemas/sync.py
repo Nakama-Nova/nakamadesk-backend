@@ -69,6 +69,23 @@ class AttendancePayload(BaseModel):
     daily_wage: Decimal
 
 
+class RawMaterialPayload(BaseModel):
+    """
+    Schema for raw material data in a synchronization payload.
+
+    Mirrors ItemPayload: fields beyond `id` are optional so partial/delta
+    updates (e.g. a stock-only change) don't have to resend the full
+    record. `name` is still required to actually create a new raw
+    material — enforced in RawMaterialSyncHandler.apply_create, not here.
+    """
+
+    id: Optional[UUID] = None
+    name: Optional[str] = None
+    unit: Optional[str] = None
+    current_price: Optional[Decimal] = None
+    stock: Optional[Decimal] = None
+
+
 class SyncOperation(BaseModel):
     """
     Schema representing a single database operation for synchronization.
@@ -77,13 +94,15 @@ class SyncOperation(BaseModel):
     id: str  # Client's local operation ID / client_id
     entity: str  # "sale", "item", "attendance", "raw_material"
     action: SyncAction
-    payload: Union[SalePayload, ItemPayload, AttendancePayload, Dict[str, Any]]
+    payload: Union[
+        SalePayload, ItemPayload, AttendancePayload, RawMaterialPayload, Dict[str, Any]
+    ]
     updated_at: datetime
 
     @field_validator("payload", mode="before")
     @classmethod
     def validate_payload(cls, v, values):
-        if isinstance(v, (SalePayload, ItemPayload, AttendancePayload)):
+        if isinstance(v, (SalePayload, ItemPayload, AttendancePayload, RawMaterialPayload)):
             return v
 
         entity = values.data.get("entity")
@@ -91,6 +110,8 @@ class SyncOperation(BaseModel):
             return SalePayload(**v)
         elif entity == "item":
             return ItemPayload(**v)
+        elif entity == "raw_material":
+            return RawMaterialPayload(**v)
         elif entity == "attendance":
             return AttendancePayload(**v)
         return v

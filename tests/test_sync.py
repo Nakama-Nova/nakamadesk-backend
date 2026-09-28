@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.models.attendance import Attendance
 from app.models.item import Item
+from app.models.raw_material import RawMaterial
 from app.models.user import User
 
 
@@ -414,3 +415,81 @@ def test_sync_internal_error_returns_generic_message_not_raw_exception(
     assert "constraint" not in error.lower()
     assert "duplicate key" not in error.lower()
     assert dup_sku not in error
+
+
+def test_raw_material_sync_create_and_stock_delta(auth_client: TestClient, db):
+    """
+    Regression test for issue #20: raw_material now has a typed
+    RawMaterialPayload schema (previously fell through to an unvalidated
+    Dict[str, Any]). Verify create + delta stock update both work through
+    the typed schema, consistent with how item stock deltas already work.
+    """
+    material_id = str(uuid.uuid4())
+    name = f"Timber {uuid.uuid4().hex[:6]}"
+
+    create_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "raw_material",
+        "action": "create",
+        "payload": {
+            "id": material_id,
+            "name": name,
+            "unit": "CFT",
+            "current_price": 500.0,
+            "stock": 10,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp = auth_client.post("/sync/push", json={"operations": [create_op]})
+    assert resp.status_code == 200
+    assert len(resp.json()["failed"]) == 0
+
+    material = db.query(RawMaterial).filter(RawMaterial.id == uuid.UUID(material_id)).first()
+    assert material is not None
+    assert float(material.stock) == 10.0
+
+    delta_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "raw_material",
+        "action": "update",
+        "payload": {"id": material_id, "stock": 4},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp2 = auth_client.post("/sync/push", json={"operations": [delta_op]})
+    assert resp2.status_code == 200
+    assert len(resp2.json()["failed"]) == 0
+
+    db.refresh(material)
+    assert float(material.stock) == 14.0
+
+
+def test_raw_material_sync_create_missing_name_fails_only_that_op(
+    auth_client: TestClient,
+):
+    """
+    Regression test for issue #20: a raw_material create missing `name`
+    should fail only that operation, not 422 the whole batch — same
+    contract as item creates (issue #18).
+    """
+    op_good = {
+        "id": str(uuid.uuid4()),
+        "entity": "raw_material",
+        "action": "create",
+        "payload": {"name": f"Plywood {uuid.uuid4().hex[:6]}", "stock": 5},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    op_bad = {
+        "id": str(uuid.uuid4()),
+        "entity": "raw_material",
+        "action": "create",
+        "payload": {"unit": "KG", "current_price": 20.0},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    resp = auth_client.post("/sync/push", json={"operations": [op_good, op_bad]})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["failed"]) == 1
+    assert data["failed"][0]["client_id"] == op_bad["id"]
+    assert "name" in data["failed"][0]["error"]
+    assert any(r["client_id"] == op_good["id"] for r in data["success"])
