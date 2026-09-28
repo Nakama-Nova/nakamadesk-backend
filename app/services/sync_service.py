@@ -416,8 +416,19 @@ class SyncExecutor:
                     return handler.apply_delete(uow, op.payload, current_user, op)
                 else:
                     return None, f"Invalid sync action: {op.action}"
-        except Exception as e:
-            return None, str(e)
+        except Exception:
+            # Log the real exception (with traceback) server-side only. The
+            # client-facing/persisted message must stay generic — it can
+            # otherwise leak internals like DB constraint or column names
+            # (see issue #19).
+            logger.exception(
+                "Unhandled error applying sync operation "
+                "(client_id=%s, entity=%s, action=%s)",
+                op.id,
+                op.entity,
+                op.action,
+            )
+            return None, "An internal error occurred while processing this operation"
 
 
 class SyncLogWriter:

@@ -362,3 +362,55 @@ def test_sync_stale_delete_does_not_destroy_newer_update(auth_client: TestClient
 
     gone = db.query(Item).filter(Item.id == uuid.UUID(item_id)).first()
     assert gone is None
+
+
+def test_sync_internal_error_returns_generic_message_not_raw_exception(
+    auth_client: TestClient,
+):
+    """
+    Regression test for issue #19: an unexpected internal error during a
+    sync operation (here, a DB unique-constraint violation on sku) must
+    return/persist a generic message, not raw driver/constraint text.
+    """
+    dup_sku = f"DUPCHK-{uuid.uuid4().hex[:8]}"
+
+    op1 = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {
+            "sku": dup_sku,
+            "name": "Original",
+            "selling_price": 10.0,
+            "current_stock": 1,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp1 = auth_client.post("/sync/push", json={"operations": [op1]})
+    assert resp1.status_code == 200
+    assert len(resp1.json()["failed"]) == 0
+
+    # Same sku, different record id — a genuine DB unique-constraint
+    # violation, not a handler-level validation error.
+    op2 = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {
+            "sku": dup_sku,
+            "name": "Duplicate",
+            "selling_price": 10.0,
+            "current_stock": 1,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp2 = auth_client.post("/sync/push", json={"operations": [op2]})
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert len(data["failed"]) == 1
+
+    error = data["failed"][0]["error"]
+    assert error == "An internal error occurred while processing this operation"
+    assert "constraint" not in error.lower()
+    assert "duplicate key" not in error.lower()
+    assert dup_sku not in error
