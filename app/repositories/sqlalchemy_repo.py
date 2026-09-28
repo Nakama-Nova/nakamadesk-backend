@@ -105,6 +105,16 @@ class AttendanceRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):
         super().__init__(session, Attendance)
 
+    def get_by_id_scoped(self, record_id: UUID, user_id: UUID) -> Any:
+        # Attendance.user_id identifies the employee the record is about, not
+        # the actor performing the sync — scope by recorded_by (the admin/manager
+        # who logged it) instead, so the person who created the record can update it.
+        return (
+            self.session.query(self.model)
+            .filter(self.model.id == record_id, self.model.recorded_by == user_id)
+            .first()
+        )
+
 
 class RawMaterialRepository(SQLAlchemyRepository):
     def __init__(self, session: Session):

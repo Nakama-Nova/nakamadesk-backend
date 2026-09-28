@@ -3,6 +3,9 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
+from app.models.attendance import Attendance
+from app.models.user import User
+
 
 def test_push_sync_create_and_idempotency(auth_client: TestClient):
     # 1. Create offline
@@ -143,3 +146,65 @@ def test_sync_partial_failure(auth_client: TestClient):
     assert len(data["success"]) == 1
     assert len(data["failed"]) == 1
     assert data["failed"][0]["client_id"] == op_bad["id"]
+
+
+def test_attendance_sync_update_scoped_by_recorded_by(auth_client: TestClient, db):
+    """
+    Regression test for issue #17: an admin who recorded an employee's
+    attendance must be able to sync-update that same record later. Scoping
+    the update by Attendance.user_id (the employee) instead of recorded_by
+    (the admin who logged it) used to reject this as "access denied".
+    """
+    unique_id = uuid.uuid4().hex[:8]
+    employee = User(
+        username=f"emp_{unique_id}",
+        email=f"emp_{unique_id}@example.com",
+        password_hash="fakehash",
+        role="worker",
+    )
+    db.add(employee)
+    db.commit()
+    db.refresh(employee)
+
+    attendance_id = str(uuid.uuid4())
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    create_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "attendance",
+        "action": "create",
+        "payload": {
+            "id": attendance_id,
+            "user_id": str(employee.id),
+            "date": today,
+            "status": "present",
+            "daily_wage": 500.0,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp = auth_client.post("/sync/push", json={"operations": [create_op]})
+    assert resp.status_code == 200
+    assert len(resp.json()["failed"]) == 0
+
+    # The same admin (recorded_by) syncs an update to the record they created
+    update_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "attendance",
+        "action": "update",
+        "payload": {
+            "id": attendance_id,
+            "user_id": str(employee.id),
+            "date": today,
+            "status": "half-day",
+            "daily_wage": 500.0,
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp2 = auth_client.post("/sync/push", json={"operations": [update_op]})
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert len(data["failed"]) == 0, f"Update rejected: {data['failed']}"
+    assert len(data["success"]) == 1
+
+    att = db.query(Attendance).filter(Attendance.id == uuid.UUID(attendance_id)).first()
+    assert att.status == "half-day"
