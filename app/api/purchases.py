@@ -14,6 +14,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.user import User

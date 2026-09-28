@@ -5,7 +5,6 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, InternalError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import StaleDataError
