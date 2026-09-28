@@ -167,7 +167,11 @@ class BaseSyncHandler(ABC):
 
     @abstractmethod
     def apply_delete(
-        self, uow: AbstractUnitOfWork, payload: Any, current_user: User
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
     ) -> Tuple[Optional[UUID], Optional[str]]:
         pass
 
@@ -287,7 +291,11 @@ class GenericSyncHandler(BaseSyncHandler):
         return record_id, None
 
     def apply_delete(
-        self, uow: AbstractUnitOfWork, payload: Any, current_user: User
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
     ) -> Tuple[Optional[UUID], Optional[str]]:
         # Convert payload to dict if it's a Pydantic model
         payload_data = (
@@ -308,11 +316,27 @@ class GenericSyncHandler(BaseSyncHandler):
             else repo.get_by_id(record_id)
         )
 
-        if db_obj:
-            repo.delete(db_obj)
-            uow.flush()
-            return record_id, None
-        return record_id, "Record not found or access denied for delete"
+        if not db_obj:
+            return record_id, "Record not found or access denied for delete"
+
+        # LWW guard: if the record was updated server-side more recently than
+        # this delete was queued, drop the stale delete instead of destroying
+        # a newer write. Mirrors apply_update's silent-no-op-on-stale-write
+        # behavior rather than erroring, since the delete is legitimately
+        # outdated, not invalid.
+        if op is not None and hasattr(db_obj, "updated_at"):
+            from datetime import timezone as _tz
+
+            db_updated_at = db_obj.updated_at
+            if db_updated_at and not db_updated_at.tzinfo:
+                db_updated_at = db_updated_at.replace(tzinfo=_tz.utc)
+
+            if db_updated_at and op.updated_at.astimezone(_tz.utc) < db_updated_at:
+                return record_id, None
+
+        repo.delete(db_obj)
+        uow.flush()
+        return record_id, None
 
 
 class SaleSyncHandler(GenericSyncHandler):
@@ -389,7 +413,7 @@ class SyncExecutor:
                     return handler.apply_update(uow, op.payload, current_user, op)
 
                 elif op.action == SyncAction.DELETE:
-                    return handler.apply_delete(uow, op.payload, current_user)
+                    return handler.apply_delete(uow, op.payload, current_user, op)
                 else:
                     return None, f"Invalid sync action: {op.action}"
         except Exception as e:

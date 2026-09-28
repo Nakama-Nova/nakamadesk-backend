@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 
 from app.models.attendance import Attendance
+from app.models.item import Item
 from app.models.user import User
 
 
@@ -287,3 +288,77 @@ def test_sync_item_create_missing_required_fields_fails_only_that_op(
     assert data["failed"][0]["client_id"] == op_bad_create["id"]
     assert "name" in data["failed"][0]["error"] or "sku" in data["failed"][0]["error"]
     assert any(r["client_id"] == op_good["id"] for r in data["success"])
+
+
+def test_sync_stale_delete_does_not_destroy_newer_update(auth_client: TestClient, db):
+    """
+    Regression test for issue #21: a queued delete with an older timestamp
+    than the record's current updated_at must not destroy a newer write.
+    A delete queued *after* that newer write should still go through.
+    """
+    item_id = str(uuid.uuid4())
+    sku = f"DEL-{uuid.uuid4().hex[:6]}"
+    t1 = datetime.now(timezone.utc) - timedelta(hours=2)
+    t2 = datetime.now(timezone.utc) - timedelta(hours=1)  # the "newer update"
+
+    create_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "create",
+        "payload": {
+            "id": item_id,
+            "name": "Deletable Item",
+            "sku": sku,
+            "selling_price": 20.0,
+            "current_stock": 5,
+        },
+        "updated_at": t1.isoformat(),
+    }
+    auth_client.post("/sync/push", json={"operations": [create_op]})
+
+    update_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "update",
+        "payload": {
+            "id": item_id,
+            "name": "Deletable Item Updated",
+            "sku": sku,
+            "selling_price": 25.0,
+        },
+        "updated_at": t2.isoformat(),
+    }
+    auth_client.post("/sync/push", json={"operations": [update_op]})
+
+    # A delete queued *before* t2 arrives late (e.g. a slow/offline client) —
+    # it must not remove a record that was legitimately updated afterwards.
+    stale_delete_time = t1 + timedelta(minutes=30)
+    stale_delete_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "delete",
+        "payload": {"id": item_id},
+        "updated_at": stale_delete_time.isoformat(),
+    }
+    resp = auth_client.post("/sync/push", json={"operations": [stale_delete_op]})
+    assert resp.status_code == 200
+    assert len(resp.json()["failed"]) == 0
+
+    still_there = db.query(Item).filter(Item.id == uuid.UUID(item_id)).first()
+    assert still_there is not None, "stale delete destroyed a newer update"
+    assert still_there.name == "Deletable Item Updated"
+
+    # A delete queued *after* the update should actually take effect.
+    fresh_delete_op = {
+        "id": str(uuid.uuid4()),
+        "entity": "item",
+        "action": "delete",
+        "payload": {"id": item_id},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp2 = auth_client.post("/sync/push", json={"operations": [fresh_delete_op]})
+    assert resp2.status_code == 200
+    assert len(resp2.json()["failed"]) == 0
+
+    gone = db.query(Item).filter(Item.id == uuid.UUID(item_id)).first()
+    assert gone is None
