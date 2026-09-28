@@ -1,3 +1,5 @@
+from typing import Optional
+
 from pydantic import BaseModel
 
 
@@ -7,3 +9,4 @@ class StockUpdate(BaseModel):
     """
 
     quantity: int
+    notes: Optional[str] = None
