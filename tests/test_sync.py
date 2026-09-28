@@ -280,9 +280,7 @@ def test_sync_item_create_missing_required_fields_fails_only_that_op(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    resp = auth_client.post(
-        "/sync/push", json={"operations": [op_good, op_bad_create]}
-    )
+    resp = auth_client.post("/sync/push", json={"operations": [op_good, op_bad_create]})
     assert resp.status_code == 200
     data = resp.json()
     assert len(data["failed"]) == 1
@@ -444,7 +442,9 @@ def test_raw_material_sync_create_and_stock_delta(auth_client: TestClient, db):
     assert resp.status_code == 200
     assert len(resp.json()["failed"]) == 0
 
-    material = db.query(RawMaterial).filter(RawMaterial.id == uuid.UUID(material_id)).first()
+    material = (
+        db.query(RawMaterial).filter(RawMaterial.id == uuid.UUID(material_id)).first()
+    )
     assert material is not None
     assert float(material.stock) == 10.0
 
@@ -511,9 +511,7 @@ def test_sync_push_batch_size_is_capped(auth_client: TestClient):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    oversized = {
-        "operations": [make_op() for _ in range(MAX_SYNC_PUSH_OPERATIONS + 1)]
-    }
+    oversized = {"operations": [make_op() for _ in range(MAX_SYNC_PUSH_OPERATIONS + 1)]}
     resp = auth_client.post("/sync/push", json=oversized)
     assert resp.status_code == 422
 

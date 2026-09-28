@@ -7,7 +7,9 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-_DEV_DEFAULT_SECRET_KEY = "supersecretkey_dev"  # noqa: S105 - intentional dev-only default
+_DEV_DEFAULT_SECRET_KEY = (
+    "supersecretkey_dev"  # noqa: S105 - intentional dev-only default
+)
 
 SECRET_KEY = os.getenv(
     "SECRET_KEY", _DEV_DEFAULT_SECRET_KEY

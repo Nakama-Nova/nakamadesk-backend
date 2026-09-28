@@ -107,7 +107,9 @@ class SyncOperation(BaseModel):
     @field_validator("payload", mode="before")
     @classmethod
     def validate_payload(cls, v, values):
-        if isinstance(v, (SalePayload, ItemPayload, AttendancePayload, RawMaterialPayload)):
+        if isinstance(
+            v, (SalePayload, ItemPayload, AttendancePayload, RawMaterialPayload)
+        ):
             return v
 
         entity = values.data.get("entity")
