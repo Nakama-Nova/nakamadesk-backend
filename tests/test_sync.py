@@ -493,3 +493,30 @@ def test_raw_material_sync_create_missing_name_fails_only_that_op(
     assert data["failed"][0]["client_id"] == op_bad["id"]
     assert "name" in data["failed"][0]["error"]
     assert any(r["client_id"] == op_good["id"] for r in data["success"])
+
+
+def test_sync_push_batch_size_is_capped(auth_client: TestClient):
+    """
+    Regression test for issue #22: /sync/push must reject an oversized
+    operations batch with a clean 422 instead of processing it unbounded.
+    """
+    from app.schemas.sync import MAX_SYNC_PUSH_OPERATIONS
+
+    def make_op():
+        return {
+            "id": str(uuid.uuid4()),
+            "entity": "item",
+            "action": "update",
+            "payload": {"id": str(uuid.uuid4()), "current_stock": 1},
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    oversized = {
+        "operations": [make_op() for _ in range(MAX_SYNC_PUSH_OPERATIONS + 1)]
+    }
+    resp = auth_client.post("/sync/push", json=oversized)
+    assert resp.status_code == 422
+
+    at_limit = {"operations": [make_op() for _ in range(MAX_SYNC_PUSH_OPERATIONS)]}
+    resp2 = auth_client.post("/sync/push", json=at_limit)
+    assert resp2.status_code == 200

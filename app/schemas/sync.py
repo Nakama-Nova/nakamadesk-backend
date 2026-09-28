@@ -4,7 +4,12 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
+
+# Upper bound on operations per /sync/push request. Keeps a single request's
+# DB transaction bounded even for a legitimate-but-corrupted/runaway client
+# outbox; matches /sync/pull's existing limit=500 cap.
+MAX_SYNC_PUSH_OPERATIONS = 500
 
 
 class SyncAction(str, Enum):
@@ -122,7 +127,7 @@ class SyncPushRequest(BaseModel):
     Request schema for a batch of sync operations from a client.
     """
 
-    operations: List[SyncOperation]
+    operations: List[SyncOperation] = Field(..., max_length=MAX_SYNC_PUSH_OPERATIONS)
 
 
 class SyncOperationResult(BaseModel):
