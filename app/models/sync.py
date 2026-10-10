@@ -40,3 +40,30 @@ class SyncLog(Base):
     error_message = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SyncTombstone(Base):
+    """
+    Append-only record that a synced row was deleted.
+
+    pull_sync can only return rows that still exist, so without this other
+    clients never learn a record is gone. Written from
+    SQLAlchemyRepository.delete, so REST and sync deletes are both covered.
+    """
+
+    __tablename__ = "sync_tombstones"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    entity = Column(String, nullable=False)  # same names as SYNC_HANDLER_REGISTRY
+    record_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    deleted_at = Column(
+        DateTime,
+        nullable=False,
+        index=True,
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
+    )

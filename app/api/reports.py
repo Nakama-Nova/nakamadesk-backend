@@ -30,7 +30,7 @@ def get_sales_report(
     """
     Retrieve a comprehensive sales report for a specific date range.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         start_date (Optional[date]): Start date for the report.
@@ -53,7 +53,7 @@ def get_top_products_report(
     """
     Retrieve a report of top-selling products.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         limit (int): Number of top products to return.
@@ -74,7 +74,7 @@ def get_inventory_report(
     """
     Retrieve a complete inventory status report.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         current_user (User): Authenticated user.
@@ -96,7 +96,7 @@ def get_profit_loss_analytics(
     """
     Retrieve Profit and Loss (P&L) analytics for a specific date range.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         start_date (Optional[date]): Start date for the analysis.
@@ -120,7 +120,7 @@ def get_gst_summary_report(
     """
     Retrieve a GST summary report for a specific date range.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         start_date (Optional[date]): Start date for the summary.
@@ -144,7 +144,7 @@ def export_sales_excel(
     """
     Export sales data to an Excel file for a specific date range.
 
-    RBAC: Restricted to OWNER role.
+    RBAC: Restricted to OWNER and MANAGER roles.
 
     Args:
         start_date (Optional[date]): Start date for the export.

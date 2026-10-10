@@ -10,7 +10,7 @@ from app.models.item import Item
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
-from app.models.sync import SyncLog
+from app.models.sync import SyncLog, SyncTombstone
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sync import (
@@ -681,7 +681,24 @@ def pull_sync(
         .all()
     )
 
+    deleted = (
+        uow.session.query(SyncTombstone)
+        .filter(SyncTombstone.deleted_at > last_sync)
+        .order_by(SyncTombstone.deleted_at, SyncTombstone.id)
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+
     return SyncPullResponse(
+        deleted=[
+            {
+                "entity": t.entity,
+                "record_id": str(t.record_id),
+                "deleted_at": t.deleted_at.isoformat(),
+            }
+            for t in deleted
+        ],
         items=to_dict_list(items),
         sales=to_dict_list(sales),
         attendance=to_dict_list(attendance),

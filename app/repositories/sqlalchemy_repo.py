@@ -16,9 +16,17 @@ from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
-from app.models.sync import SyncLog
+from app.models.sync import SyncLog, SyncTombstone
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork, BaseRepository
+
+# Models that sync clients mirror; deleting one records a tombstone.
+SYNCED_ENTITY_NAMES = {
+    Item: "item",
+    Sale: "sale",
+    Attendance: "attendance",
+    RawMaterial: "raw_material",
+}
 
 
 class SQLAlchemyRepository(BaseRepository):
@@ -43,6 +51,9 @@ class SQLAlchemyRepository(BaseRepository):
         pass
 
     def delete(self, entity: Any) -> None:
+        entity_name = SYNCED_ENTITY_NAMES.get(type(entity))
+        if entity_name:
+            self.session.add(SyncTombstone(entity=entity_name, record_id=entity.id))
         self.session.delete(entity)
 
     def get_by_client_id(self, client_id: str) -> Any:

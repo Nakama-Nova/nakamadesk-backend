@@ -161,3 +161,5 @@ class SyncPullResponse(BaseModel):
     sales: List[Dict[str, Any]]
     attendance: List[Dict[str, Any]]
     raw_materials: List[Dict[str, Any]]
+    # Rows deleted since last_sync: {entity, record_id, deleted_at}.
+    deleted: List[Dict[str, Any]] = []

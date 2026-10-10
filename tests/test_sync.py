@@ -559,3 +559,51 @@ def test_sync_sale_create_persists_line_items(auth_client: TestClient, db):
     lines = db.query(SaleItem).filter(SaleItem.sale_id == uuid.UUID(good_id)).all()
     assert len(lines) == 1 and lines[0].quantity == 2
     assert db.query(Sale).filter(Sale.id == uuid.UUID(bad_id)).first() is None
+
+
+def _pulled_deletions(client):
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    body = client.get("/sync/pull", params={"last_sync": since}).json()
+    return {(d["entity"], d["record_id"]) for d in body["deleted"]}
+
+
+def test_pull_reports_deleted_rows_from_rest_and_sync(auth_client: TestClient):
+    """Issue #24: deletions must reach other clients, whichever path deleted."""
+    # REST delete (admin removes an item in the UI)
+    rest_id = auth_client.post(
+        "/items/", json={"sku": f"TB-{uuid.uuid4().hex[:6]}", "name": "Gone"}
+    ).json()["id"]
+    assert auth_client.delete(f"/items/{rest_id}").status_code == 200
+
+    # Sync delete (a terminal pushes a delete)
+    sync_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    ops = [
+        {
+            "id": str(uuid.uuid4()),
+            "entity": "item",
+            "action": action,
+            "payload": payload,
+            "updated_at": (now + timedelta(seconds=n)).isoformat(),
+        }
+        for n, (action, payload) in enumerate(
+            [
+                (
+                    "create",
+                    {
+                        "id": sync_id,
+                        "name": "Gone2",
+                        "sku": f"TB-{uuid.uuid4().hex[:6]}",
+                    },
+                ),
+                ("delete", {"id": sync_id}),
+            ]
+        )
+    ]
+    assert (
+        auth_client.post("/sync/push", json={"operations": ops}).json()["failed"] == []
+    )
+
+    deleted = _pulled_deletions(auth_client)
+    assert ("item", rest_id) in deleted
+    assert ("item", sync_id) in deleted
