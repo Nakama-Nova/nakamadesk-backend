@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.models.attendance import Attendance
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
+from app.models.sale import Sale
+from app.models.sale_item import SaleItem
 from app.models.user import User
 
 
@@ -518,3 +520,42 @@ def test_sync_push_batch_size_is_capped(auth_client: TestClient):
     at_limit = {"operations": [make_op() for _ in range(MAX_SYNC_PUSH_OPERATIONS)]}
     resp2 = auth_client.post("/sync/push", json=at_limit)
     assert resp2.status_code == 200
+
+
+def test_sync_sale_create_persists_line_items(auth_client: TestClient, db):
+    """Issue #3: a synced sale must keep its line items, and a bad product_id
+    must fail only that operation."""
+    customer_id = auth_client.post(
+        "/customers/",
+        json={"name": "Sync Buyer", "phone": str(uuid.uuid4().int % 10**10)},
+    ).json()["id"]
+    item_id = auth_client.post(
+        "/items/",
+        json={"sku": f"SI-{uuid.uuid4().hex[:6]}", "name": "Chair", "current_stock": 9},
+    ).json()["id"]
+
+    def sale_op(sale_id, product_id):
+        return {
+            "id": str(uuid.uuid4()),
+            "entity": "sale",
+            "action": "create",
+            "payload": {
+                "id": sale_id,
+                "customer_id": customer_id,
+                "items": [{"product_id": product_id, "quantity": 2, "price": 50}],
+                "total_amount": 100,
+                "payment_method": "cash",
+            },
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    good_id, bad_id = str(uuid.uuid4()), str(uuid.uuid4())
+    good, bad = sale_op(good_id, item_id), sale_op(bad_id, str(uuid.uuid4()))
+    data = auth_client.post("/sync/push", json={"operations": [good, bad]}).json()
+
+    assert [r["client_id"] for r in data["success"]] == [good["id"]]
+    assert [r["client_id"] for r in data["failed"]] == [bad["id"]]
+
+    lines = db.query(SaleItem).filter(SaleItem.sale_id == uuid.UUID(good_id)).all()
+    assert len(lines) == 1 and lines[0].quantity == 2
+    assert db.query(Sale).filter(Sale.id == uuid.UUID(bad_id)).first() is None

@@ -6,7 +6,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
-from app.db.deps import get_current_user, get_db
+from app.db.deps import check_role, get_current_user, get_db
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.services import auth_service
@@ -88,7 +89,9 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.get("/", response_model=List[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
 ):
     """
     List all users in the system.
@@ -101,14 +104,5 @@ def list_users(
 
     Returns:
         List[UserResponse]: A list of all registered users.
-
-    Raises:
-        HTTPException: If the user is not authorized.
     """
-    from app.models.enums import UserRole
-
-    # Only allow OWNER, MANAGER, SALES to list all users
-    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]:
-        raise HTTPException(status_code=403, detail="Not authorized to list users")
-
     return auth_service.list_users(db)

@@ -9,6 +9,7 @@ from app.models.attendance import Attendance
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
+from app.models.sale_item import SaleItem
 from app.models.sync import SyncLog
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -244,9 +245,13 @@ class GenericSyncHandler(BaseSyncHandler):
                 new_obj.updated_at = op_updated_at.astimezone(_tz.utc).replace(
                     tzinfo=None
                 )
+            self._attach_children(new_obj, payload_data)
             repo.add(new_obj)
             uow.flush()
         return record_id, None
+
+    def _attach_children(self, new_obj: Any, payload_data: dict) -> None:
+        """Hook for entities whose payload carries nested rows (default: none)."""
 
     def apply_update(
         self,
@@ -342,6 +347,23 @@ class GenericSyncHandler(BaseSyncHandler):
 class SaleSyncHandler(GenericSyncHandler):
     def __init__(self):
         super().__init__(Sale, "sales")
+
+    def _attach_children(self, new_obj: Any, payload_data: dict) -> None:
+        # The generic column filter strips `items`; rebuild the line items so a
+        # synced sale isn't created empty (issue #3). Tax columns stay at their
+        # defaults — the offline payload only carries product, qty and price.
+        # An unknown product_id fails the FK at flush and fails just this op.
+        new_obj.items = [
+            SaleItem(
+                id=uuid.uuid4(),
+                sale_id=new_obj.id,
+                item_id=line["product_id"],
+                quantity=line["quantity"],
+                price_at_sale=line["price"],
+                total_price=line["price"] * line["quantity"],
+            )
+            for line in payload_data.get("items", [])
+        ]
 
 
 class ItemSyncHandler(GenericSyncHandler):
@@ -628,6 +650,7 @@ def pull_sync(
     items = (
         uow.session.query(Item)
         .filter(Item.updated_at > last_sync)
+        .order_by(Item.updated_at, Item.id)
         .limit(limit)
         .offset(offset)
         .all()
@@ -636,6 +659,7 @@ def pull_sync(
         uow.session.query(Sale)
         .options(joinedload(Sale.items))
         .filter(Sale.updated_at > last_sync)
+        .order_by(Sale.updated_at, Sale.id)
         .limit(limit)
         .offset(offset)
         .all()
@@ -643,6 +667,7 @@ def pull_sync(
     attendance = (
         uow.session.query(Attendance)
         .filter(Attendance.updated_at > last_sync)
+        .order_by(Attendance.updated_at, Attendance.id)
         .limit(limit)
         .offset(offset)
         .all()
@@ -650,6 +675,7 @@ def pull_sync(
     raw_materials = (
         uow.session.query(RawMaterial)
         .filter(RawMaterial.updated_at > last_sync)
+        .order_by(RawMaterial.updated_at, RawMaterial.id)
         .limit(limit)
         .offset(offset)
         .all()
