@@ -1,0 +1,14 @@
+{
+  "_note": "Colours sampled from logo.jpg. Fonts are suggestions, not from the logo. Tailwind and Flutter ThemeData both read this file.",
+  "color": {
+    "brand-brown": "#5A2A06",
+    "brand-gold": "#BF830B",
+    "surface": "#FFFFFF",
+    "surface-warm": "#FBF6EC",
+    "text": "#3A1B04",
+    "text-muted": "#7A5A3C"
+  },
+  "font": { "heading": "Cormorant Garamond", "body": "Inter" },
+  "radius": { "card": "12px", "button": "8px" },
+  "usage": "Gold is ~3.2:1 on white: use for accents, borders, large text only. Body text is brown on white or warm surface."
+}
