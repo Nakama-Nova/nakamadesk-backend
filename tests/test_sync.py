@@ -607,3 +607,81 @@ def test_pull_reports_deleted_rows_from_rest_and_sync(auth_client: TestClient):
     deleted = _pulled_deletions(auth_client)
     assert ("item", rest_id) in deleted
     assert ("item", sync_id) in deleted
+
+
+# --- Offline counter sales go through the real sales logic ------------------
+
+
+def _push_sale(
+    auth_client, item_id, qty, op_id=None, phone="9000000001", name="Walk-in"
+):
+    op_id = op_id or str(uuid.uuid4())
+    body = {
+        "operations": [
+            {
+                "id": op_id,
+                "entity": "sale",
+                "action": "create",
+                "payload": {
+                    "customer_name": name,
+                    "customer_phone": phone,
+                    "items": [{"product_id": item_id, "quantity": qty, "price": 100}],
+                    "total_amount": 100 * qty,
+                    "payment_method": "cash",
+                },
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+    }
+    resp = auth_client.post("/sync/push", json=body)
+    assert resp.status_code == 200, resp.text
+    return op_id, resp.json()
+
+
+def _make_item(auth_client, stock):
+    r = auth_client.post(
+        "/items/",
+        json={
+            "sku": f"OFFSALE-{uuid.uuid4().hex[:8]}",
+            "name": "Offline Sale Item",
+            "selling_price": 100,
+            "current_stock": stock,
+        },
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def test_pushed_sale_deducts_stock_and_gets_bill_number(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    _, data = _push_sale(auth_client, item_id, 3)
+    assert len(data["success"]) == 1 and not data["failed"]
+
+    sale = auth_client.get(f"/sales/{data['success'][0]['record_id']}").json()
+    assert sale["invoice_number"].startswith("NTD-")
+    assert auth_client.get(f"/items/{item_id}").json()["current_stock"] == 7
+
+
+def test_pushed_sale_replay_does_not_double_deduct(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    op_id, first = _push_sale(auth_client, item_id, 2)
+    _, again = _push_sale(auth_client, item_id, 2, op_id=op_id)
+    assert first["success"][0]["record_id"] == again["success"][0]["record_id"]
+    assert auth_client.get(f"/items/{item_id}").json()["current_stock"] == 8
+
+
+def test_pushed_sale_with_short_stock_is_recorded_not_lost(auth_client: TestClient):
+    item_id = _make_item(auth_client, 1)
+    _, data = _push_sale(auth_client, item_id, 3)
+    assert len(data["success"]) == 1 and not data["failed"]
+    assert auth_client.get(f"/items/{item_id}").json()["current_stock"] == -2
+
+
+def test_pushed_sale_reuses_customer_by_phone(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    phone = f"98{uuid.uuid4().int % 10**8:08d}"
+    _, a = _push_sale(auth_client, item_id, 1, phone=phone, name="Meena")
+    _, b = _push_sale(auth_client, item_id, 1, phone=phone, name="Meena")
+    sale_a = auth_client.get(f"/sales/{a['success'][0]['record_id']}").json()
+    sale_b = auth_client.get(f"/sales/{b['success'][0]['record_id']}").json()
+    assert sale_a["customer_id"] and sale_a["customer_id"] == sale_b["customer_id"]

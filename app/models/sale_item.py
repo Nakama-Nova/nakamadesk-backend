@@ -38,3 +38,8 @@ class SaleItem(Base):
 
     sale = relationship("Sale", back_populates="items")
     item = relationship("Item")
+
+    @property
+    def item_name(self):
+        """Product name for API responses (None if the item row is gone)."""
+        return self.item.name if self.item else None

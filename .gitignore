@@ -13,3 +13,5 @@ htmlcov/
 *.log
 .DS_Store
 *.swp
+
+reports/

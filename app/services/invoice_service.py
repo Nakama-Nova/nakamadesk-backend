@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import List
 
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from sqlalchemy.orm import Session
 
 from app.models.sale import Sale
@@ -13,21 +13,30 @@ logger = logging.getLogger(__name__)
 
 def generate_invoice_number(db: Session) -> str:
     """
-    Generate a unique, business-aligned invoice number for a new sale.
+    Generate the next consecutive bill number for a new sale.
 
-    Format: NTD-YYYY-[8-char random suffix]
+    Format: NTD-YYYY-NNNNN (14 chars, inside the GST 16-char limit).
+
+    The counter row is bumped in the caller's transaction, so a rolled-back
+    sale gives its number back (no gaps) and concurrent sales queue on the
+    row lock instead of colliding.
 
     Args:
-        db (Session): Database session.
+        db (Session): Database session (the sale's own transaction).
 
     Returns:
-        str: A unique invoice identifier.
+        str: A unique, consecutive invoice identifier.
     """
     current_year = datetime.now(timezone.utc).year
-    import uuid
-
-    suffix = uuid.uuid4().hex[:8].upper()
-    return f"NTD-{current_year}-{suffix}"
+    last_no = db.execute(
+        text(
+            "INSERT INTO invoice_counters (year, last_no) VALUES (:y, 1) "
+            "ON CONFLICT (year) DO UPDATE "
+            "SET last_no = invoice_counters.last_no + 1 RETURNING last_no"
+        ),
+        {"y": current_year},
+    ).scalar_one()
+    return f"NTD-{current_year}-{last_no:05d}"
 
 
 def format_invoice_response(sale: Sale) -> InvoiceResponse:

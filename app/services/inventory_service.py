@@ -260,11 +260,12 @@ def remove_finished_goods(
     quantity: int,
     sale_id: UUID,
     created_by: Optional[UUID] = None,
+    allow_negative: bool = False,
 ) -> Item:
     """
     Deduct finished goods stock (sales path) and log the movement.
 
-    Called by: sales_service.create_sale_transaction()
+    Called by: sales_service.build_sale()
 
     Args:
         uow: Unit of Work.
@@ -272,12 +273,14 @@ def remove_finished_goods(
         quantity: Positive number of units sold.
         sale_id: UUID of the sale record.
         created_by: UUID of the user.
+        allow_negative: Let stock go below zero instead of failing. Used for
+            offline counter sales, where the goods have already left the shop.
 
     Returns:
         Item: Updated item record.
 
     Raises:
-        HTTPException 400: If insufficient stock.
+        HTTPException 400: If insufficient stock (and not allow_negative).
     """
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="Sold quantity must be positive")
@@ -289,9 +292,17 @@ def remove_finished_goods(
 
     stock_before = item.current_stock or 0
     if stock_before < quantity:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient stock for '{item.name}'. Available: {stock_before}",
+        if not allow_negative:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for '{item.name}'. Available: {stock_before}",
+            )
+        logger.warning(
+            "negative stock allowed | item=%s | sold %d, had %d | sale=%s",
+            item_id,
+            quantity,
+            stock_before,
+            sale_id,
         )
 
     item.current_stock = stock_before - quantity

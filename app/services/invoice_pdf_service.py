@@ -40,17 +40,18 @@ def generate_invoice_pdf(sale: Sale) -> str:
         "MainTitle",
         parent=styles["Heading1"],
         alignment=1,
-        spaceAfter=5,  # Center
+        spaceAfter=20,  # Center
     )
-    subtitle_style = ParagraphStyle(
-        "SubTitle", parent=styles["Heading2"], alignment=1, spaceAfter=20
-    )
-    elements.append(Paragraph("Nakama Timber Depot", title_style))
-    elements.append(Paragraph("Nakama Furniture", subtitle_style))
+    elements.append(Paragraph("Vriksha Furnitures", title_style))
 
     # --- Invoice Info ---
+    # A shop that is not GST-registered charges no tax (tax_total == 0), so the
+    # document is a plain "Bill" with no CGST/SGST columns. Once items carry a
+    # GST rate, the same code prints the full tax invoice.
+    has_tax = bool(sale.tax_total)
+    doc_label = "Invoice" if has_tax else "Bill"
     info_style = styles["Normal"]
-    elements.append(Paragraph(f"<b>Invoice:</b> {sale.invoice_number}", info_style))
+    elements.append(Paragraph(f"<b>{doc_label}:</b> {sale.invoice_number}", info_style))
     elements.append(
         Paragraph(f"<b>Date:</b> {sale.invoice_date.strftime('%Y-%m-%d')}", info_style)
     )
@@ -60,7 +61,8 @@ def generate_invoice_pdf(sale: Sale) -> str:
     elements.append(Spacer(1, 20))
 
     # --- Table Data ---
-    data = [["Item Name", "Qty", "Price", "CGST", "SGST", "Total"]]
+    header = ["Item Name", "Qty", "Price", "CGST", "SGST", "Total"]
+    data = [header if has_tax else ["Item Name", "Qty", "Price", "Total"]]
 
     from decimal import Decimal
 
@@ -89,16 +91,11 @@ def generate_invoice_pdf(sale: Sale) -> str:
                 item, "total_price", (price * Decimal(str(qty))) + cgst + sgst
             )
 
-            data.append(
-                [
-                    item_name,
-                    str(qty),
-                    f"Rs. {price:.2f}",
-                    f"Rs. {cgst:.2f}",
-                    f"Rs. {sgst:.2f}",
-                    f"Rs. {line_total:.2f}",
-                ]
-            )
+            row = [item_name, str(qty), f"Rs. {price:.2f}"]
+            if has_tax:
+                row += [f"Rs. {cgst:.2f}", f"Rs. {sgst:.2f}"]
+            row.append(f"Rs. {line_total:.2f}")
+            data.append(row)
 
             total_cgst += cgst
             total_sgst += sgst
@@ -109,7 +106,8 @@ def generate_invoice_pdf(sale: Sale) -> str:
         grand_total = sale.total_amount
 
     # --- Table Styling ---
-    table = Table(data, colWidths=[150, 50, 80, 80, 80, 80])
+    col_widths = [150, 50, 80, 80, 80, 80] if has_tax else [230, 50, 100, 100]
+    table = Table(data, colWidths=col_widths)
     table.setStyle(
         TableStyle(
             [
@@ -132,12 +130,13 @@ def generate_invoice_pdf(sale: Sale) -> str:
         parent=styles["Normal"],
         alignment=2,  # Right
     )
-    elements.append(
-        Paragraph(f"<b>CGST Total:</b> Rs. {total_cgst:.2f}", right_align_style)
-    )
-    elements.append(
-        Paragraph(f"<b>SGST Total:</b> Rs. {total_sgst:.2f}", right_align_style)
-    )
+    if has_tax:
+        elements.append(
+            Paragraph(f"<b>CGST Total:</b> Rs. {total_cgst:.2f}", right_align_style)
+        )
+        elements.append(
+            Paragraph(f"<b>SGST Total:</b> Rs. {total_sgst:.2f}", right_align_style)
+        )
     elements.append(
         Paragraph(f"<b>Grand Total:</b> Rs. {grand_total:.2f}", right_align_style)
     )

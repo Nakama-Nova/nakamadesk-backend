@@ -8,6 +8,20 @@ from app.models.item import Item
 from app.models.sale import Sale
 
 
+def _item(auth_client, price: int = 100) -> str:
+    """A real product: synced sales now go through the sales logic."""
+    r = auth_client.post(
+        "/items/",
+        json={
+            "sku": f"LWW-{uuid4().hex[:8]}",
+            "name": "LWW Item",
+            "current_stock": 50,
+            "selling_price": price,
+        },
+    )
+    return r.json()["id"]
+
+
 def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
     """Test that a newer timestamp update overwrites an existing record (LWW)."""
     sale_id = str(uuid4())
@@ -30,7 +44,9 @@ def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
                 "payload": {
                     "id": sale_id,
                     "customer_id": customer_id,
-                    "items": [],
+                    "items": [
+                        {"product_id": _item(auth_client), "quantity": 1, "price": 100}
+                    ],
                     "total_amount": 100.0,
                     "payment_method": "cash",
                 },
@@ -51,7 +67,9 @@ def test_conflict_lww_newer_wins(auth_client: TestClient, db: Session):
                 "payload": {
                     "id": sale_id,
                     "customer_id": customer_id,
-                    "items": [],
+                    "items": [
+                        {"product_id": _item(auth_client), "quantity": 1, "price": 100}
+                    ],
                     "total_amount": 200.0,
                     "payment_method": "cash",
                 },
@@ -88,7 +106,13 @@ def test_conflict_lww_older_ignored(auth_client: TestClient, db: Session):
                 "payload": {
                     "id": sale_id,
                     "customer_id": customer_id,
-                    "items": [],
+                    "items": [
+                        {
+                            "product_id": _item(auth_client, 500),
+                            "quantity": 1,
+                            "price": 100,
+                        }
+                    ],
                     "total_amount": 500.0,
                     "payment_method": "cash",
                 },
@@ -109,7 +133,9 @@ def test_conflict_lww_older_ignored(auth_client: TestClient, db: Session):
                 "payload": {
                     "id": sale_id,
                     "customer_id": customer_id,
-                    "items": [],
+                    "items": [
+                        {"product_id": _item(auth_client), "quantity": 1, "price": 100}
+                    ],
                     "total_amount": 100.0,
                     "payment_method": "cash",
                 },

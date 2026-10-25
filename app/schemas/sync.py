@@ -34,7 +34,11 @@ class SalePayload(BaseModel):
     """
 
     id: Optional[UUID] = None
-    customer_id: UUID
+    # Offline counter sales may not know a customer id: send name/phone and the
+    # server finds or creates the customer.
+    customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     items: List[SaleItemPayload]
     total_amount: Decimal
     payment_method: str
