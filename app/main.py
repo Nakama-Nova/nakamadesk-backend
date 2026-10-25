@@ -5,8 +5,10 @@ Initializes the FastAPI app, registers middleware, and includes all API routers.
 """
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    assets,
     attendance,
     auth,
     bom,
@@ -15,8 +17,10 @@ from app.api import (
     health,
     invoices,
     items,
+    media,
     orders,
     production,
+    public,
     purchases,
     raw_materials,
     reports,
@@ -24,11 +28,22 @@ from app.api import (
     sync,
     wages,
 )
+from app.core.config import settings
 from app.core.middleware import TimingMiddleware
 
 app = FastAPI(title="NakamaDesk API", version="0.1.0")
 
 app.add_middleware(TimingMiddleware)
+
+# The website (another origin) calls the API from the browser: allow only the
+# origins listed in CORS_ORIGINS. Empty = none (default).
+if settings.CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
 
 app.include_router(health.router)
 app.include_router(auth.router)
@@ -46,6 +61,9 @@ app.include_router(sync.router)
 app.include_router(orders.router)
 app.include_router(production.router)
 app.include_router(purchases.router)
+app.include_router(assets.router)
+app.include_router(public.router)
+app.include_router(media.router)
 
 
 @app.get("/")

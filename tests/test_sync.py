@@ -11,7 +11,7 @@ from app.models.sale_item import SaleItem
 from app.models.user import User
 
 
-def test_push_sync_create_and_idempotency(auth_client: TestClient):
+def test_push_sync_create_and_idempotency(auth_client: TestClient, db):
     # 1. Create offline
     client_id = str(uuid.uuid4())
     item_payload = {
@@ -40,19 +40,20 @@ def test_push_sync_create_and_idempotency(auth_client: TestClient):
     assert len(data["success"]) == 1
     assert data["success"][0]["client_id"] == client_id
 
-    # Verify DB
-    items_resp = auth_client.get("/items/")
-    assert any(i["sku"] == item_payload["sku"] for i in items_resp.json())
+    # Verify DB. Fetch by id: GET /items/ is paginated (50) and unordered, so
+    # in a shared test database the new item may not be on page one.
+    record_id = data["success"][0]["record_id"]
+    created = auth_client.get(f"/items/{record_id}")
+    assert created.status_code == 200 and created.json()["sku"] == item_payload["sku"]
 
     # 3. Duplicate Idempotency
     resp2 = auth_client.post("/sync/push", json=sync_req)
     assert resp2.status_code == 200
     assert len(resp2.json()["success"]) == 1
 
-    items_resp2 = auth_client.get("/items/")
     # Shouldn't duplicate
-    count = sum(1 for i in items_resp2.json() if i["sku"] == item_payload["sku"])
-    assert count == 1
+    assert resp2.json()["success"][0]["record_id"] == record_id
+    assert db.query(Item).filter(Item.sku == item_payload["sku"]).count() == 1
 
 
 def test_pull_sync(auth_client: TestClient):

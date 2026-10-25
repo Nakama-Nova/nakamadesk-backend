@@ -13,7 +13,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -49,6 +49,21 @@ class Item(Base):
     min_stock = Column(Integer, default=5)
     production_cost = Column(Numeric(10, 2), default=0.0)
     image_url = Column(String, nullable=True)
+
+    # --- Public catalogue (website). Staff edit these; shoppers never see costs.
+    slug = Column(String, unique=True, index=True, nullable=True)
+    is_published = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    made_to_order = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    lead_time_days = Column(Integer, nullable=True)
+    short_desc = Column(
+        Text, nullable=True
+    )  # shopper-facing; `description` is internal
+    wood_type = Column(String, nullable=True)
+    dimensions_mm = Column(JSONB, nullable=True)  # {"l":700,"w":650,"h":950}
     is_active = Column(Boolean, default=True)
     version_id = Column(
         Integer, default=1, server_default="1", nullable=False

@@ -80,7 +80,12 @@ class Order(Base):
     sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.id"), nullable=True)
 
     # Audit
-    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    # NULL for guest web orders (no staff user behind them)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    source = Column(String, nullable=False, default="pos", server_default="pos")
+    delivery_address = Column(
+        JSONB, nullable=True
+    )  # web orders: address, town, pincode...
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

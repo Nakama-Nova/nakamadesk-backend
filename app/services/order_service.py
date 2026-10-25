@@ -172,6 +172,7 @@ def list_orders(
     status: Optional[str] = None,
     customer_id: Optional[UUID] = None,
     order_type: Optional[str] = None,
+    source: Optional[str] = None,
 ) -> List[Order]:
     """
     List orders with optional filtering and pagination.
@@ -183,6 +184,7 @@ def list_orders(
         status (Optional[str]): Filter by lifecycle status.
         customer_id (Optional[UUID]): Filter by customer.
         order_type (Optional[str]): Filter by 'standard' or 'custom'.
+        source (Optional[str]): Filter by 'pos' or 'web'.
 
     Returns:
         List[Order]: Matching orders with items loaded.
@@ -195,6 +197,8 @@ def list_orders(
         query = query.filter(Order.customer_id == customer_id)
     if order_type:
         query = query.filter(Order.order_type == order_type)
+    if source:
+        query = query.filter(Order.source == source)
 
     return query.order_by(Order.created_at.desc()).limit(limit).offset(offset).all()
 

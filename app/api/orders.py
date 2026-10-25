@@ -63,6 +63,7 @@ def list_orders(
     ),
     customer_id: Optional[UUID] = None,
     order_type: Optional[str] = Query(None, description="Filter: standard|custom"),
+    source: Optional[str] = Query(None, description="Filter: pos|web"),
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
@@ -92,6 +93,7 @@ def list_orders(
         status=status,
         customer_id=customer_id,
         order_type=order_type,
+        source=source,
     )
 
 

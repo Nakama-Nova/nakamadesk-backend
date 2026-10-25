@@ -1,11 +1,14 @@
+import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.core.constants import GST_ALLOWED
+
+SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class ItemBase(BaseModel):
@@ -28,6 +31,22 @@ class ItemBase(BaseModel):
     image_url: Optional[str] = None
     production_cost: Decimal = Decimal("0.00")
     is_active: bool = True
+
+    # Public catalogue (website)
+    slug: Optional[str] = None
+    is_published: bool = False
+    made_to_order: bool = False
+    lead_time_days: Optional[int] = None
+    short_desc: Optional[str] = None
+    wood_type: Optional[str] = None
+    dimensions_mm: Optional[Dict[str, Any]] = None
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v):
+        if v is not None and not SLUG_RE.match(v):
+            raise ValueError("slug must be lowercase letters, digits and hyphens")
+        return v
 
 
 class ItemCreate(ItemBase):
@@ -70,6 +89,20 @@ class ItemUpdate(BaseModel):
     image_url: Optional[str] = None
     production_cost: Optional[Decimal] = None
     is_active: Optional[bool] = None
+    slug: Optional[str] = None
+    is_published: Optional[bool] = None
+    made_to_order: Optional[bool] = None
+    lead_time_days: Optional[int] = None
+    short_desc: Optional[str] = None
+    wood_type: Optional[str] = None
+    dimensions_mm: Optional[Dict[str, Any]] = None
+
+    @field_validator("slug")
+    @classmethod
+    def validate_slug(cls, v):
+        if v is not None and not SLUG_RE.match(v):
+            raise ValueError("slug must be lowercase letters, digits and hyphens")
+        return v
 
 
 class ItemResponse(ItemBase):
