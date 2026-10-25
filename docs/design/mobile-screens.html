@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vriksha Studio – Mobile screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* Brand tokens: docs/brand/design-tokens.json */
+  :root {
+    --brown: #5A2A06; --gold: #BF830B; --surface: #FFFFFF; --warm: #FBF6EC;
+    --text: #3A1B04; --muted: #7A5A3C; --line: #E8DCC8; --ok: #2F7D4F; --bad: #B3261E;
+    --page: #EFEAE0; --page-text: #3A1B04;
+    --serif: "Cormorant Garamond", Georgia, serif; --sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #1B1209; --page-text: #F3E9D6; } }
+  :root[data-theme="dark"] { --page: #1B1209; --page-text: #F3E9D6; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--page); color: var(--page-text); font-family: var(--sans); padding: 32px 16px 64px; }
+  header.top { max-width: 1280px; margin: 0 auto 28px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; justify-content: space-between; }
+  header.top h1 { font-family: var(--serif); font-size: 34px; }
+  header.top p { font-size: 14px; opacity: .75; max-width: 62ch; }
+  .gallery { max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 40px 32px; justify-content: center; }
+  figure.item { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  figcaption { font-size: 13px; font-weight: 600; letter-spacing: .02em; }
+  figcaption small { display: block; font-weight: 400; opacity: .7; text-align: center; }
+
+  /* Phone */
+  .phone { width: 390px; height: 844px; background: var(--surface); color: var(--text); border-radius: 30px; overflow: hidden;
+    display: flex; flex-direction: column; box-shadow: 0 0 0 8px #2a1608, 0 18px 40px rgba(0,0,0,.35); position: relative; font-size: 14px; }
+  .phone.warm { background: var(--warm); }
+  .appbar { background: var(--brown); color: var(--warm); padding: 18px 20px; }
+  .appbar h2 { font-family: var(--serif); font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .appbar .sub { font-size: 13px; color: var(--line); }
+  .appbar .back { font-size: 13px; font-weight: 500; color: var(--line); margin-bottom: 4px; }
+  .body { flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .center { justify-content: center; align-items: stretch; padding: 28px; gap: 14px; }
+
+  /* Bottom nav */
+  nav.tabs { border-top: 1px solid var(--line); display: flex; justify-content: space-around; padding: 10px 0 14px; background: var(--surface); }
+  nav.tabs a { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); padding: 0 12px; }
+  nav.tabs a svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  nav.tabs a.on { color: var(--brown); font-weight: 600; }
+  nav.tabs a.on svg { fill: var(--brown); stroke: var(--brown); }
+  nav.tabs a.on svg .cut { stroke: var(--surface); }
+
+  /* Parts */
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .warmcard { background: var(--warm); border-radius: 14px; padding: 16px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .col { display: flex; flex-direction: column; gap: 2px; }
+  .muted { color: var(--muted); } .s12 { font-size: 12px; } .s11 { font-size: 11px; } .b { font-weight: 600; } .m { font-weight: 500; }
+  .gold { color: var(--gold); } .brown { color: var(--brown); } .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .h { font-family: var(--serif); font-weight: 700; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 500; padding: 4px 10px; border: 1.2px solid var(--brown); border-radius: 999px; color: var(--brown); white-space: nowrap; }
+  .chip.gold { border-color: var(--gold); } .chip.ok { border-color: var(--ok); color: var(--ok); } .chip.mute { border-color: var(--muted); color: var(--muted); }
+  .chip.fill { background: var(--brown); color: var(--surface); }
+  .input { border: 1.5px solid var(--line); border-radius: 10px; padding: 14px; color: var(--muted); font-size: 15px; display: flex; justify-content: space-between; background: var(--surface); }
+  .input .act { color: var(--gold); font-weight: 500; font-size: 13px; }
+  .btn { border-radius: 10px; padding: 16px 20px; text-align: center; font-weight: 600; font-size: 15px; border: 1.5px solid transparent; }
+  .btn.primary { background: var(--brown); color: var(--surface); }
+  .btn.outline { border-color: var(--gold); color: var(--brown); background: transparent; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric .big { font-family: var(--serif); font-size: 32px; font-weight: 700; line-height: 1.1; margin-top: 6px; }
+  .filters { display: flex; gap: 8px; overflow: hidden; }
+  .filter { font-size: 12px; font-weight: 500; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; white-space: nowrap; }
+  .filter.on { background: var(--brown); border-color: var(--brown); color: var(--surface); }
+  .stepper { display: flex; gap: 14px; align-items: center; font-size: 16px; }
+  .stepper b { color: var(--text); } .stepper span { color: var(--brown); font-weight: 500; }
+  .item.low { border-color: var(--bad); }
+  .logomark { width: 72px; height: 72px; border-radius: 50%; background: var(--gold); align-self: center; }
+  .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); flex: none; }
+  .dot.done { background: var(--ok); border-color: var(--ok); } .dot.now { background: var(--gold); border-color: var(--gold); }
+  .banner { background: var(--warm); border-bottom: 1px solid var(--gold); padding: 10px 20px; display: flex; gap: 10px; align-items: center; font-size: 12px; color: var(--brown); line-height: 1.4; }
+  .banner i { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); flex: none; }
+  .actionbar { border-top: 1px solid var(--line); padding: 16px; background: var(--surface); }
+  .spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <h1>Vriksha Studio · Mobile app</h1>
+    <p>All 8 screens of the Flutter app, drawn with the brand tokens. Sample names, prices and times. Same actions and permissions as the desktop.</p>
+  </div>
+  <button onclick="var r=document.documentElement;r.dataset.theme=(r.dataset.theme==='dark')?'light':'dark'" style="font:500 13px var(--sans);padding:8px 14px;border-radius:8px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer">Toggle page background</button>
+</header>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path class="cut" d="M5 10v10h5v-6h4v6h5V10"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path class="cut" d="M9 8h6M9 12h6M9 16h4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path class="cut" d="M3 7l9 4 9-4M12 11v10"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></symbol>
+</svg>
+
+<main class="gallery">
+
+<!-- 1 LOGIN -->
+<figure class="item">
+  <div class="phone warm"><div class="body center">
+    <div class="logomark" title="Replace with the logo"></div>
+    <div style="text-align:center"><div class="h" style="font-size:34px;color:var(--brown)">Vriksha Studio</div><div class="muted">Staff sign in</div></div>
+    <div style="height:10px"></div>
+    <div class="input">Username</div>
+    <div class="input">Password <span class="act">Show</span></div>
+    <div class="btn primary">Sign in</div>
+    <div class="muted s12" style="text-align:center">NakamaDesk · v1</div>
+  </div></div>
+  <figcaption>1 · Login</figcaption>
+</figure>
+
+<!-- 2 DASHBOARD -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><h2>Good morning</h2><div class="sub">Owner · Today</div></div>
+    <div class="body">
+      <div class="grid2">
+        <div class="warmcard metric"><div class="muted s12">Sales today</div><div class="big brown">₹24,800</div></div>
+        <div class="warmcard metric"><div class="muted s12">Open orders</div><div class="big brown">7</div></div>
+        <div class="warmcard metric"><div class="muted s12">Low stock</div><div class="big bad">3</div></div>
+        <div class="warmcard metric"><div class="muted s12">Present today</div><div class="big ok">5 / 8</div></div>
+      </div>
+      <div class="row"><span class="b" style="font-size:16px">Open orders</span><span class="gold m s12">See all</span></div>
+      <div class="card row"><div class="col"><span class="b">ORD-2026-0012</span><span class="muted s12">Ramesh K · ₹18,500</span></div><span class="chip gold">In production</span></div>
+      <div class="card row"><div class="col"><span class="b">ORD-2026-0013</span><span class="muted s12">Anitha S · ₹9,800</span></div><span class="chip">Confirmed</span></div>
+      <div class="card row"><div class="col"><span class="b">ORD-2026-0014</span><span class="muted s12">Web order · ₹32,000</span></div><span class="chip mute">Draft</span></div>
+    </div>
+    <nav class="tabs"><a class="on"><svg><use href="#i-home"/></svg>Home</a><a><svg><use href="#i-list"/></svg>Orders</a><a><svg><use href="#i-box"/></svg>Items</a><a><svg><use href="#i-more"/></svg>More</a></nav>
+  </div>
+  <figcaption>2 · Dashboard</figcaption>
+</figure>
+
+<!-- 3 ORDERS -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><h2>Orders</h2></div>
+    <div class="body" style="gap:12px">
+      <div class="filters"><span class="filter on">All</span><span class="filter">Draft</span><span class="filter">Confirmed</span><span class="filter">In production</span><span class="filter">Ready</span></div>
+      <div class="card col" style="gap:8px"><div class="row"><span class="b">ORD-2026-0012</span><span class="chip gold">In production</span></div><span>Ramesh K  ·  ₹18,500</span><span class="s11"><b class="gold m">Counter</b> &nbsp;<span class="muted">Due 12 Nov</span></span></div>
+      <div class="card col" style="gap:8px"><div class="row"><span class="b">ORD-2026-0013</span><span class="chip">Confirmed</span></div><span>Anitha S  ·  ₹9,800</span><span class="s11"><b class="gold m">Web</b> &nbsp;<span class="muted">Due 20 Nov</span></span></div>
+      <div class="card col" style="gap:8px"><div class="row"><span class="b">ORD-2026-0014</span><span class="chip mute">Draft</span></div><span>Web enquiry  ·  Quote pending</span><span class="s11"><b class="gold m">Web</b> &nbsp;<span class="muted">Custom</span></span></div>
+      <div class="card col" style="gap:8px"><div class="row"><span class="b">ORD-2026-0011</span><span class="chip ok">Ready</span></div><span>Suresh B  ·  ₹14,200</span><span class="s11"><b class="gold m">Counter</b> &nbsp;<span class="muted">Ready</span></span></div>
+      <div class="card col" style="gap:8px"><div class="row"><span class="b">ORD-2026-0009</span><span class="chip mute">Delivered</span></div><span>Kavya R  ·  ₹6,400</span><span class="s11"><b class="gold m">Counter</b> &nbsp;<span class="muted">Delivered</span></span></div>
+    </div>
+    <nav class="tabs"><a><svg><use href="#i-home"/></svg>Home</a><a class="on"><svg><use href="#i-list"/></svg>Orders</a><a><svg><use href="#i-box"/></svg>Items</a><a><svg><use href="#i-more"/></svg>More</a></nav>
+  </div>
+  <figcaption>3 · Orders</figcaption>
+</figure>
+
+<!-- 4 ORDER DETAIL -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><h2>ORD-2026-0012</h2><div class="sub">Standard order · Counter</div></div>
+    <div class="body">
+      <div class="warmcard row"><div class="col"><span class="b" style="font-size:15px">Ramesh K</span><span class="muted s12">+91 98765 43210</span></div><span class="gold b s12">Call</span></div>
+      <div class="card col" style="gap:8px">
+        <div class="row"><span style="font-size:13px">Carved Teak Armchair × 1</span><span class="m" style="font-size:13px">₹18,500</span></div>
+        <div style="height:6px"></div>
+        <div class="row"><span class="muted" style="font-size:13px">Total</span><span class="b">₹18,500</span></div>
+        <div class="row"><span class="muted" style="font-size:13px">Advance paid</span><span class="b ok">₹6,000</span></div>
+        <div class="row"><span class="muted" style="font-size:13px">Balance</span><span class="b brown">₹12,500</span></div>
+      </div>
+      <div class="card col" style="gap:12px"><span class="b">Progress</span>
+        <div class="row" style="justify-content:flex-start"><span class="dot done"></span>Draft</div>
+        <div class="row" style="justify-content:flex-start"><span class="dot done"></span>Confirmed</div>
+        <div class="row" style="justify-content:flex-start"><span class="dot now"></span><b>In production</b></div>
+        <div class="row muted" style="justify-content:flex-start"><span class="dot"></span>Ready</div>
+        <div class="row muted" style="justify-content:flex-start"><span class="dot"></span>Delivered</div>
+      </div>
+      <div class="muted s12" style="line-height:1.5">Status only moves forward. A delivered order cannot be reopened.</div>
+    </div>
+    <div class="actionbar"><div class="btn primary">Mark as Ready</div></div>
+  </div>
+  <figcaption>4 · Order detail</figcaption>
+</figure>
+
+<!-- 5 ITEMS -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><h2>Items</h2></div>
+    <div class="body" style="gap:12px">
+      <div class="input">Search name or SKU</div>
+      <div class="card row"><div class="col"><span class="b">Carved Teak Armchair</span><span class="muted s11">CH-TEAK-01</span></div><div class="stepper"><span>−</span><b>4</b><span>+</span></div></div>
+      <div class="card item low row"><div class="col"><span class="b">Rosewood Wall Panel</span><span class="bad s11">WP-ROSE-03 · Low stock</span></div><div class="stepper"><span>−</span><b>1</b><span>+</span></div></div>
+      <div class="card row"><div class="col"><span class="b">Study Table, Sheesham</span><span class="muted s11">TB-SHE-02</span></div><div class="stepper"><span>−</span><b>6</b><span>+</span></div></div>
+      <div class="card item low row"><div class="col"><span class="b">Temple Door Frame</span><span class="bad s11">DF-TEAK-07 · Low stock</span></div><div class="stepper"><span>−</span><b>2</b><span>+</span></div></div>
+      <div class="card row"><div class="col"><span class="b">Teak Planks (raw)</span><span class="muted s11">RM-TEAK</span></div><div class="stepper"><span>−</span><b>48</b><span>+</span></div></div>
+    </div>
+    <nav class="tabs"><a><svg><use href="#i-home"/></svg>Home</a><a><svg><use href="#i-list"/></svg>Orders</a><a class="on"><svg><use href="#i-box"/></svg>Items</a><a><svg><use href="#i-more"/></svg>More</a></nav>
+  </div>
+  <figcaption>5 · Items</figcaption>
+</figure>
+
+<!-- 6 NEW BILL (offline) -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><div class="back">←  Back</div><h2>New bill</h2></div>
+    <div class="banner"><i></i><span>No internet. The bill is saved on this phone and sent when you are back online.</span></div>
+    <div class="body" style="gap:12px">
+      <div class="input">Buyer phone <span class="act">Search</span></div>
+      <div class="input">Buyer name</div>
+      <div class="input">Search item to add <span class="act">Add</span></div>
+      <span class="b">Items</span>
+      <div class="card row"><div class="col"><span class="b">Study Table Sheesham</span><span class="muted s12">₹14,200 each</span></div><div class="stepper"><span>−</span><b>1</b><span>+</span></div></div>
+      <div class="card row"><div class="col"><span class="b">Carved Teak Armchair</span><span class="muted s12">₹18,500 each</span></div><div class="stepper"><span>−</span><b>2</b><span>+</span></div></div>
+      <div class="warmcard row"><span class="m muted" style="font-size:15px">Total</span><span class="h brown" style="font-size:30px">₹51,200</span></div>
+    </div>
+    <div class="actionbar"><div class="btn primary">Save bill offline</div></div>
+  </div>
+  <figcaption>6 · New bill<small>Offline state. Online it says “Create bill” and shows the bill number.</small></figcaption>
+</figure>
+
+<!-- 7 WORKFORCE -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><div class="back">←  Back</div><h2>Workforce</h2><div class="sub">Attendance and wages</div></div>
+    <div class="body">
+      <div class="warmcard col" style="gap:12px">
+        <span class="muted m s12">Who is checking in?</span>
+        <div class="input">Achari One <span class="act">▾</span></div>
+        <div class="grid2"><div class="btn primary">Check in</div><div class="btn outline">Check out</div></div>
+      </div>
+      <div class="row"><span class="b" style="font-size:16px">Today</span><span class="gold m s12">Wages due ₹1,800</span></div>
+      <div class="card row"><div class="col"><span class="b">Achari One</span><span class="muted s12">9:02 am  →  —</span></div><div class="col" style="align-items:flex-end"><span class="b brown">—</span><span class="ok s12">working</span></div></div>
+      <div class="card row"><div class="col"><span class="b">Suresh B</span><span class="muted s12">9:10 am  →  6:05 pm</span></div><div class="col" style="align-items:flex-end"><span class="b brown">₹800</span><span class="muted s12">8.9 h</span></div></div>
+      <div class="card row"><div class="col"><span class="b">Kavya R</span><span class="muted s12">9:30 am  →  1:30 pm</span></div><div class="col" style="align-items:flex-end"><span class="b brown">₹400</span><span class="muted s12">4.0 h</span></div></div>
+    </div>
+    <nav class="tabs"><a><svg><use href="#i-home"/></svg>Home</a><a><svg><use href="#i-list"/></svg>Orders</a><a><svg><use href="#i-box"/></svg>Items</a><a class="on"><svg><use href="#i-more"/></svg>More</a></nav>
+  </div>
+  <figcaption>7 · Workforce<small>Owners and managers pick a worker. Workers see only their own check-in.</small></figcaption>
+</figure>
+
+<!-- 8 MORE -->
+<figure class="item">
+  <div class="phone">
+    <div class="appbar"><h2>More</h2></div>
+    <div class="body" style="gap:12px">
+      <div class="warmcard col" style="gap:8px"><div class="row"><span class="b">Sync</span><span class="chip ok">Online</span></div><span class="muted s12" style="font-size:13px">Last synced 2 minutes ago</span><span class="m brown" style="font-size:13px">1 bill waiting to be sent</span></div>
+      <div class="card row" style="padding:16px"><div class="col"><span class="b" style="font-size:15px">Workforce</span><span class="muted s12">Attendance and wages</span></div><span class="gold" style="font-size:20px">›</span></div>
+      <div class="card row" style="padding:16px"><div class="col"><span class="b" style="font-size:15px">Buyers</span><span class="muted s12">Customers and phone numbers</span></div><span class="gold" style="font-size:20px">›</span></div>
+      <div class="card row" style="padding:16px"><div class="col"><span class="b" style="font-size:15px">Bill history</span><span class="muted s12">Past bills and reprints</span></div><span class="gold" style="font-size:20px">›</span></div>
+      <div class="card row" style="padding:16px"><div class="col"><span class="b" style="font-size:15px">Reports</span><span class="muted s12">Sales, stock and tax</span></div><span class="gold" style="font-size:20px">›</span></div>
+      <div class="spacer"></div>
+      <div class="btn outline">Sign out</div>
+      <div class="muted s12" style="text-align:center">Vriksha Studio · v1</div>
+    </div>
+    <nav class="tabs"><a><svg><use href="#i-home"/></svg>Home</a><a><svg><use href="#i-list"/></svg>Orders</a><a><svg><use href="#i-box"/></svg>Items</a><a class="on"><svg><use href="#i-more"/></svg>More</a></nav>
+  </div>
+  <figcaption>8 · More<small>Shows how many offline bills are still waiting to sync.</small></figcaption>
+</figure>
+
+</main>
+</body>
+</html>
