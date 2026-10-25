@@ -270,3 +270,24 @@ Answered in §0: budget, shipping, GST, Kotlin app, Figma plan. Still open:
 3. **Which delivery pincodes or towns** count as local?
 4. **Which state** is the shop registered in? This sets the GST registration threshold.
 5. Does the shop's **UPI ID or QR** go on the order confirmation page?
+
+---
+
+## 13. Phase 4 as built (public API)
+
+Branch `feature/public-api`. Differs from the sketch in §5 and §6 because of the owner answers in §0:
+
+| Design said | Built |
+|---|---|
+| `POST /assets/presign` to R2/S3 | `POST /items/{id}/assets` (multipart) stores on the server disk (`MEDIA_DIR`), served at `GET /media/<key>`. Only `media_service.py` knows this; moving to R2 means changing that one file. Photos JPG/PNG/WebP up to 10 MB, `.glb` up to 25 MB; content is verified, not just the declared type. |
+| `payments` table, Razorpay webhook | Not built (no gateway yet). Checkout makes a **draft** order; staff confirm and record the UPI advance in `advance_paid`. |
+| `product_assets` | Built, plus the item catalogue fields (`slug`, `is_published`, `made_to_order`, `lead_time_days`, `short_desc`, `wood_type`, `dimensions_mm`) and `orders.source` / `delivery_address`. `orders.created_by` is now nullable (guest web orders). |
+| `/public/*` | `GET /public/catalog`, `GET /public/catalog/{slug}`, `GET /public/delivery-check`, `POST /public/checkout`, `POST /public/enquiry`, `GET /public/orders/{number}?phone=` |
+
+Rules the public API keeps: prices always come from the database; stock is checked but not taken (a sale moves stock); a made-to-order item cannot be pay-on-delivery; an order is readable only with its number **and** phone (a wrong phone and an unknown number both return 404); costs, SKUs and stock counts are never returned; writes are limited per IP (`PUBLIC_RATE_LIMIT`).
+
+Known limits:
+- The enquiry takes text only. Reference photos need a small upload endpoint (not built).
+- The rate limiter is in process (fine for one API process; use the proxy or Redis if that changes). Run uvicorn with `--proxy-headers` behind Caddy so the real client IP is used.
+- Publishing an item needs a selling price; the slug is made from the name if missing.
+- Staff can filter web orders with `GET /orders?source=web`.
