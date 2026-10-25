@@ -60,4 +60,13 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          pytest --cov=app --cov-report=term-missing -v
+          pytest --cov=app --cov-report=term-missing --cov-report=html:reports/coverage             --html=reports/backend-test-report.html --self-contained-html -v
+
+      # Download from the run's "Artifacts" to read the HTML test and coverage reports.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: reports/
+          if-no-files-found: ignore
