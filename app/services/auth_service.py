@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
+from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate
 
@@ -74,6 +75,26 @@ def register_user(db: Session, user: UserCreate) -> User:
     db.commit()
     db.refresh(new_user)
     return new_user
+
+
+def bootstrap_owner(db: Session, username: str, email: str, password: str) -> User:
+    """
+    Create the first owner account. Refuses if an owner already exists.
+
+    Registration needs an owner token, so this is the only way in on a fresh
+    database. Called from `python -m app.cli create-owner`.
+
+    Raises:
+        HTTPException: 400 if an owner already exists (or the username is taken).
+    """
+    if db.query(User).filter(User.role == UserRole.OWNER).first():
+        raise HTTPException(status_code=400, detail="An owner already exists")
+    return register_user(
+        db,
+        UserCreate(
+            username=username, email=email, password=password, role=UserRole.OWNER
+        ),
+    )
 
 
 def list_users(db: Session) -> List[User]:

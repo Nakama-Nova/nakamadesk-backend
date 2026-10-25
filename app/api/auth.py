@@ -18,13 +18,21 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
 @router.post("/register", response_model=UserResponse)
-def register(user: UserCreate, db: Session = Depends(get_db)):
+def register(
+    user: UserCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+):
     """
-    Register a new user in the system.
+    Create a new staff account.
+
+    RBAC: OWNER only. The very first owner is created from the command line
+    (`python -m app.cli create-owner`), since nobody can be logged in yet.
 
     Args:
         user (UserCreate): User registration data.
         db (Session): Database session.
+        current_user (User): The authenticated owner.
 
     Returns:
         UserResponse: The newly created user.
