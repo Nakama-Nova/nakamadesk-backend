@@ -15,6 +15,7 @@ the Movement Engine section — do NOT remove them.
 """
 
 import logging
+import re
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
@@ -364,6 +365,38 @@ def get_item(uow: AbstractUnitOfWork, item_id: UUID) -> Optional[Item]:
     return uow.items.get_by_id(item_id)
 
 
+def _slugify(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "item"
+
+
+def prepare_catalog_fields(uow: AbstractUnitOfWork, item: Item) -> None:
+    """
+    Before saving: keep `slug` unique, and make sure a published item can be
+    shown (it needs a price and a slug; a missing slug is made from the name).
+    """
+
+    def taken(slug: str) -> bool:
+        q = uow.session.query(Item.id).filter(Item.slug == slug)
+        if item.id is not None:
+            q = q.filter(Item.id != item.id)
+        return q.first() is not None
+
+    if item.slug and taken(item.slug):
+        raise HTTPException(status_code=400, detail="That slug is already in use")
+    if not item.is_published:
+        return
+    if (item.selling_price or 0) <= 0:
+        raise HTTPException(
+            status_code=400, detail="Set a selling price before publishing"
+        )
+    if not item.slug:
+        base = _slugify(item.name)
+        slug, n = base, 2
+        while taken(slug):
+            slug, n = f"{base}-{n}", n + 1
+        item.slug = slug
+
+
 def create_item(uow: AbstractUnitOfWork, item_data: ItemCreate) -> Item:
     """
     Create a new inventory item and persist it to the database.
@@ -377,6 +410,7 @@ def create_item(uow: AbstractUnitOfWork, item_data: ItemCreate) -> Item:
     """
     new_item = Item(**item_data.model_dump())
     with uow:
+        prepare_catalog_fields(uow, new_item)
         uow.items.add(new_item)
         uow.commit()
     uow.refresh(new_item)
@@ -407,6 +441,7 @@ def update_item(
         for key, value in update_dict.items():
             setattr(item, key, value)
 
+        prepare_catalog_fields(uow, item)
         uow.commit()
     uow.refresh(item)
     logger.info(f"Item updated: {item.sku} (ID: {item.id})")

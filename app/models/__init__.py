@@ -12,6 +12,7 @@ from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
 from app.models.price_history import RawMaterialPriceHistory  # noqa: F401
+from app.models.product_asset import ProductAsset  # noqa: F401
 from app.models.production_job import ProductionJob  # noqa: F401
 from app.models.production_material_allocation import (
     ProductionMaterialAllocation,  # noqa: F401, E501

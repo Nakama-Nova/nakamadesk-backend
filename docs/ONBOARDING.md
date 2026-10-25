@@ -81,7 +81,7 @@ uvicorn app.main:app --reload       # http://127.0.0.1:8000/docs
 pytest                              # needs a live PostgreSQL
 ```
 
-Env vars: `ENV` (default `dev`), `DATABASE_URL`, `DEV_DATABASE_URL`, `TEST_DATABASE_URL`, `SECRET_KEY`, `ALGORITHM` (HS256), `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60). Outside `dev`/`test`, startup **refuses to run** with a missing or default `SECRET_KEY`. `conftest.py` forces `ENV=test`; fixtures `auth_client`, `manager_client`, `worker_client` give pre-authenticated clients. **`pytest` wipes the database it points at** (`DROP SCHEMA public`), and `DATABASE_URL` from `.env` wins over `TEST_DATABASE_URL`: run it with `DATABASE_URL` set to a separate test database, never your dev one. Alembic has a single head (`a7b8c9d0e1f2`); keep it linear.
+Env vars: `ENV` (default `dev`), `DATABASE_URL`, `DEV_DATABASE_URL`, `TEST_DATABASE_URL`, `SECRET_KEY`, `ALGORITHM` (HS256), `ACCESS_TOKEN_EXPIRE_MINUTES` (default 60). Website API: `MEDIA_DIR` (uploaded photos/models, default `media`), `DELIVERY_PINCODES` (comma separated; empty = no restriction), `CORS_ORIGINS` (storefront origins, comma separated; empty = none), `PUBLIC_RATE_LIMIT` (calls per IP per minute, default 20). Outside `dev`/`test`, startup **refuses to run** with a missing or default `SECRET_KEY`. `conftest.py` forces `ENV=test`; fixtures `auth_client`, `manager_client`, `worker_client` give pre-authenticated clients. **`pytest` wipes the database it points at** (`DROP SCHEMA public`), and `DATABASE_URL` from `.env` wins over `TEST_DATABASE_URL`: run it with `DATABASE_URL` set to a separate test database, never your dev one. Alembic has a single head (`b8c9d0e1f2a3`); keep it linear.
 
 ### Desktop
 

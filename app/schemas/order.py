@@ -119,7 +119,9 @@ class OrderResponse(BaseModel):
     expected_delivery: Optional[date] = None
     delivered_at: Optional[datetime] = None
     order_date: datetime
-    created_by: UUID
+    created_by: Optional[UUID] = None  # None for guest web orders
+    source: str = "pos"
+    delivery_address: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
     items: List[OrderItemResponse] = []
