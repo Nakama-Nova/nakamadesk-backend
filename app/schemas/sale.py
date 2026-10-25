@@ -45,6 +45,7 @@ class SaleItemResponse(BaseModel):
 
     id: UUID
     item_id: UUID
+    item_name: Optional[str] = None
     quantity: int
     price_at_sale: Decimal
     gst_percent: Decimal = Decimal("0.00")

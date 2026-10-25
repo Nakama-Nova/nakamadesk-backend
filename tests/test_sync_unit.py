@@ -3,6 +3,7 @@ from typing import Any
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+from app.models.sale import Sale
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork, BaseRepository
 from app.schemas.sync import SyncAction, SyncOperation
@@ -47,25 +48,25 @@ def test_sync_executor_create_calls_repository():
 
     op = SyncOperation(
         id=str(uuid4()),
-        entity="sale",
+        entity="item",  # sales have their own handler (see test_sync.py)
         action=SyncAction.CREATE,
         payload={
             "id": str(uuid4()),
-            "customer_id": str(uuid4()),
-            "items": [{"product_id": str(uuid4()), "quantity": 1, "price": 100.0}],
-            "total_amount": 100.0,
-            "payment_method": "cash",
+            "name": "Chair",
+            "sku": "CH-1",
+            "selling_price": 100.0,
+            "current_stock": 1,
         },
         updated_at=datetime.now(timezone.utc),
     )
 
     # Mock repository behavior
-    uow.sales.get_by_id_scoped.return_value = None
+    uow.items.get_by_id.return_value = None
 
     record_id, error = SyncExecutor.execute(uow, op, user)
 
     assert error is None
-    assert uow.sales.add.called
+    assert uow.items.add.called
     # Check that record_id matches the payload
     assert str(record_id) == str(op.payload.id)
 
@@ -80,6 +81,7 @@ def test_sync_executor_update_calls_repository():
     mock_sale = MagicMock()
     mock_sale.id = record_id
     mock_sale.updated_at = datetime.now(timezone.utc)
+    mock_sale.__table__ = Sale.__table__  # LWW only overwrites real columns
     uow.sales.get_by_id_scoped.return_value = mock_sale
 
     op = SyncOperation(

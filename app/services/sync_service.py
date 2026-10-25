@@ -1,15 +1,15 @@
 import logging
 import uuid
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from app.models.attendance import Attendance
+from app.models.customer import Customer
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
-from app.models.sale_item import SaleItem
 from app.models.sync import SyncLog, SyncTombstone
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -92,8 +92,11 @@ class LWWResolver(ConflictResolver):
             if hasattr(op.payload, "model_dump")
             else op.payload
         )
+        # Only real columns: a sale payload also carries nested `items` and
+        # customer_name/phone, which are not attributes to overwrite.
+        columns = {c.name for c in db_obj.__table__.columns}
         for key, value in payload_data.items():
-            if key in ["id", "user_id", "recorded_by"]:
+            if key in ["id", "user_id", "recorded_by"] or key not in columns:
                 continue
             setattr(db_obj, key, value)
         return True
@@ -345,25 +348,86 @@ class GenericSyncHandler(BaseSyncHandler):
 
 
 class SaleSyncHandler(GenericSyncHandler):
+    """
+    Offline counter sales go through the same sales logic as the REST API
+    (stock ledger, tax, consecutive bill number), not a raw row insert.
+
+    The goods have already left the shop, so a sale is recorded even when
+    server stock is short (stock goes negative and is logged). Server prices
+    are authoritative; the price the client saw is not used.
+    """
+
     def __init__(self):
         super().__init__(Sale, "sales")
 
-    def _attach_children(self, new_obj: Any, payload_data: dict) -> None:
-        # The generic column filter strips `items`; rebuild the line items so a
-        # synced sale isn't created empty (issue #3). Tax columns stay at their
-        # defaults — the offline payload only carries product, qty and price.
-        # An unknown product_id fails the FK at flush and fails just this op.
-        new_obj.items = [
-            SaleItem(
-                id=uuid.uuid4(),
-                sale_id=new_obj.id,
-                item_id=line["product_id"],
-                quantity=line["quantity"],
-                price_at_sale=line["price"],
-                total_price=line["price"] * line["quantity"],
+    @staticmethod
+    def _customer_id(uow: AbstractUnitOfWork, data: dict) -> Optional[UUID]:
+        """Explicit customer_id, else find-or-create by phone, else walk-in."""
+        if data.get("customer_id"):
+            return data["customer_id"]
+        phone = (data.get("customer_phone") or "").strip()
+        if not phone:
+            return None
+        customer = uow.session.query(Customer).filter(Customer.phone == phone).first()
+        if not customer:
+            customer = Customer(
+                name=(data.get("customer_name") or "Walk-in Customer").strip(),
+                phone=phone,
             )
-            for line in payload_data.get("items", [])
-        ]
+            uow.session.add(customer)
+            uow.flush()
+        return customer.id
+
+    def apply_create(
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional[SyncOperation] = None,
+    ) -> Tuple[Optional[UUID], Optional[str]]:
+        # Imported here: sales_service pulls in inventory and invoice code that
+        # this module must not depend on at import time.
+        from app.schemas.sale import SaleCreate, SaleItemCreate
+        from app.services import sales_service
+
+        data = (
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload
+        )
+        try:
+            client_id = UUID(str(op.id)) if op is not None else None
+        except ValueError:
+            client_id = None  # non-UUID client id: the SyncLog still dedupes
+
+        sale_data = SaleCreate(
+            customer_id=self._customer_id(uow, data),
+            client_id=client_id,
+            items=[
+                SaleItemCreate(item_id=line["product_id"], quantity=line["quantity"])
+                for line in data.get("items", [])
+            ],
+            payment_method=data.get("payment_method"),
+        )
+        sale_id = data.get("id")
+        existing = uow.sales.get_by_id(sale_id) if sale_id else None
+        if existing is not None and existing.user_id == current_user.id:
+            return existing.id, None  # replay under a different op id
+        sale, _ = sales_service.build_sale(
+            uow,
+            sale_data,
+            current_user.id,
+            allow_negative_stock=True,
+            sale_id=sale_id,
+        )
+        if op is not None:
+            # Store the client's op time (naive UTC) so last-write-wins on later
+            # updates compares against when the sale happened, not when it synced.
+            sale.updated_at = op.updated_at.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
+        uow.flush()  # surface FK/unique errors inside this op's nested transaction
+        return sale.id, None
 
 
 class ItemSyncHandler(GenericSyncHandler):

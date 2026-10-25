@@ -113,3 +113,21 @@ def test_list_and_fetch_sale(auth_client: TestClient):
 
     # Ensure totals match decimal precision accurately
     assert Decimal(fetch_resp.json()["total_amount"]) == Decimal("100.00")
+
+
+def test_sale_items_include_product_name(auth_client: TestClient):
+    item = auth_client.post(
+        "/items/",
+        json={
+            "sku": "NAME-001",
+            "name": "Named Chair",
+            "selling_price": 100,
+            "current_stock": 5,
+        },
+    ).json()
+    sale = auth_client.post(
+        "/sales/", json={"items": [{"item_id": item["id"], "quantity": 1}]}
+    ).json()
+    assert sale["items"][0]["item_name"] == "Named Chair"
+    lines = auth_client.get(f"/sales/{sale['id']}/items").json()
+    assert [ln["item_name"] for ln in lines] == ["Named Chair"]
