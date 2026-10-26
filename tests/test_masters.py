@@ -158,3 +158,57 @@ def test_stock_adjustments_are_in_the_ledger_with_who_and_why(client, people):
     assert [float(x["quantity"]) for x in mm] == [12.0] and mm[0]["name"].startswith(
         "Ply"
     )
+
+
+def test_every_staff_role_can_read_stock_but_only_owner_manager_see_costs(
+    client, people
+):
+    owner = people["owner"]["h"]
+    item = client.post(
+        "/items/",
+        headers=owner,
+        json={
+            "sku": sku(),
+            "name": "Bench",
+            "selling_price": 900,
+            "purchase_price": 400,
+            "production_cost": 350,
+        },
+    ).json()
+    for role in ("owner", "manager"):
+        got = client.get(f"/items/{item['id']}", headers=people[role]["h"]).json()
+        assert (
+            float(got["purchase_price"]) == 400 and float(got["production_cost"]) == 350
+        )
+    for role in ("sales", "achari", "worker"):
+        h = people[role]["h"]
+        one = client.get(f"/items/{item['id']}", headers=h)
+        assert one.status_code == 200 and float(one.json()["selling_price"]) == 900
+        assert (
+            float(one.json()["purchase_price"]) == 0
+            and float(one.json()["production_cost"]) == 0
+        )
+        listed = [
+            i for i in client.get("/items/", headers=h).json() if i["id"] == item["id"]
+        ]
+        assert listed and float(listed[0]["purchase_price"]) == 0
+        # reading is all they get
+        assert (
+            client.put(
+                f"/items/{item['id']}", headers=h, json={"name": "x"}
+            ).status_code
+            == 403
+        )
+        assert (
+            client.patch(
+                f"/items/{item['id']}/stock", headers=h, json={"quantity": 1}
+            ).status_code
+            == 403
+        )
+    # and the real cost was not overwritten by masking
+    assert (
+        float(
+            client.get(f"/items/{item['id']}", headers=owner).json()["purchase_price"]
+        )
+        == 400
+    )
