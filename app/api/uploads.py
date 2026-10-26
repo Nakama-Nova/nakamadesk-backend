@@ -65,11 +65,12 @@ def presign(
         raise HTTPException(status_code=404, detail="Item not found")
     key = media_service.private_key(req.item_id, req.kind, ext)
     max_bytes = media_service.PRIVATE_KINDS[req.kind][1]
-    signed = store.presign_post(key, req.content_type, max_bytes)
+    signed = store.presign_put(key, req.content_type, req.size)
     return {
         "key": key,
         "url": signed["url"],
-        "fields": signed["fields"],
+        "method": signed["method"],
+        "headers": signed["headers"],
         "max_bytes": max_bytes,
         "expires_in": 600,
     }

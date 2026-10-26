@@ -15,15 +15,12 @@ class FakeStore:
         self.objects = {}
         self.signed = []
 
-    def presign_post(self, key, content_type, max_bytes, expires=600):
-        self.signed.append((key, content_type, max_bytes))
+    def presign_put(self, key, content_type, size, expires=600):
+        self.signed.append((key, content_type, size))
         return {
-            "url": "https://store.invalid/bucket",
-            "fields": {
-                "key": key,
-                "Content-Type": content_type,
-                "policy": f"content-length-range 1 {max_bytes}",
-            },
+            "url": f"https://store.invalid/bucket/{key}?sig=1",
+            "method": "PUT",
+            "headers": {"Content-Type": content_type},
         }
 
     def presign_get(self, key, expires=900, filename=None):

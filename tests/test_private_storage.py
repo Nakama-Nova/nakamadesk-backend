@@ -70,9 +70,10 @@ def test_presign_returns_a_policy_with_size_and_type_limits(
     out = r.json()
     assert out["key"].startswith(f"items/{item['id']}/stl/")
     assert out["key"].endswith(".stl")
-    assert out["fields"]["Content-Type"] == "model/stl"
-    assert str(out["max_bytes"]) in out["fields"]["policy"]
-    assert store.signed[0][2] == 300 * 1024 * 1024
+    assert out["method"] == "PUT"
+    assert out["headers"] == {"Content-Type": "model/stl"}
+    assert store.signed[-1][1:] == ("model/stl", 5_000_000)  # type and size are signed
+    assert out["max_bytes"] == 300 * 1024 * 1024
 
 
 @pytest.mark.parametrize(
