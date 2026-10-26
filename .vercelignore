@@ -1,0 +1,16 @@
+.env
+.env.*
+venv/
+.git/
+tests/
+docs/
+reports/
+invoices/
+media/
+full_source_dump.txt
+CHANGELOG.md
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+pyproject.toml

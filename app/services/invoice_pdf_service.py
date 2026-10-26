@@ -8,7 +8,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from app.models.sale import Sale
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-INVOICES_DIR = os.path.join(BASE_DIR, "invoices")
+INVOICES_DIR = os.getenv("INVOICES_DIR") or os.path.join(BASE_DIR, "invoices")
 
 
 def generate_invoice_pdf(sale: Sale) -> str:
