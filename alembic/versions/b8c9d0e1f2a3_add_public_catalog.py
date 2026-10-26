@@ -45,7 +45,9 @@ def upgrade() -> None:
     op.add_column("items", sa.Column("wood_type", sa.String(), nullable=True))
     op.add_column(
         "items",
-        sa.Column("dimensions_mm", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "dimensions_mm", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
     )
 
     op.create_table(

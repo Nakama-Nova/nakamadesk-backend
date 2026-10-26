@@ -64,6 +64,14 @@ class Item(Base):
     )  # shopper-facing; `description` is internal
     wood_type = Column(String, nullable=True)
     dimensions_mm = Column(JSONB, nullable=True)  # {"l":700,"w":650,"h":950}
+
+    # --- 3D Lab (staff only; never part of the public API) -----------------
+    is_furniture = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    size_presets = Column(
+        JSONB, nullable=True
+    )  # {"S": {"l":..,"w":..,"h":..}, "M": .., "L": ..}
     is_active = Column(Boolean, default=True)
     version_id = Column(
         Integer, default=1, server_default="1", nullable=False

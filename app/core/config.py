@@ -28,6 +28,15 @@ class Settings:
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 
+    # --- Private object store (scans, STL/OBJ/G-code, part models) -----------
+    # Any S3-compatible service: AWS S3, or Cloudflare R2 via S3_ENDPOINT_URL.
+    # Empty S3_BUCKET = not configured (the presign endpoints answer 503).
+    S3_BUCKET: str = os.getenv("S3_BUCKET", "")
+    S3_ENDPOINT_URL: str = os.getenv("S3_ENDPOINT_URL", "")
+    S3_REGION: str = os.getenv("S3_REGION", "auto")
+    S3_ACCESS_KEY_ID: str = os.getenv("S3_ACCESS_KEY_ID", "")
+    S3_SECRET_ACCESS_KEY: str = os.getenv("S3_SECRET_ACCESS_KEY", "")
+
     if not DATABASE_URL:
         if ENV == "test":
             DATABASE_URL = os.getenv(

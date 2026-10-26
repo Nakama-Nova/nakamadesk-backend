@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Edit parts · 3D Lab</title>
+  <link rel="stylesheet" href="/lab/static/lab.css">
+</head>
+<body>
+  <header class="bar">
+    <div>
+      <h1 id="title">Edit parts</h1>
+      <div class="muted small">Owner and manager only. The achari see the Lab read-only.</div>
+    </div>
+    <a id="viewLink" class="small" href="#">Open the Lab view</a>
+  </header>
+
+  <div class="page">
+    <section class="card" aria-labelledby="h-help">
+      <h2 id="h-help">How sizes work</h2>
+      <p class="small" style="margin:0 0 6px">
+        Every size is a formula of the piece's overall size, in millimetres:
+        <code>L</code> = left to right, <code>W</code> = front to back, <code>H</code> = height.
+        For example a leg's length can be <code>H - 30</code>, a rail <code>(L - 80) / 2</code>.
+        You can use <code>+ - * /</code>, brackets and numbers. Each row is <b>one placed piece</b>:
+        for four legs add four rows (use Copy). <b>Axis</b> says which way the piece's length runs.
+        The position is the piece's lowest corner (x left, y up, z front).
+      </p>
+    </section>
+
+    <section class="card" aria-labelledby="h-size">
+      <h2 id="h-size">Piece, overall size and presets</h2>
+      <label class="row" style="margin-bottom:10px"><input type="checkbox" id="isFurniture" style="width:auto"> Show this piece in the 3D Lab</label>
+      <table style="max-width:640px" id="sizes">
+        <thead><tr><th>Size</th><th>L (mm)</th><th>W (mm)</th><th>H (mm)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="row" style="margin-top:10px">
+        <button type="button" class="primary" id="saveSizes">Save sizes</button>
+        <span class="ok" id="sizesOk" aria-live="polite"></span>
+      </div>
+      <div class="error" id="sizesError" role="alert"></div>
+      <div class="small muted">Leave a preset empty to not offer it. Saving checks that every part still works at every size.</div>
+    </section>
+
+    <section class="card" aria-labelledby="h-parts">
+      <h2 id="h-parts">Parts</h2>
+      <div class="parts">
+        <table id="parts">
+          <thead>
+            <tr>
+              <th>Name</th><th>Wood</th><th>Length</th><th>Width</th><th>Thickness</th><th>Axis</th>
+              <th>x</th><th>y</th><th>z</th><th>Step</th><th>Joinery note</th><th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="addPart">Add part</button>
+        <button type="button" class="primary" id="saveParts">Save parts</button>
+        <span class="ok" id="partsOk" aria-live="polite"></span>
+      </div>
+      <div class="error" id="partsError" role="alert"></div>
+    </section>
+  </div>
+
+  <script type="module" src="/lab/static/edit.js"></script>
+</body>
+</html>

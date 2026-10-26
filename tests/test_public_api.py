@@ -79,7 +79,8 @@ def test_catalog_shows_only_published_and_never_costs(auth_client: TestClient):
     assert row["slug"] == shown["slug"]
     assert set(row) == {
         "slug", "name", "short_desc", "price", "made_to_order", "lead_time_days",
-        "in_stock", "wood_type", "dimensions_mm", "category", "images", "model_url",
+        "in_stock", "wood_type", "dimensions_mm", "category", "images", "renders",
+        "model_url",
     }  # fmt: skip
     assert "purchase_price" not in row and "production_cost" not in row
     assert "current_stock" not in row and "sku" not in row
