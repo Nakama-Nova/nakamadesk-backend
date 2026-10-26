@@ -10,6 +10,13 @@ shop runs on its own server (see ONBOARDING.md). Everything here can be deleted.
 | Website | Vercel project from the `VrikshaStudio` repo |
 | Scan / 3D files | A **private** Supabase Storage bucket, through its S3 API |
 
+## Where it is deployed
+
+- Backend: https://vriksha-beta-api.vercel.app (Vercel project `vriksha-beta-api`, team `nakama23`). Health: `/health/`.
+- Website: https://vriksha-beta-site.vercel.app (project `vriksha-beta-site`).
+- Both were deployed by direct upload with the Vercel CLI (no GitHub link yet), so a push does **not** redeploy. Redeploy from the repo folder with `vercel deploy --prod --scope nakama23`. `.vercelignore` keeps `.env`, tests and `pyproject.toml` out of the upload (`pyproject.toml` makes Vercel ignore `requirements.txt`).
+- Already set on the backend: `ENV`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MEDIA_DIR`, `INVOICES_DIR`, `S3_ENDPOINT_URL`, `S3_REGION`, `SECRET_KEY` (generated, hidden), `CORS_ORIGINS`. **Still missing, you add them:** `DATABASE_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Environment changes only apply after a redeploy.
+
 ## Backend environment variables (Vercel, Production and Preview)
 
 | Name | Value |
