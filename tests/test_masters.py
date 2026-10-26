@@ -188,10 +188,8 @@ def test_every_staff_role_can_read_stock_but_only_owner_manager_see_costs(
             float(one.json()["purchase_price"]) == 0
             and float(one.json()["production_cost"]) == 0
         )
-        listed = [
-            i for i in client.get("/items/", headers=h).json() if i["id"] == item["id"]
-        ]
-        assert listed and float(listed[0]["purchase_price"]) == 0
+        listed = client.get("/items/", headers=h, params={"limit": 100}).json()
+        assert listed and all(float(i["purchase_price"]) == 0 for i in listed)
         # reading is all they get
         assert (
             client.put(
