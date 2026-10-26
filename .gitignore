@@ -16,3 +16,5 @@ htmlcov/
 
 reports/
 media/
+
+.vercel
