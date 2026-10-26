@@ -66,11 +66,15 @@ def _find_customer(uow: AbstractUnitOfWork, phone: str) -> Optional[Customer]:
 
 # --------------------------------------------------------------------------- catalogue
 def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str]):
-    images = [
-        PublicImage(url=media_service.url(a.storage_key), alt=a.alt)
-        for a in assets
-        if a.kind == "image"
-    ]
+    # `assets` is already limited to public, server-disk files (see _products_for)
+    def pictures(kind: str):
+        return [
+            PublicImage(url=media_service.url(a.storage_key), alt=a.alt)
+            for a in assets
+            if a.kind == kind
+        ]
+
+    images, renders = pictures("image"), pictures("render")
     model = next((a for a in assets if a.kind == "glb"), None)
     return PublicProduct(
         slug=item.slug,
@@ -84,6 +88,7 @@ def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str])
         dimensions_mm=item.dimensions_mm,
         category=category,
         images=images,
+        renders=renders,
         model_url=media_service.url(model.storage_key) if model else None,
     )
 
@@ -124,7 +129,12 @@ def _products_for(uow: AbstractUnitOfWork, items: List[Item]) -> List[PublicProd
     assets: Dict = {i: [] for i in ids}
     for a in (
         uow.session.query(ProductAsset)
-        .filter(ProductAsset.item_id.in_(ids))
+        .filter(
+            ProductAsset.item_id.in_(ids),
+            # THE gate: staff-only and private-store files never reach the website
+            ProductAsset.visibility == "public",
+            ProductAsset.storage == "local",
+        )
         .order_by(ProductAsset.sort, ProductAsset.created_at)
     ):
         assets[a.item_id].append(a)

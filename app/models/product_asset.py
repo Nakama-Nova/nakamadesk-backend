@@ -34,5 +34,13 @@ class ProductAsset(Base):
     content_type = Column(String, nullable=False)
     bytes = Column(Integer, nullable=False)
     sort = Column(Integer, nullable=False, default=0)
+    # 'public' files may appear on the website; 'staff' files never do. Safe by
+    # default: anything created without saying so is staff-only.
+    visibility = Column(String, nullable=False, default="staff", server_default="staff")
+    # 'local' = server disk (MEDIA_DIR, public photos/models); 's3' = private object store
+    storage = Column(String, nullable=False, default="local", server_default="local")
+    scan_id = Column(
+        UUID(as_uuid=True), nullable=True
+    )  # job that produced it (later step)
     alt = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

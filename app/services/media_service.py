@@ -7,6 +7,7 @@ delete() and url() here and nothing else.
 """
 
 import io
+import re
 import uuid
 from pathlib import Path
 from typing import Tuple
@@ -84,3 +85,56 @@ def delete(storage_key: str) -> None:
 
 def url(storage_key: str) -> str:
     return f"/media/{storage_key}"
+
+
+# ---------------------------------------------------------------------------
+# Files that go to the private object store (presigned upload, not via the API)
+# ---------------------------------------------------------------------------
+MB = 1024 * 1024
+
+# kind -> (allowed extensions, max bytes, may be shown on the website?)
+PRIVATE_KINDS = {
+    "render": ({".jpg", ".jpeg", ".png", ".webp"}, 15 * MB, True),
+    "glb": ({".glb"}, 100 * MB, True),
+    "part_model": ({".glb"}, 50 * MB, False),
+    "stl": ({".stl"}, 300 * MB, False),
+    "obj": ({".obj"}, 300 * MB, False),
+    "ply": ({".ply"}, 300 * MB, False),
+    "nc": ({".nc", ".gcode", ".ngc", ".tap"}, 50 * MB, False),
+    "source_scan": (
+        {".mp4", ".mov", ".jpg", ".jpeg", ".png", ".zip"},
+        2048 * MB,
+        False,
+    ),
+}
+# What is allowed on the PUBLIC disk (what validate() above checks and limits).
+PUBLISHABLE_MAX = {"render": MAX_BYTES["image"], "glb": MAX_BYTES["glb"]}
+_CONTENT_TYPE = re.compile(r"^[a-z]+/[a-z0-9][a-z0-9.+-]*$")
+
+
+def validate_private_upload(kind: str, filename: str, content_type: str, size: int):
+    """Check a presign request. Returns the lower-case extension."""
+    if kind not in PRIVATE_KINDS:
+        raise HTTPException(status_code=400, detail=f"Unknown file kind '{kind}'")
+    exts, max_bytes, _ = PRIVATE_KINDS[kind]
+    ext = Path(filename or "").suffix.lower()
+    if ext not in exts:
+        raise HTTPException(
+            status_code=415,
+            detail=f"{kind} files must end in {', '.join(sorted(exts))}",
+        )
+    if not _CONTENT_TYPE.match(content_type or ""):
+        raise HTTPException(status_code=400, detail="Invalid content type")
+    if size < 1 or size > max_bytes:
+        raise HTTPException(
+            status_code=413, detail=f"File must be 1 byte to {max_bytes // MB} MB"
+        )
+    return ext
+
+
+def private_key(item_id: uuid.UUID, kind: str, ext: str) -> str:
+    return f"items/{item_id}/{kind}/{uuid.uuid4().hex}{ext}"
+
+
+def can_be_public(kind: str) -> bool:
+    return kind in PRIVATE_KINDS and PRIVATE_KINDS[kind][2]

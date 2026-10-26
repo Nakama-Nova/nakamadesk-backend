@@ -26,6 +26,7 @@ from app.api import (
     reports,
     sales,
     sync,
+    uploads,
     wages,
 )
 from app.core.config import settings
@@ -64,6 +65,7 @@ app.include_router(purchases.router)
 app.include_router(assets.router)
 app.include_router(public.router)
 app.include_router(media.router)
+app.include_router(uploads.router)
 
 
 @app.get("/")

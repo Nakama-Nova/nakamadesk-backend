@@ -25,6 +25,7 @@ class PublicProduct(BaseModel):
     dimensions_mm: Optional[Dict[str, Any]] = None
     category: Optional[str] = None
     images: List[PublicImage] = []
+    renders: List[PublicImage] = []  # finished-piece render pictures
     model_url: Optional[str] = None  # .glb for the 3D viewer, when there is one
 
 
@@ -87,5 +88,7 @@ class AssetResponse(BaseModel):
     alt: Optional[str] = None
     sort: int
     bytes: int
+    visibility: str = "public"  # public | staff
+    storage: str = "local"  # local | s3
 
     model_config = ConfigDict(from_attributes=True)

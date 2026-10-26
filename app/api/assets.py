@@ -5,6 +5,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.api.uploads import asset_out
+from app.core.config import settings
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.product_asset import ProductAsset
@@ -12,6 +14,7 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import AssetResponse
 from app.services import media_service
+from app.services.object_store import S3Store
 
 router = APIRouter(prefix="/items", tags=["Product assets"])
 
@@ -19,15 +22,7 @@ STAFF = [UserRole.OWNER, UserRole.MANAGER]
 
 
 def _out(a: ProductAsset) -> AssetResponse:
-    return AssetResponse(
-        id=a.id,
-        item_id=a.item_id,
-        kind=a.kind,
-        url=media_service.url(a.storage_key),
-        alt=a.alt,
-        sort=a.sort,
-        bytes=a.bytes,
-    )
+    return asset_out(a)
 
 
 @router.get("/{item_id}/assets", response_model=List[AssetResponse])
@@ -68,6 +63,8 @@ async def upload_asset(
         bytes=len(data),
         sort=sort,
         alt=alt,
+        visibility="public",  # photos/models uploaded here are the public catalogue
+        storage="local",
     )
     try:
         with uow:
@@ -94,8 +91,12 @@ def delete_asset(
     )
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    key = asset.storage_key
+    key, storage = asset.storage_key, asset.storage
     with uow:
         uow.session.delete(asset)
         uow.commit()
-    media_service.delete(key)
+    if storage == "s3":
+        if settings.S3_BUCKET:
+            S3Store().delete(key)
+    else:
+        media_service.delete(key)
