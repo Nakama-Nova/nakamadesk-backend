@@ -28,6 +28,7 @@ from app.api import (
     raw_materials,
     reports,
     sales,
+    scans,
     sync,
     uploads,
     wages,
@@ -71,6 +72,7 @@ app.include_router(public.router)
 app.include_router(media.router)
 app.include_router(uploads.router)
 app.include_router(lab.router)
+app.include_router(scans.router)
 app.mount("/lab/static", StaticFiles(directory=lab.STATIC_DIR), name="lab-static")
 
 

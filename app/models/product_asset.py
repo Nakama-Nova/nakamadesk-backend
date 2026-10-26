@@ -40,7 +40,9 @@ class ProductAsset(Base):
     # 'local' = server disk (MEDIA_DIR, public photos/models); 's3' = private object store
     storage = Column(String, nullable=False, default="local", server_default="local")
     scan_id = Column(
-        UUID(as_uuid=True), nullable=True
-    )  # job that produced it (later step)
+        UUID(as_uuid=True),
+        ForeignKey("scan_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+    )  # the scan job that produced it
     alt = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -24,17 +24,10 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import AssetResponse
 from app.services import media_service
+from app.services.asset_service import attach_private_asset
 from app.services.object_store import S3Store, get_store, get_store_or_none
 
 router = APIRouter(tags=["Uploads"])
-
-_PUBLIC_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".glb": "model/gltf-binary",
-}
 
 
 class PresignRequest(BaseModel):
@@ -101,61 +94,17 @@ def register_asset(
         raise HTTPException(status_code=404, detail="Item not found")
     if not req.key.startswith(f"items/{item_id}/{req.kind}/") or ".." in req.key:
         raise HTTPException(status_code=400, detail="Key does not belong to this item")
-    if req.visibility == "public" and not media_service.can_be_public(req.kind):
-        raise HTTPException(
-            status_code=400,
-            detail=f"{req.kind} files are staff-only and cannot be published",
-        )
-
-    max_bytes = media_service.PRIVATE_KINDS[req.kind][1]
-    size = store.head(req.key)
-    if size is None:
-        raise HTTPException(
-            status_code=409, detail="Upload not found. Upload the file first"
-        )
-    if size > max_bytes:
-        store.delete(req.key)
-        raise HTTPException(status_code=413, detail="File is too large")
-
-    storage, key, content_type = "s3", req.key, req.content_type
-    if req.visibility == "public":
-        # Public files live on the server disk (what the website serves), never
-        # in the private bucket. Checked like any other public upload.
-        ext = Path(req.key).suffix.lower()
-        content_type = _PUBLIC_TYPES.get(ext, "")
-        cap = media_service.PUBLISHABLE_MAX[req.kind]
-        data = store.get_bytes(req.key, cap)
-        if len(data) > cap:
-            raise HTTPException(
-                status_code=413,
-                detail=f"Too large to publish (max {cap // media_service.MB} MB). Keep it staff-only",
-            )
-        _, checked_ext = media_service.validate(content_type, data)
-        key = media_service.save(item_id, checked_ext, data)
-        storage = "local"
-
-    asset = ProductAsset(
+    asset = attach_private_asset(
+        uow,
+        store,
         item_id=item_id,
+        key=req.key,
         kind=req.kind,
-        storage_key=key,
-        content_type=content_type,
-        bytes=size,
-        sort=req.sort,
-        alt=req.alt,
         visibility=req.visibility,
-        storage=storage,
+        content_type=req.content_type,
+        alt=req.alt,
+        sort=req.sort,
     )
-    try:
-        with uow:
-            uow.session.add(asset)
-            uow.commit()
-    except Exception:
-        if storage == "local":
-            media_service.delete(key)
-        raise
-    if storage == "local":
-        store.delete(req.key)  # the private copy is no longer needed
-    uow.refresh(asset)
     return asset_out(asset)
 
 

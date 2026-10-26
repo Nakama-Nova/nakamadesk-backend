@@ -254,3 +254,16 @@ Egress: the PC downloads ~13 GB/month. S3 normally charges for data out beyond a
 - No ETag (not needed at this size). Responses are gzipped (the viewer scripts are large).
 - The viewer is `app/static/lab/view.html` + `view.js`, the editor `edit.html` + `edit.js`, with Three.js r0.186.1 vendored (minified, MIT licence kept) under `app/static/lab/vendor/`. Pages use a strict content-security policy (own scripts only).
 - Every save validates every formula against the standard size and every preset, and is refused with the part, field and size if any fails. Viewing is read-only.
+
+## 12. As built: step 3, scan jobs (branch `feature/scan-jobs`)
+
+Migration `e1f2a3b4c5d6` (additive): table `scan_jobs`, FK from `product_assets.scan_id`. API in `app/api/scans.py`.
+
+Differences from the sketch in section 4:
+- `POST /scans/{id}/presign` takes a **list** of files (one call per capture, not one per photo). Photos: JPG/PNG, 8 to 300 files, 25 MB each; video: one MP4/MOV, 2 GB.
+- Every worker call (`progress`, `download-urls`, `results/presign`, `finish`, `fail`) carries `worker` (a name such as `workshop-pc`). The claim is stored as `user id | worker`, so two PCs sharing the owner login still cannot touch each other's job.
+- Results are uploaded with `POST /scans/{id}/results/presign` to `scans/{id}/out/...`; `finish` checks every object exists **before** attaching any, then reuses `asset_service.attach_private_asset` (the same code as `/items/{id}/assets/register`). Results are staff-only unless a `render` or `glb` is published.
+- `POST /scans/{id}/cancel` (creator or owner/manager, while `created` or `uploaded`) deletes the source files.
+- Staff see only their own scans; owner/manager see all. `GET /scans?status=uploaded` lists oldest first (the queue).
+- A lapsed lease can be re-claimed; after the third attempt the job becomes `failed` ("gave up after 3 attempts").
+- Not built: a retry button for failed jobs, an "old jobs" warning screen.
