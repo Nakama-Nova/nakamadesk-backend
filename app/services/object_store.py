@@ -30,26 +30,34 @@ class S3Store:
             region_name=settings.S3_REGION or "auto",
             aws_access_key_id=settings.S3_ACCESS_KEY_ID,
             aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
-            config=Config(signature_version="s3v4"),
+            config=Config(
+                signature_version="s3v4",
+                # S3-compatible services (Supabase, R2, MinIO) want /bucket/key URLs
+                s3={"addressing_style": "path"} if settings.S3_ENDPOINT_URL else {},
+            ),
         )
 
-    def presign_post(
-        self, key: str, content_type: str, max_bytes: int, expires: int = 600
+    def presign_put(
+        self, key: str, content_type: str, size: int, expires: int = 600
     ) -> Dict:
         """
-        POST policy: the STORE rejects a body that is empty, bigger than
-        max_bytes, or sent with a different Content-Type. Returns {url, fields}.
+        Signed PUT for exactly `size` bytes of `content_type`: both headers are part
+        of the signature, so the STORE rejects any other body. (Presigned PUT works on
+        AWS S3, Cloudflare R2 and Supabase Storage; browser-style POST policies do not.)
+        The client must send those two headers.
         """
-        return self._client.generate_presigned_post(
-            Bucket=self.bucket,
-            Key=key,
-            Fields={"Content-Type": content_type},
-            Conditions=[
-                {"Content-Type": content_type},
-                ["content-length-range", 1, max_bytes],
-            ],
+        url = self._client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": content_type,
+                "ContentLength": size,
+            },
             ExpiresIn=expires,
+            HttpMethod="PUT",
         )
+        return {"url": url, "method": "PUT", "headers": {"Content-Type": content_type}}
 
     def presign_get(
         self, key: str, expires: int = 900, filename: Optional[str] = None

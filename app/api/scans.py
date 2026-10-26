@@ -262,8 +262,15 @@ def presign_sources(
                 detail=f"Each file must be 1 byte to {max_bytes // MB} MB",
             )
         key = f"scans/{job.id}/src/{uuid.uuid4().hex}{ext}"
-        signed = store.presign_post(key, f.content_type, max_bytes)
-        out.append({"key": key, "url": signed["url"], "fields": signed["fields"]})
+        signed = store.presign_put(key, f.content_type, f.size)
+        out.append(
+            {
+                "key": key,
+                "url": signed["url"],
+                "method": signed["method"],
+                "headers": signed["headers"],
+            }
+        )
     return {"files": out, "expires_in": 600}
 
 
@@ -299,6 +306,8 @@ def complete_upload(
             status_code=409,
             detail={"message": "Some files did not upload", "missing": missing},
         )
+    if any(s > max_bytes for s in sizes.values()):
+        raise HTTPException(status_code=413, detail="A file is larger than allowed")
     job.source_keys = keys
     job.source_bytes = sum(sizes.values())
     job.status = "uploaded"
@@ -450,12 +459,12 @@ def presign_result(
         req.kind, req.filename, req.content_type, req.size
     )
     key = f"scans/{job.id}/out/{uuid.uuid4().hex}{ext}"
-    max_bytes = media_service.PRIVATE_KINDS[req.kind][1]
-    signed = store.presign_post(key, req.content_type, max_bytes)
+    signed = store.presign_put(key, req.content_type, req.size)
     return {
         "key": key,
         "url": signed["url"],
-        "fields": signed["fields"],
+        "method": signed["method"],
+        "headers": signed["headers"],
         "expires_in": 600,
     }
 

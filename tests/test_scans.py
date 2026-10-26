@@ -176,10 +176,8 @@ def test_presign_rules(client, people, store):
     assert presign([{**ok, "filename": "a.exe"}]).status_code == 415
     assert presign([{**ok, "size": 3 * 1024**3}]).status_code == 413
     assert presign([{**ok, "content_type": "no slash"}]).status_code == 400
-    _, ctype, cap = store.signed[0]
-    assert (
-        ctype == "video/mp4" and cap == 2048 * 1024 * 1024
-    )  # the store enforces the cap
+    _, ctype, size = store.signed[0]
+    assert ctype == "video/mp4" and size == 5_000_000  # signed: the store enforces both
 
 
 def test_you_only_see_your_own_scans(client, people, store):
