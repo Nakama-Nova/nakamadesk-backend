@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -57,6 +57,8 @@ def register_user(db: Session, user: UserCreate) -> User:
     existing_user = db.query(User).filter(User.username == user.username).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
+    if db.query(User).filter(User.email == user.email).first():
+        raise HTTPException(status_code=400, detail="Email already in use")
 
     hashed_pw = hash_password(user.password)
 
@@ -69,6 +71,7 @@ def register_user(db: Session, user: UserCreate) -> User:
         role=user.role,
         status=user.status,
         is_active=user.is_active,
+        base_daily_wage=user.base_daily_wage,
     )
 
     db.add(new_user)
@@ -108,3 +111,59 @@ def list_users(db: Session) -> List[User]:
         List[User]: List of User model instances.
     """
     return db.query(User).all()
+
+
+def _other_active_owner(db: Session, user_id) -> bool:
+    return (
+        db.query(User)
+        .filter(
+            User.role == UserRole.OWNER, User.is_active.is_(True), User.id != user_id
+        )
+        .first()
+        is not None
+    )
+
+
+def update_user(db: Session, actor: User, user_id, data: UserUpdate) -> User:
+    """
+    Edit a staff account (owner only, enforced by the route).
+
+    Guards: you cannot change your own role or switch yourself off, and the
+    last active owner can never be demoted or deactivated (nobody could log in
+    to fix it).
+    """
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    changes = data.model_dump(exclude_unset=True)
+
+    if user.id == actor.id and (
+        changes.get("role", user.role) != user.role or changes.get("is_active") is False
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot change your own role or switch yourself off",
+        )
+    losing_owner = user.role == UserRole.OWNER and (
+        changes.get("role", user.role) != UserRole.OWNER
+        or changes.get("is_active") is False
+    )
+    if losing_owner and not _other_active_owner(db, user.id):
+        raise HTTPException(
+            status_code=400, detail="There must be at least one active owner"
+        )
+    if "email" in changes and changes["email"] != user.email:
+        if db.query(User).filter(User.email == changes["email"]).first():
+            raise HTTPException(status_code=400, detail="Email already in use")
+    for key, value in changes.items():
+        setattr(user, key, value)
+    if "is_active" in changes:
+        user.status = "active" if user.is_active else "inactive"
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def set_password(db: Session, user: User, new_password: str) -> None:
+    user.password_hash = hash_password(new_password)
+    db.commit()

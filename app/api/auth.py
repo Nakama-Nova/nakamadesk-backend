@@ -1,5 +1,6 @@
 import logging
 from typing import List
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
@@ -9,7 +10,13 @@ from app.core.security import create_access_token
 from app.db.deps import check_role, get_current_user, get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
+from app.schemas.user import (
+    PasswordChange,
+    PasswordReset,
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+)
 from app.services import auth_service
 
 logger = logging.getLogger(__name__)
@@ -63,6 +70,11 @@ def login(
         logger.warning(f"Authentication failure: user '{form_data.username}' not found")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    if not user.is_active:
+        raise HTTPException(
+            status_code=401, detail="This account is switched off. Ask the owner."
+        )
+
     if not auth_service.verify_password(form_data.password, user.password_hash):
         logger.warning(
             f"Authentication failure: invalid password for user '{form_data.username}'"
@@ -114,3 +126,47 @@ def list_users(
         List[UserResponse]: A list of all registered users.
     """
     return auth_service.list_users(db)
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: UUID,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+):
+    """
+    Edit a staff account: name, phone, email, role, daily wage, or switch it
+    on/off. There is no delete: a switched-off account keeps its history but
+    can no longer log in. RBAC: OWNER only.
+    """
+    return auth_service.update_user(db, current_user, user_id, data)
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_password(
+    user_id: UUID,
+    body: PasswordReset,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+):
+    """Set a new password for someone who forgot theirs. RBAC: OWNER only."""
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    auth_service.set_password(db, user, body.new_password)
+    return {"message": "Password changed"}
+
+
+@router.post("/me/password")
+def change_my_password(
+    body: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Change your own password (needs the current one)."""
+    user = db.get(User, current_user.id)  # in this request's own session
+    if not auth_service.verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is wrong")
+    auth_service.set_password(db, user, body.new_password)
+    return {"message": "Password changed"}
