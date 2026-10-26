@@ -40,6 +40,8 @@ class ItemBase(BaseModel):
     short_desc: Optional[str] = None
     wood_type: Optional[str] = None
     dimensions_mm: Optional[Dict[str, Any]] = None
+    is_furniture: bool = False
+    size_presets: Optional[Dict[str, Any]] = None
 
     @field_validator("slug")
     @classmethod
@@ -96,6 +98,8 @@ class ItemUpdate(BaseModel):
     short_desc: Optional[str] = None
     wood_type: Optional[str] = None
     dimensions_mm: Optional[Dict[str, Any]] = None
+    is_furniture: Optional[bool] = None
+    size_presets: Optional[Dict[str, Any]] = None
 
     @field_validator("slug")
     @classmethod

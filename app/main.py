@@ -6,6 +6,8 @@ Initializes the FastAPI app, registers middleware, and includes all API routers.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api import (
     assets,
@@ -17,6 +19,7 @@ from app.api import (
     health,
     invoices,
     items,
+    lab,
     media,
     orders,
     production,
@@ -35,6 +38,7 @@ from app.core.middleware import TimingMiddleware
 app = FastAPI(title="NakamaDesk API", version="0.1.0")
 
 app.add_middleware(TimingMiddleware)
+app.add_middleware(GZipMiddleware, minimum_size=1000)  # the 3D viewer scripts are large
 
 # The website (another origin) calls the API from the browser: allow only the
 # origins listed in CORS_ORIGINS. Empty = none (default).
@@ -66,6 +70,8 @@ app.include_router(assets.router)
 app.include_router(public.router)
 app.include_router(media.router)
 app.include_router(uploads.router)
+app.include_router(lab.router)
+app.mount("/lab/static", StaticFiles(directory=lab.STATIC_DIR), name="lab-static")
 
 
 @app.get("/")

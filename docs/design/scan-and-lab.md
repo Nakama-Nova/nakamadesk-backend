@@ -240,3 +240,17 @@ Egress: the PC downloads ~13 GB/month. S3 normally charges for data out beyond a
 1. **Storage and visibility:** object-store module (S3-compatible), presign endpoint, new asset kinds, `visibility` + public filter + leak tests, retention rule documented.
 2. **Parts and 3D Lab:** parts/presets/`is_furniture` model, safe formula evaluator, `/lab` API, scoped-token link, viewer, cutting list. Useful at once; needs no GPU or phone work.
 3. Scan jobs + Flutter capture · 4. Scan Studio on the GPU PC · 5. Renders for the site (later plans).
+
+---
+
+## 11. As built: steps 1 and 2 (branch `feature/lab-and-storage`)
+
+**Step 1, storage and visibility.** `POST /uploads/presign` (POST policy, size and type enforced by the store), `POST /items/{id}/assets/register` (owner/manager), `GET /items/{id}/assets/{id}/download` (signed link). New settings `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (AWS S3 or R2). `product_assets` gained `visibility` (default `staff`), `storage`, `scan_id`; existing rows were backfilled to `public`. The public API reads only `visibility='public'` server-disk files, and products gained `renders`. **Publishing copies the file from the private bucket to the public disk** (after the usual content checks) and only `render` and finished-piece `glb` can be published, so the private bucket never serves the website. A public `glb` is capped at 25 MB; larger models stay staff-only until a public CDN exists. Bucket CORS must allow GET from the shop address if carved part models are loaded in the Lab.
+
+**Step 2, parts and Lab.** Differences from the sketch in §3 to §5:
+- A part row is **one placed piece**. There is no `quantity`: add four rows for four legs (the editor has Copy). The cutting list groups identical pieces.
+- `axis` (`x`, `y` or `z`) replaces `rot_deg`: it says which way the piece's length runs. Positions are the piece's **lowest corner**. Axes: L is left-right (x), W is front-back (z), H is up (y).
+- Added `PUT /lab/items/{id}/size` (standard overall size) and `GET /lab/items/{id}/definition` for the editor. Part editing endpoints accept the Lab cookie only with the `X-Lab-Client: 1` header, and the cookie is `SameSite=Lax`.
+- No ETag (not needed at this size). Responses are gzipped (the viewer scripts are large).
+- The viewer is `app/static/lab/view.html` + `view.js`, the editor `edit.html` + `edit.js`, with Three.js r0.186.1 vendored (minified, MIT licence kept) under `app/static/lab/vendor/`. Pages use a strict content-security policy (own scripts only).
+- Every save validates every formula against the standard size and every preset, and is refused with the part, field and size if any fails. Viewing is read-only.

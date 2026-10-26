@@ -1,0 +1,291 @@
+/* Vriksha Studio 3D Lab: brand tokens from docs/brand/design-tokens.json */
+:root {
+  --brown: #5a2a06;
+  --gold: #bf830b;
+  --surface: #ffffff;
+  --warm: #fbf6ec;
+  --text: #3a1b04;
+  --muted: #7a5a3c;
+  --line: #e8dcc8;
+  --bad: #b3261e;
+  --stage: #f3ece0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #24160c;
+    --warm: #2f1e11;
+    --text: #f3e9d6;
+    --muted: #c9b08f;
+    --line: #4a3524;
+    --brown: #e8c58a;
+    --stage: #1b120a;
+    --bad: #ff8a80;
+  }
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--surface);
+  color: var(--text);
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  color: var(--brown);
+}
+h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.5rem;
+}
+h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+  margin-bottom: 8px;
+}
+header.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--warm);
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+
+/* viewer layout */
+.lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: calc(100vh - 53px);
+}
+#stage {
+  position: relative;
+  background: var(--stage);
+  min-height: 320px;
+}
+#stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+#tip {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+aside.panel {
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+@media (max-width: 860px) {
+  .lab {
+    grid-template-columns: 1fr;
+    grid-template-rows: 55vh auto;
+    height: auto;
+  }
+  aside.panel {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* controls */
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+button,
+select,
+input {
+  font: inherit;
+  color: var(--text);
+}
+button {
+  border: 1.5px solid var(--gold);
+  background: transparent;
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button[aria-pressed="true"],
+button.primary {
+  background: var(--brown);
+  border-color: var(--brown);
+  color: var(--surface);
+}
+button:hover {
+  background: var(--warm);
+}
+button.primary:hover,
+button[aria-pressed="true"]:hover {
+  background: var(--brown);
+  opacity: 0.9;
+}
+button.link {
+  border: 0;
+  padding: 2px 6px;
+  text-decoration: underline;
+  color: var(--muted);
+}
+input,
+select,
+textarea {
+  border: 1.5px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--surface);
+  width: 100%;
+}
+input:focus,
+select:focus,
+button:focus-visible,
+textarea:focus {
+  outline: 3px solid var(--gold);
+  outline-offset: 1px;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.fields label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--gold);
+}
+.error {
+  color: var(--bad);
+  font-size: 0.9rem;
+  min-height: 1.2em;
+}
+.note {
+  background: var(--warm);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+/* tables */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+th,
+td {
+  text-align: right;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+th {
+  color: var(--muted);
+  font-weight: 500;
+}
+tr.total td {
+  font-weight: 600;
+}
+.wood {
+  font-weight: 600;
+  color: var(--brown);
+  padding-top: 8px;
+}
+
+/* editor */
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  background: var(--surface);
+}
+.parts {
+  overflow-x: auto;
+}
+.parts table {
+  min-width: 1100px;
+}
+.parts td,
+.parts th {
+  text-align: left;
+  padding: 3px;
+  vertical-align: top;
+}
+.parts input,
+.parts select {
+  min-width: 70px;
+}
+.parts td.name input {
+  min-width: 130px;
+}
+.parts td.note input {
+  min-width: 180px;
+}
+.ok {
+  color: #2f7d4f;
+  font-size: 0.9rem;
+}
+code {
+  background: var(--warm);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+@media print {
+  header.bar,
+  #stage,
+  .noprint,
+  .controls {
+    display: none !important;
+  }
+  .lab {
+    display: block;
+    height: auto;
+  }
+  aside.panel {
+    border: 0;
+    overflow: visible;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

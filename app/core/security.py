@@ -28,13 +28,25 @@ if settings.ENV not in ("dev", "test") and (
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
-def create_access_token(data: dict):
+def create_access_token(data: dict, expires_minutes: int | None = None):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    minutes = (
+        ACCESS_TOKEN_EXPIRE_MINUTES if expires_minutes is None else expires_minutes
+    )
+    expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     to_encode.update({"exp": expire})
 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+
+def create_scoped_token(user_id: str, scope: str, minutes: int, **claims) -> str:
+    """
+    A short-lived token for ONE purpose (e.g. opening the 3D Lab). It carries a
+    `scope` claim, and get_current_user refuses any token that has one, so it
+    can never be used as a login against the rest of the API.
+    """
+    return create_access_token({"sub": str(user_id), "scope": scope, **claims}, minutes)
 
 
 def verify_token(token: str) -> dict:

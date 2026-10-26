@@ -17,6 +17,8 @@ from app.main import app  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork  # noqa: E402
 
+pytest_plugins = ("tests.lab_fixtures",)  # shared 3D Lab fixtures
+
 # Use the configured TEST_DATABASE_URL from settings
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
