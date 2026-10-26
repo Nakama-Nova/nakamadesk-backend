@@ -38,7 +38,7 @@ Single small FastAPI + Postgres server (1 to 2 GB RAM). Existing: backend, PyQt 
  Phone (Flutter)                Shop server (FastAPI + Postgres)             GPU PC (desktop app)
  ───────────────                ───────────────────────────────             ────────────────────
  1 POST /scans ───────────────▶ scan_jobs row (status=created)
- 2 POST /uploads/presign ─────▶ signs S3 POST policy (size/type capped)
+ 2 POST /uploads/presign ─────▶ signs a PUT URL (exact size and type)
  3 PUT files directly ─────────────────────────────▶ OBJECT STORE (private)
  4 POST /scans/{id}/complete ─▶ HEAD each key; status=uploaded
                                                                           5 GET /scans?status=uploaded (poll)
@@ -103,7 +103,7 @@ All new routes are additive. Roles use the existing `UserRole`.
 ```
 POST /uploads/presign        (any staff)
   {purpose:"scan_source"|"scan_result"|"asset", scan_id?|item_id?, filename, content_type, size}
-  → {url, fields, key, expires_in:600}        # S3 POST policy: content-length-range + content-type enforced by the store
+  → {url, method:"PUT", headers, key, expires_in:600}   # presigned PUT: content-length + content-type are signed, so the store rejects any other body
 
 POST /scans                  (any staff)   {item_id?, source_kind, params}      → {id}
 POST /scans/{id}/complete    (creator)     {keys:[...]}   # server HEADs each key (exists, size ok) → status=uploaded
@@ -245,7 +245,7 @@ Egress: the PC downloads ~13 GB/month. S3 normally charges for data out beyond a
 
 ## 11. As built: steps 1 and 2 (branch `feature/lab-and-storage`)
 
-**Step 1, storage and visibility.** `POST /uploads/presign` (POST policy, size and type enforced by the store), `POST /items/{id}/assets/register` (owner/manager), `GET /items/{id}/assets/{id}/download` (signed link). New settings `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (AWS S3 or R2). `product_assets` gained `visibility` (default `staff`), `storage`, `scan_id`; existing rows were backfilled to `public`. The public API reads only `visibility='public'` server-disk files, and products gained `renders`. **Publishing copies the file from the private bucket to the public disk** (after the usual content checks) and only `render` and finished-piece `glb` can be published, so the private bucket never serves the website. A public `glb` is capped at 25 MB; larger models stay staff-only until a public CDN exists. Bucket CORS must allow GET from the shop address if carved part models are loaded in the Lab.
+**Step 1, storage and visibility.** `POST /uploads/presign` (presigned PUT, exact size and type signed; see section 12), `POST /items/{id}/assets/register` (owner/manager), `GET /items/{id}/assets/{id}/download` (signed link). New settings `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (AWS S3 or R2). `product_assets` gained `visibility` (default `staff`), `storage`, `scan_id`; existing rows were backfilled to `public`. The public API reads only `visibility='public'` server-disk files, and products gained `renders`. **Publishing copies the file from the private bucket to the public disk** (after the usual content checks) and only `render` and finished-piece `glb` can be published, so the private bucket never serves the website. A public `glb` is capped at 25 MB; larger models stay staff-only until a public CDN exists. Bucket CORS must allow GET from the shop address if carved part models are loaded in the Lab.
 
 **Step 2, parts and Lab.** Differences from the sketch in §3 to §5:
 - A part row is **one placed piece**. There is no `quantity`: add four rows for four legs (the editor has Copy). The cutting list groups identical pieces.
@@ -254,3 +254,18 @@ Egress: the PC downloads ~13 GB/month. S3 normally charges for data out beyond a
 - No ETag (not needed at this size). Responses are gzipped (the viewer scripts are large).
 - The viewer is `app/static/lab/view.html` + `view.js`, the editor `edit.html` + `edit.js`, with Three.js r0.186.1 vendored (minified, MIT licence kept) under `app/static/lab/vendor/`. Pages use a strict content-security policy (own scripts only).
 - Every save validates every formula against the standard size and every preset, and is refused with the part, field and size if any fails. Viewing is read-only.
+
+## 12. As built: step 3, scan jobs (branch `feature/scan-jobs`)
+
+Migration `e1f2a3b4c5d6` (additive): table `scan_jobs`, FK from `product_assets.scan_id`. API in `app/api/scans.py`.
+
+Differences from the sketch in section 4:
+- `POST /scans/{id}/presign` takes a **list** of files (one call per capture, not one per photo). Photos: JPG/PNG, 8 to 300 files, 25 MB each; video: one MP4/MOV, 2 GB.
+- Every worker call (`progress`, `download-urls`, `results/presign`, `finish`, `fail`) carries `worker` (a name such as `workshop-pc`). The claim is stored as `user id | worker`, so two PCs sharing the owner login still cannot touch each other's job.
+- Results are uploaded with `POST /scans/{id}/results/presign` to `scans/{id}/out/...`; `finish` checks every object exists **before** attaching any, then reuses `asset_service.attach_private_asset` (the same code as `/items/{id}/assets/register`). Results are staff-only unless a `render` or `glb` is published.
+- `POST /scans/{id}/cancel` (creator or owner/manager, while `created` or `uploaded`) deletes the source files.
+- Staff see only their own scans; owner/manager see all. `GET /scans?status=uploaded` lists oldest first (the queue).
+- A lapsed lease can be re-claimed; after the third attempt the job becomes `failed` ("gave up after 3 attempts").
+- Not built: a retry button for failed jobs, an "old jobs" warning screen.
+
+**Correction (found while preparing the beta): presigned PUT, not POST.** Supabase Storage's S3 API implements `PutObject` but not browser-style `PostObject` policies (checked against its S3 compatibility page), and Cloudflare R2 is in the same position. Every presign endpoint (`/uploads/presign`, `/scans/{id}/presign`, `/scans/{id}/results/presign`) therefore returns `{key, url, method: "PUT", headers}`: the client sends the file as the request body with those headers. `Content-Length` and `Content-Type` are part of the signature, so the store still rejects a different size or type. Works on AWS S3, R2 and Supabase. Bucket lifecycle rules do not exist on Supabase, so the 60-day source retention needs a small scheduled job there (not built).

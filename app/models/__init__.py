@@ -23,6 +23,7 @@ from app.models.purchase_item import PurchaseItem  # noqa: F401
 from app.models.raw_material import RawMaterial  # noqa: F401
 from app.models.sale import Sale  # noqa: F401
 from app.models.sale_item import SaleItem  # noqa: F401
+from app.models.scan_job import ScanJob  # noqa: F401
 from app.models.supplier import Supplier  # noqa: F401
 from app.models.sync import SyncLog  # noqa: F401
 from app.models.user import User  # noqa: F401
