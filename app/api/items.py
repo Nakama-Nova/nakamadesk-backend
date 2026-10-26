@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import List
 from uuid import UUID
 
@@ -12,6 +13,19 @@ from app.schemas.stock import StockUpdate
 from app.services import inventory_service
 
 router = APIRouter(prefix="/items", tags=["Items"])
+
+COST_VIEWERS = [UserRole.OWNER, UserRole.MANAGER]
+READERS = COST_VIEWERS + [UserRole.SALES, UserRole.ACHARI, UserRole.WORKER]
+
+
+def _for(user: User, item) -> ItemResponse:
+    """Everyone on the staff can read stock; only owner/manager see what it cost."""
+    out = ItemResponse.model_validate(item)
+    if user.role in COST_VIEWERS:
+        return out
+    return out.model_copy(
+        update={"purchase_price": Decimal("0.00"), "production_cost": Decimal("0.00")}
+    )
 
 
 @router.post("/", response_model=ItemResponse)
@@ -40,13 +54,14 @@ def create_item(
 def get_items(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(check_role(READERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
     List all inventory items with pagination.
 
-    RBAC: Restricted to OWNER and MANAGER roles.
+    RBAC: every staff role can read; cost prices are hidden from all but
+    OWNER and MANAGER.
 
     Args:
         limit (int): Maximum number of items to return.
@@ -57,19 +72,22 @@ def get_items(
     Returns:
         List[ItemResponse]: List of inventory items.
     """
-    return inventory_service.get_items(uow, limit, offset)
+    return [
+        _for(current_user, i) for i in inventory_service.get_items(uow, limit, offset)
+    ]
 
 
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(
     item_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(check_role(READERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
     Retrieve details of a specific inventory item by ID.
 
-    RBAC: Restricted to OWNER and MANAGER roles.
+    RBAC: every staff role can read; cost prices are hidden from all but
+    OWNER and MANAGER.
 
     Args:
         item_id (UUID): Unique ID of the item.
@@ -85,7 +103,7 @@ def get_item(
     item = inventory_service.get_item(uow, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return item
+    return _for(current_user, item)
 
 
 @router.put("/{item_id}", response_model=ItemResponse)
@@ -167,4 +185,6 @@ def adjust_stock(
     Returns:
         ItemResponse: The updated item with new stock level.
     """
-    return inventory_service.update_item_stock(uow, item_id, stock_update)
+    return inventory_service.update_item_stock(
+        uow, item_id, stock_update, created_by=current_user.id
+    )

@@ -1,7 +1,9 @@
-from typing import List
+from decimal import Decimal
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
@@ -11,6 +13,7 @@ from app.schemas.raw_material import (
     RawMaterialResponse,
     RawMaterialUpdate,
 )
+from app.services import inventory_service
 from app.services import raw_material_service as service
 
 router = APIRouter(prefix="/raw-materials", tags=["Manufacturing - Raw Materials"])
@@ -143,3 +146,29 @@ def delete_raw_material(
     if not success:
         raise HTTPException(status_code=404, detail="Raw material not found")
     return {"message": "Raw material deleted"}
+
+
+class StockAdjust(BaseModel):
+    quantity_change: Decimal = Field(
+        description="Positive adds stock, negative removes"
+    )
+    notes: Optional[str] = Field(default=None, max_length=300)
+
+
+@router.post("/{id}/adjust", response_model=RawMaterialResponse)
+def adjust_raw_material_stock(
+    id: UUID,
+    body: StockAdjust,
+    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Receive or write off raw material and record it in the stock ledger."""
+    if body.quantity_change == 0:
+        raise HTTPException(status_code=400, detail="Enter a quantity other than zero")
+    with uow:
+        material = inventory_service.record_raw_material_adjustment(
+            uow, id, body.quantity_change, current_user.id, body.notes
+        )
+        uow.commit()
+    uow.refresh(material)
+    return material
