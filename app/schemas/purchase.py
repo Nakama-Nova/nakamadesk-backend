@@ -13,7 +13,7 @@ class PurchaseItemBase(BaseModel):
     raw_material_id: Optional[UUID] = None
     quantity: Decimal = Field(..., gt=0)
     unit_price: Decimal = Field(..., ge=0)
-    gst_percent: Decimal = Field(default=0.0, ge=0)
+    gst_percent: Decimal = Field(default=Decimal("0.0"), ge=0)
 
 
 class PurchaseItemCreate(PurchaseItemBase):

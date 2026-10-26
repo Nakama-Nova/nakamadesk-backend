@@ -20,6 +20,7 @@ from app.api import (
     invoices,
     items,
     lab,
+    masters,
     media,
     orders,
     production,
@@ -73,6 +74,10 @@ app.include_router(media.router)
 app.include_router(uploads.router)
 app.include_router(lab.router)
 app.include_router(scans.router)
+app.include_router(masters.suppliers)
+app.include_router(masters.categories)
+app.include_router(masters.brands)
+app.include_router(masters.inventory)
 app.mount("/lab/static", StaticFiles(directory=lab.STATIC_DIR), name="lab-static")
 
 

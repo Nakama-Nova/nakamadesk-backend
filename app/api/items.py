@@ -167,4 +167,6 @@ def adjust_stock(
     Returns:
         ItemResponse: The updated item with new stock level.
     """
-    return inventory_service.update_item_stock(uow, item_id, stock_update)
+    return inventory_service.update_item_stock(
+        uow, item_id, stock_update, created_by=current_user.id
+    )

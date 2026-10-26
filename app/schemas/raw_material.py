@@ -13,8 +13,8 @@ class RawMaterialBase(BaseModel):
 
     name: str
     unit: str = "pcs"
-    current_price: Decimal = Field(default=0.0, decimal_places=2)
-    stock: Decimal = Field(default=0.0, decimal_places=2)
+    current_price: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
+    stock: Decimal = Field(default=Decimal("0.00"), decimal_places=2)
 
 
 class RawMaterialCreate(RawMaterialBase):
