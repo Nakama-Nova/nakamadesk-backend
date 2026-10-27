@@ -36,6 +36,12 @@ class ScanJob(Base):
     item_id = Column(
         UUID(as_uuid=True), ForeignKey("items.id", ondelete="SET NULL"), nullable=True
     )
+    # set for a temple restoration (owner and artisans only); otherwise a product scan
+    restoration_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("restoration_projects.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

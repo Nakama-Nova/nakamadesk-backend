@@ -31,6 +31,7 @@ from app.api import (
     purchases,
     raw_materials,
     reports,
+    restorations,
     sales,
     scans,
     sync,
@@ -79,6 +80,7 @@ app.include_router(media.router)
 app.include_router(uploads.router)
 app.include_router(lab.router)
 app.include_router(scans.router)
+app.include_router(restorations.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
 app.include_router(masters.categories)

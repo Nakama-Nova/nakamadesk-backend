@@ -15,7 +15,12 @@ from app.services import inventory_service
 router = APIRouter(prefix="/items", tags=["Items"])
 
 COST_VIEWERS = [UserRole.OWNER, UserRole.MANAGER]
-READERS = COST_VIEWERS + [UserRole.SALES, UserRole.ACHARI, UserRole.WORKER]
+READERS = COST_VIEWERS + [
+    UserRole.SALES,
+    UserRole.ACHARI,
+    UserRole.WORKER,
+    UserRole.ARTISAN,
+]
 
 
 def _for(user: User, item) -> ItemResponse:

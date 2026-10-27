@@ -55,7 +55,15 @@ def check_role(allowed_roles: List[UserRole]):
 
 
 LAB_COOKIE = "lab_session"
-LAB_ROLES = [UserRole.OWNER, UserRole.MANAGER, UserRole.ACHARI, UserRole.WORKER]
+# Temple restorations (projects, scans, 3D results) are for the owner and artisans only.
+RESTORATION_ROLES = [UserRole.OWNER, UserRole.ARTISAN]
+LAB_ROLES = [
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.ACHARI,
+    UserRole.WORKER,
+    UserRole.ARTISAN,
+]
 LAB_EDIT_ROLES = [UserRole.OWNER, UserRole.MANAGER]
 
 

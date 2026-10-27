@@ -54,6 +54,7 @@ _ALL_ROLES = (
     UserRole.SALES,
     UserRole.ACHARI,
     UserRole.WORKER,
+    UserRole.ARTISAN,
 )
 _COST_VIEWERS = (UserRole.OWNER, UserRole.MANAGER)
 _SALES_ROLES = (UserRole.OWNER, UserRole.MANAGER, UserRole.SALES)
