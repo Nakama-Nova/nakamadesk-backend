@@ -224,6 +224,28 @@ def _expire_stuck(uow: AbstractUnitOfWork) -> None:
     uow.commit()
 
 
+def _settle_project(uow: AbstractUnitOfWork, job: ScanJob) -> None:
+    """A restoration scan ended badly (failed or cancelled). If nothing else is still being built,
+    the project is no longer 'processing': it is back to 'capturing' so artisans see it needs photos.
+    """
+    if not job.restoration_id:
+        return
+    project = uow.session.get(RestorationProject, job.restoration_id)
+    if not project or project.status != "processing":
+        return
+    active = (
+        uow.session.query(ScanJob.id)
+        .filter(
+            ScanJob.restoration_id == job.restoration_id,
+            ScanJob.id != job.id,
+            ScanJob.status.in_(("created", "uploaded", "processing")),
+        )
+        .first()
+    )
+    if not active:
+        project.status = "capturing"
+
+
 def _check_prefix(keys: List[str], prefix: str) -> None:
     for k in keys:
         if not k.startswith(prefix) or ".." in k:
@@ -378,6 +400,7 @@ def cancel_scan(
     keys = list(job.source_keys or [])
     job.status = "cancelled"
     job.finished_at = _now()
+    _settle_project(uow, job)
     uow.commit()
     if store:
         for k in keys:  # best effort: the retention rule would remove them anyway
@@ -651,6 +674,7 @@ def fail_scan(
     job.status = "failed"
     job.error = req.error
     job.finished_at = _now()
+    _settle_project(uow, job)
     uow.commit()
     uow.refresh(job)
     return _out(job, uow)
