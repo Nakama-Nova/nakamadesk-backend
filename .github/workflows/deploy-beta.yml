@@ -1,0 +1,88 @@
+name: Deploy beta
+
+# Continuous deployment of the backend to the Vercel beta.
+#
+# Vercel's own GitHub integration cannot deploy a private organisation repository
+# on the Hobby plan, so GitHub Actions deploys with the Vercel CLI instead. It runs
+# only after "Backend CI" has passed on main (or by hand from the Actions tab).
+#
+# One-time setup (repository secrets, see docs/BETA.md):
+#   VERCEL_TOKEN        a Vercel access token (Account Settings > Tokens)
+#   VERCEL_ORG_ID       the Vercel team id
+#   VERCEL_PROJECT_ID   the id of the project vriksha-beta-api
+#   MIGRATION_DATABASE_URL   (optional) Supabase session-pooler address, port 5432.
+#                       When set, `alembic upgrade head` runs before each deploy.
+on:
+  workflow_run:
+    workflows: ["Backend CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits instead of cancelling a deploy halfway.
+concurrency:
+  group: deploy-beta
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      BETA_URL: https://vriksha-beta-api.vercel.app
+
+    steps:
+      - name: Check the deploy settings
+        run: |
+          missing=""
+          for v in VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (see docs/BETA.md, Continuous deployment)"
+            exit 1
+          fi
+
+      # Deploy exactly the commit whose tests passed (not whatever main is by now).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-python@v5
+        if: env.MIGRATION_DATABASE_URL != ''
+        with:
+          python-version: "3.11"
+
+      # Migrations are additive only (see docs/ONBOARDING.md), so the old code keeps
+      # working while they run. If this fails, nothing is deployed.
+      - name: Apply database migrations
+        if: env.MIGRATION_DATABASE_URL != ''
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          pip install -r requirements.txt
+          alembic upgrade head
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Deploy to Vercel (production)
+        run: npx --yes vercel@65.2.0 deploy --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if curl -fsSL "$BETA_URL/health/" | grep -q '"ok"'; then
+              echo "The beta is up."
+              exit 0
+            fi
+            echo "Not up yet (try $i)"; sleep 10
+          done
+          echo "::error::$BETA_URL/health/ did not answer. Roll back in Vercel (Deployments > the previous one > Promote) or run: vercel rollback"
+          exit 1

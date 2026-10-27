@@ -14,8 +14,8 @@ shop runs on its own server (see ONBOARDING.md). Everything here can be deleted.
 
 - Backend: https://vriksha-beta-api.vercel.app (Vercel project `vriksha-beta-api`, team `nakama23`). Health: `/health/`.
 - Website: https://vriksha-beta-site.vercel.app (project `vriksha-beta-site`).
-- Both were deployed by direct upload with the Vercel CLI (no GitHub link yet), so a push does **not** redeploy. Redeploy from the repo folder with `vercel deploy --prod --scope nakama23`. `.vercelignore` keeps `.env`, tests and `pyproject.toml` out of the upload (`pyproject.toml` makes Vercel ignore `requirements.txt`).
-- Already set on the backend: `ENV`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MEDIA_DIR`, `INVOICES_DIR`, `S3_ENDPOINT_URL`, `S3_REGION`, `SECRET_KEY` (generated, hidden), `CORS_ORIGINS`. **Still missing, you add them:** `DATABASE_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`. Environment changes only apply after a redeploy.
+- Both were first deployed by direct upload with the Vercel CLI. The backend now deploys by itself from GitHub Actions after CI passes on `main` (see **Continuous deployment** below); by hand it is still `vercel deploy --prod --scope nakama23` from the repo folder. `.vercelignore` keeps `.env`, tests and `pyproject.toml` out of the upload (`pyproject.toml` makes Vercel ignore `requirements.txt`).
+- Set on the backend: `ENV`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MEDIA_DIR`, `INVOICES_DIR`, `S3_*`, `DATABASE_URL`, `SECRET_KEY` (generated, hidden), `CORS_ORIGINS`. **Optional, for app updates:** `GITHUB_RELEASES_TOKEN` (see `docs/ONBOARDING.md`, Desktop app updates). Environment changes only apply after a redeploy.
 
 ## Backend environment variables (Vercel, Production and Preview)
 
@@ -41,6 +41,24 @@ shop runs on its own server (see ONBOARDING.md). Everything here can be deleted.
    ```
 3. **Bucket.** Supabase, Storage: create a **private** bucket, then Settings, S3 Connection: enable it and create the access key above.
 4. **Later schema changes.** Run `alembic upgrade head` from your PC with the 5432 address (not the 6543 transaction pooler).
+
+## Continuous deployment
+
+`.github/workflows/deploy-beta.yml` deploys the backend to the Vercel beta after **Backend CI passes on `main`** (or on demand: Actions, Deploy beta, Run workflow). It deploys the exact commit whose tests passed, optionally applies database migrations first, then checks `/health/`. Vercel's own GitHub link cannot deploy a private organisation repo on the Hobby plan (that is why Vercel shows a red "Cannot deploy from a private GitHub organization repository" check; the Git link in the Vercel project can be disconnected).
+
+One-time setup, in the repo folder (each command asks for the value, so secrets never go into chat):
+1. **Vercel token:** Vercel, Account Settings, Tokens, Create. Scope: the Nakama team. Then:
+   ```bash
+   gh secret set VERCEL_TOKEN --repo Nakama-Nova/nakamadesk-backend
+   ```
+2. **Ids** (not secret, but stored the same way). Team `team_qDxR6LaUjBVHZozK8fTobZAS`, project `prj_B69LgBLDA9wMBFaFwXK906XBSL0b`:
+   ```bash
+   gh secret set VERCEL_ORG_ID --repo Nakama-Nova/nakamadesk-backend --body team_qDxR6LaUjBVHZozK8fTobZAS
+   gh secret set VERCEL_PROJECT_ID --repo Nakama-Nova/nakamadesk-backend --body prj_B69LgBLDA9wMBFaFwXK906XBSL0b
+   ```
+3. **Migrations (optional):** to have `alembic upgrade head` run before each deploy, store the Supabase **session pooler** address (port 5432) as `MIGRATION_DATABASE_URL`. Without it, run migrations by hand as in "One-time steps". Migrations must stay additive so the running code survives them.
+
+If a deploy goes wrong: Vercel, Deployments, open the previous good one, Promote to Production (or `vercel rollback`). The workflow reports a failed smoke test in red.
 
 ## Known limits of the beta
 
