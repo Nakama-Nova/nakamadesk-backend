@@ -459,3 +459,72 @@ def test_a_failure_never_overrides_a_status_the_artisans_chose(client, people, s
         client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
         == "carving"
     )
+
+
+# ------------------------------------------------ flat carving (relief) vs full 3D object
+def photos_scan(client, h, store, shape, count, project=None):
+    body = {"source_kind": "photos", "params": {"shape": shape}}
+    if project:
+        body["restoration_id"] = project["id"]
+    scan = client.post("/scans", headers=h, json=body)
+    assert scan.status_code == 201, scan.text
+    scan = scan.json()
+    files = [
+        {"filename": f"{i}.jpg", "content_type": "image/jpeg", "size": 1000}
+        for i in range(count)
+    ]
+    keys = [
+        f["key"]
+        for f in client.post(
+            f"/scans/{scan['id']}/presign", headers=h, json={"files": files}
+        ).json()["files"]
+    ]
+    for k in keys:
+        store.objects[k] = b"x" * 1000
+    return scan, client.post(
+        f"/scans/{scan['id']}/complete", headers=h, json={"keys": keys}
+    )
+
+
+def test_scan_shape_defaults_to_full_and_is_validated(client, people):
+    h = people["owner"]["h"]
+    p = new_project(client, h)
+    plain = client.post(
+        "/scans", headers=h, json={"restoration_id": p["id"], "source_kind": "photos"}
+    ).json()
+    assert plain["params"]["shape"] == "full"
+    relief = client.post(
+        "/scans",
+        headers=h,
+        json={
+            "restoration_id": p["id"],
+            "source_kind": "photos",
+            "params": {"shape": "relief"},
+        },
+    ).json()
+    assert relief["params"]["shape"] == "relief"
+    bad = client.post(
+        "/scans",
+        headers=h,
+        json={
+            "restoration_id": p["id"],
+            "source_kind": "photos",
+            "params": {"shape": "round"},
+        },
+    )
+    assert bad.status_code == 422
+
+
+def test_a_flat_carving_needs_one_photo_but_a_full_object_needs_eight(
+    client, people, store
+):
+    h = people["artisan"]["h"]
+    p = new_project(client, h)
+    _, one = photos_scan(client, h, store, "relief", 1, p)
+    assert one.status_code == 200 and one.json()["status"] == "uploaded"
+    _, few = photos_scan(client, h, store, "full", 3, p)
+    assert few.status_code == 422 and "at least 8" in few.json()["detail"]
+    waiting = client.get("/scans?status=uploaded", headers=h).json()
+    assert [
+        s["params"]["shape"] for s in waiting if s["restoration_id"] == p["id"]
+    ] == ["relief"]
