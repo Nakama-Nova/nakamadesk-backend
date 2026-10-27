@@ -145,3 +145,32 @@ def worker_client(client, db):
     app.dependency_overrides[get_current_user] = override_get_current_user
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as(client, db):
+    """Factory: `client_as("sales")` -> (TestClient, User) logged in with that role."""
+
+    def make(role: str):
+        unique_id = uuid.uuid4().hex[:8]
+        user = User(
+            username=f"{role}_{unique_id}",
+            email=f"{role}_{unique_id}@example.com",
+            password_hash="fakehash",
+            role=role,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        app.dependency_overrides[get_current_user] = lambda: user
+        return client, user
+
+    yield make
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def sales_client(client_as):
+    """Get a TestClient with an authenticated 'sales' user."""
+    return client_as("sales")[0]

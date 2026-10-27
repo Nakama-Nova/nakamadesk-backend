@@ -52,7 +52,7 @@ def test_sync_unknown_entity(auth_client: TestClient):
     assert "unknown entity" in failed[0]["error"].lower()
 
 
-def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClient):
+def test_sync_cross_user_update_restriction(db: Session, sales_client: TestClient):
     """Test that User B cannot update User A's created record."""
     # 1. Create User A manually
     user_a = User(
@@ -75,7 +75,7 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
     db.add(sale)
     db.commit()
 
-    # 3. User B (worker_client) tries to update User A's record via sync
+    # 3. User B (sales_client) tries to update User A's record via sync
     client_id_b = str(uuid4())
     payload_update = {
         "operations": [
@@ -96,7 +96,7 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
             }
         ]
     }
-    resp_update = worker_client.post("/sync/push", json=payload_update)
+    resp_update = sales_client.post("/sync/push", json=payload_update)
     assert resp_update.status_code == 200
     # The operation should be in the 'failed' list due to access denied
     failed = resp_update.json()["failed"]
@@ -105,7 +105,7 @@ def test_sync_cross_user_update_restriction(db: Session, worker_client: TestClie
     assert "access denied" in failed[0]["error"].lower()
 
 
-def test_sync_cross_user_delete_restriction(db: Session, worker_client: TestClient):
+def test_sync_cross_user_delete_restriction(db: Session, sales_client: TestClient):
     """Test that User B cannot delete User A's created record."""
     # 1. Create User A and record
     user_a = User(
@@ -146,7 +146,7 @@ def test_sync_cross_user_delete_restriction(db: Session, worker_client: TestClie
             }
         ]
     }
-    resp_delete = worker_client.post("/sync/push", json=payload_delete)
+    resp_delete = sales_client.post("/sync/push", json=payload_delete)
     assert resp_delete.status_code == 200
     failed = resp_delete.json()["failed"]
     assert len(failed) == 1

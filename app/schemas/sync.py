@@ -107,6 +107,11 @@ class SyncOperation(BaseModel):
         SalePayload, ItemPayload, AttendancePayload, RawMaterialPayload, Dict[str, Any]
     ]
     updated_at: datetime
+    # Who made this change on the client. The server records every change under the
+    # token that pushes it, so a client that queued a change for user A must not push
+    # it under user B's token; when this is sent, a mismatch is refused. Optional so
+    # older clients keep working.
+    user_id: Optional[UUID] = None
 
     @field_validator("payload", mode="before")
     @classmethod

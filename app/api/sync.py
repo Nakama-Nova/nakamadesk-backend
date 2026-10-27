@@ -45,6 +45,8 @@ def pull_sync_updates(
     """
     Retrieve incremental updates from the server since the last successful sync.
 
+    Each role only receives what its REST routes would show it (see PULL_ROLES).
+
     Args:
         last_sync (datetime): Timestamp of the client's last synchronization.
         limit (int): Maximum records per entity.
@@ -55,4 +57,4 @@ def pull_sync_updates(
     Returns:
         SyncPullResponse: List of updated records since `last_sync`.
     """
-    return pull_sync(uow, last_sync, limit, offset)
+    return pull_sync(uow, last_sync, current_user, limit, offset)
