@@ -149,3 +149,14 @@ Open in Android Studio (JDK 17). Package `com.nakamafurnibiz`, compileSdk and ta
 3. Run the desktop app against your local backend.
 4. Pick up the sync follow-ups in gap #6 as a warm-up.
 5. Then the rest of desktop #4 (local read cache), the largest remaining feature.
+
+## Desktop app updates
+
+The desktop installers are GitHub Releases of the **private** `nakama-desktop` repo. The app cannot read a private repo, so it asks this server (`GET /app/updates/latest`, then `/app/updates/download/{version}`), which reads the releases with a read-only token and only answers signed-in staff.
+
+Set up once (the token is a secret: enter it yourself, never in git or chat):
+1. GitHub, Settings, Developer settings, **Fine-grained personal access tokens**, Generate new token. Resource owner: Nakama-Nova. Repository access: **only** `nakama-desktop`. Permissions: **Contents: Read-only** (Metadata is added automatically). Choose the longest expiry; GitHub caps it at one year.
+2. Put it in the server settings as `GITHUB_RELEASES_TOKEN` (on Vercel: project, Settings, Environment Variables, or `vercel env add GITHUB_RELEASES_TOKEN production --sensitive`), then redeploy. `GITHUB_RELEASES_REPO` defaults to `Nakama-Nova/nakama-desktop`.
+3. When the token expires the endpoint answers 502 "The update token was refused": make a new one and replace the setting.
+
+Without the token the endpoints answer 503 "Updates are not set up" and the app simply shows no update.

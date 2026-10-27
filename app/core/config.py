@@ -37,6 +37,15 @@ class Settings:
     S3_ACCESS_KEY_ID: str = os.getenv("S3_ACCESS_KEY_ID", "")
     S3_SECRET_ACCESS_KEY: str = os.getenv("S3_SECRET_ACCESS_KEY", "")
 
+    # --- Desktop app updates ------------------------------------------------
+    # The installers are GitHub Releases of a private repo. A fine-grained token
+    # with read-only "Contents" access to that one repo lets this server read
+    # them. Empty = updates are not set up (the endpoints answer 503).
+    GITHUB_RELEASES_REPO: str = os.getenv(
+        "GITHUB_RELEASES_REPO", "Nakama-Nova/nakama-desktop"
+    )
+    GITHUB_RELEASES_TOKEN: str = os.getenv("GITHUB_RELEASES_TOKEN", "")
+
     if not DATABASE_URL:
         if ENV == "test":
             DATABASE_URL = os.getenv(
