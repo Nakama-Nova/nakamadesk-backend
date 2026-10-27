@@ -10,6 +10,7 @@ from app.models.inventory_movement import InventoryMovement  # noqa: F401
 from app.models.invoice_counter import InvoiceCounter  # noqa: F401
 from app.models.item import Item  # noqa: F401
 from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
+from app.models.login_attempt import LoginAttempt  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
 from app.models.price_history import RawMaterialPriceHistory  # noqa: F401
