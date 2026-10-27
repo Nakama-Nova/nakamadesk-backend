@@ -130,9 +130,16 @@ def build_sale(
         )
         sale_items.append(sale_item)
 
+    discount = to_decimal(sale_data.discount)
+    if discount < 0 or discount > sub_total + tax_total:
+        # A negative discount would raise the bill; a bigger one would make it negative.
+        raise HTTPException(
+            status_code=400,
+            detail="The discount cannot be negative or more than the bill",
+        )
     new_sale.sub_total = sub_total
     new_sale.tax_total = tax_total
-    new_sale.total_amount = sub_total + tax_total - to_decimal(sale_data.discount)
+    new_sale.total_amount = sub_total + tax_total - discount
 
     # 5. Attach items and persist
     new_sale.items = sale_items

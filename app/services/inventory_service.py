@@ -21,6 +21,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from app.models.inventory_movement import InventoryMovement
 from app.models.item import Item
@@ -464,8 +465,19 @@ def delete_item(uow: AbstractUnitOfWork, item_id: UUID) -> bool:
         if not item:
             return False
 
-        uow.items.delete(item)
-        uow.commit()
+        name = item.name
+        try:
+            uow.items.delete(item)
+            uow.commit()
+        except IntegrityError:
+            uow.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{name} has sales or stock history, so it cannot be deleted. "
+                    "Switch it off (untick Active) to hide it instead."
+                ),
+            ) from None
     logger.info(f"Item deleted: {item_id}")
     return True
 

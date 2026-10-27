@@ -2,7 +2,7 @@ import logging
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,7 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from app.services import auth_service
+from app.services import auth_service, login_guard
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,9 @@ def register(
 
 @router.post("/login")
 def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
 ):
     """
     Authenticate a user and return an access token.
@@ -64,22 +66,26 @@ def login(
     Raises:
         HTTPException: If credentials are invalid.
     """
+    ip = login_guard.client_ip(request)
+    login_guard.check(db, form_data.username, ip)  # 429 when guessing too often
+
     user = db.query(User).filter(User.username == form_data.username).first()
 
-    if not user:
-        logger.warning(f"Authentication failure: user '{form_data.username}' not found")
+    # Always hash once, so an unknown username takes as long as a wrong password.
+    stored = user.password_hash if user else auth_service.DUMMY_HASH
+    password_ok = auth_service.verify_password(form_data.password, stored)
+
+    if not user or not password_ok:
+        logger.warning(f"Authentication failure for '{form_data.username}' from {ip}")
+        login_guard.record_failure(db, form_data.username, ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # Only someone who knows the password is told the account is switched off.
     if not user.is_active:
         raise HTTPException(
             status_code=401, detail="This account is switched off. Ask the owner."
         )
-
-    if not auth_service.verify_password(form_data.password, user.password_hash):
-        logger.warning(
-            f"Authentication failure: invalid password for user '{form_data.username}'"
-        )
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    login_guard.clear(db, form_data.username, ip)
 
     # Store user_id (UUID) in the token instead of just username
     token = create_access_token({"sub": str(user.id), "username": user.username})

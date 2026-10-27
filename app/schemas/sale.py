@@ -3,7 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SaleItemCreate(BaseModel):
@@ -32,7 +32,7 @@ class SaleCreate(BaseModel):
     client_id: Optional[UUID] = None  # For idempotency
     items: List[SaleItemCreate]
     order_type: str = "in-store"
-    discount: Decimal = Decimal("0.00")
+    discount: Decimal = Field(default=Decimal("0.00"), ge=0)
     payment_method: Optional[str] = None
     payment_status: str = "pending"
     order_status: str = "completed"

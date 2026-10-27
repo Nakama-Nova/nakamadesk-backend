@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import HTTPException
+from passlib import exc
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,9 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Checked against when the username does not exist, so the answer takes as long.
+DUMMY_HASH = pwd_context.hash("not-a-real-password")
 
 
 def hash_password(password: str) -> str:
@@ -35,7 +39,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: True if password matches, False otherwise.
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError, exc.UnknownHashError):
+        # a damaged or unknown stored hash is a failed sign-in, never a 500
+        return False
 
 
 def register_user(db: Session, user: UserCreate) -> User:
