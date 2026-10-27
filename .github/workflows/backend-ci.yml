@@ -58,9 +58,11 @@ jobs:
         run: |
           alembic upgrade head
 
+      # The timing-based load tests run in their own job below: they measure the speed of
+      # a shared CI machine, so they must not decide whether a change (or a deploy) passes.
       - name: Run tests with coverage
         run: |
-          pytest --cov=app --cov-report=term-missing --cov-report=html:reports/coverage             --html=reports/backend-test-report.html --self-contained-html -v
+          pytest --ignore=tests/performance --cov=app --cov-report=term-missing --cov-report=html:reports/coverage             --html=reports/backend-test-report.html --self-contained-html -v
 
       # Download from the run's "Artifacts" to read the HTML test and coverage reports.
       - name: Upload test reports
@@ -70,3 +72,53 @@ jobs:
           name: backend-test-reports
           path: reports/
           if-no-files-found: ignore
+
+  # Informational: response-time checks (average and 95th percentile) on a shared CI
+  # machine vary from run to run. A slow run raises a warning, never a red cross, and
+  # never blocks a merge or the deploy that waits for this workflow. Run them locally
+  # with `pytest tests/performance` when you want a real measurement.
+  load-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: furnbiz_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/furnbiz_test
+      SECRET_KEY: test_secret_key_ci
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run load tests
+        id: load
+        continue-on-error: true
+        run: pytest tests/performance -v
+
+      - name: Say so when a load test was too slow
+        if: steps.load.outcome == 'failure'
+        run: echo "::warning::A load test was slower than its limit on this CI machine. This does not fail the build. See the log above, and rerun locally with 'pytest tests/performance'."
