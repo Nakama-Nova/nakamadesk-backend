@@ -17,6 +17,7 @@ from app.api import (
     bom,
     customers,
     dashboard,
+    expenses,
     health,
     invoices,
     items,
@@ -24,6 +25,7 @@ from app.api import (
     masters,
     media,
     orders,
+    payroll,
     production,
     public,
     purchases,
@@ -65,6 +67,8 @@ app.include_router(raw_materials.router)
 app.include_router(bom.router)
 app.include_router(attendance.router)
 app.include_router(wages.router)
+app.include_router(expenses.router)
+app.include_router(payroll.router)
 app.include_router(sync.router)
 app.include_router(orders.router)
 app.include_router(production.router)

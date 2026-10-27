@@ -29,6 +29,7 @@ class UserCreate(UserBase):
 
     password: str = Field(min_length=8, max_length=72)
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
+    overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)
 
 
 class UserUpdate(BaseModel):
@@ -40,6 +41,7 @@ class UserUpdate(BaseModel):
     role: Optional[UserRole] = None
     is_active: Optional[bool] = None
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
+    overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)
 
 
 class PasswordReset(BaseModel):
@@ -58,5 +60,6 @@ class UserResponse(UserBase):
     id: UUID
     created_at: datetime
     base_daily_wage: Optional[Decimal] = None
+    overtime_rate_per_hour: Optional[Decimal] = None
 
     model_config = ConfigDict(from_attributes=True)
