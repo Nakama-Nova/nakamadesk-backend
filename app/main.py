@@ -10,6 +10,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api import (
+    app_updates,
     assets,
     attendance,
     auth,
@@ -74,6 +75,7 @@ app.include_router(media.router)
 app.include_router(uploads.router)
 app.include_router(lab.router)
 app.include_router(scans.router)
+app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
 app.include_router(masters.categories)
 app.include_router(masters.brands)
