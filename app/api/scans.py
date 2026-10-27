@@ -23,8 +23,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, update
 
 from app.core.ratelimit import public_rate_limit
-from app.db.deps import check_role, get_current_user, get_uow
+from app.db.deps import (
+    RESTORATION_ROLES,
+    check_role,
+    get_current_user,
+    get_uow,
+)
 from app.models.enums import UserRole
+from app.models.restoration import RestorationFile, RestorationProject
 from app.models.scan_job import ScanJob
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -35,14 +41,16 @@ from app.services.object_store import S3Store, get_store, get_store_or_none
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
 PROCESSORS = [UserRole.OWNER, UserRole.MANAGER]  # the GPU PC logs in as one of these
+# Restoration scans are processed by the owner or an artisan account (never a manager).
+WORKERS = PROCESSORS + [UserRole.ARTISAN]
 LEASE = timedelta(minutes=30)
 MAX_ATTEMPTS = 3
 MIN_PHOTOS, MAX_PHOTOS = 8, 300
 MB = 1024 * 1024
 # source kind -> (extensions, max bytes per file, max files)
 SOURCES = {
-    "photos": ({".jpg", ".jpeg", ".png"}, 25 * MB, MAX_PHOTOS),
-    "video": ({".mp4", ".mov"}, 2048 * MB, 1),
+    "photos": ({".jpg", ".jpeg", ".png"}, 100 * MB, MAX_PHOTOS),
+    "video": ({".mp4", ".mov"}, 1024 * MB, 1),
 }
 RESULT_KINDS = ["render", "glb", "stl", "obj", "ply", "nc"]
 OPEN = ("created", "uploaded")
@@ -57,6 +65,7 @@ class ScanParams(BaseModel):
 
 class ScanCreate(BaseModel):
     item_id: Optional[UUID] = None
+    restoration_id: Optional[UUID] = None  # a temple restoration instead of a product
     source_kind: Literal["photos", "video"]
     params: ScanParams = ScanParams()
 
@@ -111,6 +120,7 @@ class Fail(Claim):
 class ScanOut(BaseModel):
     id: UUID
     item_id: Optional[UUID]
+    restoration_id: Optional[UUID] = None
     item_name: Optional[str]
     status: str
     source_kind: str
@@ -141,6 +151,7 @@ def _out(job: ScanJob, uow: AbstractUnitOfWork) -> ScanOut:
     return ScanOut(
         id=job.id,
         item_id=job.item_id,
+        restoration_id=job.restoration_id,
         item_name=name,
         status=job.status,
         source_kind=job.source_kind,
@@ -167,13 +178,28 @@ def _get(uow: AbstractUnitOfWork, scan_id: UUID) -> ScanJob:
 
 
 def _visible(job: ScanJob, user: User) -> None:
-    """Capture is open to all staff, but you only see your own scans; owner/manager see all."""
-    if user.role in PROCESSORS or job.created_by == user.id:
+    """
+    Capture is open to all staff, but you only see your own scans; owner/manager see
+    all. A restoration scan is seen by the owner and every artisan, and by nobody else
+    (a manager is told it does not exist).
+    """
+    if job.restoration_id:
+        if user.role in RESTORATION_ROLES:
+            return
+    elif user.role in PROCESSORS or job.created_by == user.id:
         return
     raise HTTPException(status_code=404, detail="Scan not found")
 
 
+def _may_process(job: ScanJob, user: User) -> None:
+    """Who may run a job on the workshop PC: owner/manager, or for a restoration owner/artisan."""
+    allowed = RESTORATION_ROLES if job.restoration_id else PROCESSORS
+    if user.role not in allowed:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+
 def _claimed(job: ScanJob, user: User, worker: str) -> None:
+    _may_process(job, user)
     if job.status != "processing" or job.claimed_by != f"{user.id}|{worker}":
         raise HTTPException(
             status_code=409, detail="This scan is not claimed by this worker"
@@ -213,10 +239,23 @@ def create_scan(
     user: User = Depends(get_current_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
+    if req.item_id and req.restoration_id:
+        raise HTTPException(
+            status_code=422, detail="A scan is for a product or a restoration, not both"
+        )
     if req.item_id and not uow.items.get_by_id(req.item_id):
         raise HTTPException(status_code=404, detail="Item not found")
+    if req.restoration_id:
+        if user.role not in RESTORATION_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail="Restoration scans are for the owner and artisans",
+            )
+        if not uow.session.get(RestorationProject, req.restoration_id):
+            raise HTTPException(status_code=404, detail="Restoration not found")
     job = ScanJob(
         item_id=req.item_id,
+        restoration_id=req.restoration_id,
         created_by=user.id,
         source_kind=req.source_kind,
         params=req.params.model_dump(),
@@ -311,6 +350,13 @@ def complete_upload(
     job.source_keys = keys
     job.source_bytes = sum(sizes.values())
     job.status = "uploaded"
+    project = (
+        uow.session.get(RestorationProject, job.restoration_id)
+        if job.restoration_id
+        else None
+    )
+    if project and project.status in ("planned", "capturing"):
+        project.status = "processing"  # queued for the workshop PC
     uow.commit()
     uow.refresh(job)
     return _out(job, uow)
@@ -346,14 +392,24 @@ def cancel_scan(
 @router.get("", response_model=List[ScanOut])
 def list_scans(
     status: Optional[str] = Query(default=None),
+    restoration_id: Optional[UUID] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     user: User = Depends(get_current_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    """Own scans for staff; every scan for owner/manager. `uploaded` lists oldest first (the queue)."""
+    """
+    Own scans for staff; every product scan for owner/manager. `uploaded` lists oldest
+    first (the queue). Restoration scans are listed only for the owner and artisans.
+    """
     q = uow.session.query(ScanJob)
+    if user.role not in RESTORATION_ROLES:
+        q = q.filter(ScanJob.restoration_id.is_(None))
     if user.role not in PROCESSORS:
-        q = q.filter(ScanJob.created_by == user.id)
+        q = q.filter(
+            or_(ScanJob.created_by == user.id, ScanJob.restoration_id.isnot(None))
+        )
+    if restoration_id:
+        q = q.filter(ScanJob.restoration_id == restoration_id)
     if status:
         q = q.filter(ScanJob.status == status)
     q = q.order_by(
@@ -378,11 +434,11 @@ def get_scan(
 def claim_scan(
     scan_id: UUID,
     req: Claim,
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """One statement decides the winner, so two PCs can never both take a job."""
-    _get(uow, scan_id)
+    _may_process(_get(uow, scan_id), user)
     _expire_stuck(uow)
     now = _now()
     res = uow.session.execute(
@@ -419,7 +475,7 @@ def claim_scan(
 def report_progress(
     scan_id: UUID,
     req: Progress,
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     job = _get(uow, scan_id)
@@ -436,7 +492,7 @@ def report_progress(
 def download_urls(
     scan_id: UUID,
     worker: str = Query(min_length=1, max_length=60),
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -449,7 +505,7 @@ def download_urls(
 def presign_result(
     scan_id: UUID,
     req: ResultPresign,
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -469,11 +525,61 @@ def presign_result(
     }
 
 
+def _finish_restoration(
+    uow: AbstractUnitOfWork, store: S3Store, job: ScanJob, req: Finish
+) -> ScanOut:
+    """Results of a restoration scan become private files of the project, never product assets."""
+    keys = [a.key for a in req.assets]
+    _check_prefix(keys, f"scans/{job.id}/out/")
+    if len(set(keys)) != len(keys):
+        raise HTTPException(status_code=422, detail="The same file is listed twice")
+    if any(a.visibility == "public" for a in req.assets):
+        raise HTTPException(
+            status_code=400,
+            detail="Restoration results are private and cannot be published",
+        )
+    sizes = {a.key: store.head(a.key) for a in req.assets}
+    missing = [k for k, s in sizes.items() if s is None]
+    if missing:
+        raise HTTPException(
+            status_code=409,
+            detail={"message": "Some results did not upload", "missing": missing},
+        )
+    for a in req.assets:
+        if sizes[a.key] > media_service.PRIVATE_KINDS[a.kind][1]:
+            raise HTTPException(status_code=413, detail="A result file is too large")
+    ids = []
+    for a in req.assets:
+        row = RestorationFile(
+            restoration_id=job.restoration_id,
+            scan_id=job.id,
+            kind=a.kind,
+            key=a.key,
+            content_type=a.content_type,
+            size_bytes=sizes[a.key],
+            label=a.alt,
+        )
+        uow.session.add(row)
+        uow.session.flush()
+        ids.append(str(row.id))
+    job.status = "done"
+    job.progress = 100
+    job.note = "Finished"
+    job.result_asset_ids = ids
+    job.finished_at = _now()
+    project = uow.session.get(RestorationProject, job.restoration_id)
+    if project and project.status == "processing":
+        project.status = "review"  # results are in; artisans check them
+    uow.commit()
+    uow.refresh(job)
+    return _out(job, uow)
+
+
 @router.post("/{scan_id}/finish", response_model=ScanOut)
 def finish_scan(
     scan_id: UUID,
     req: Finish,
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -482,6 +588,8 @@ def finish_scan(
     if job.status == "done" and job.claimed_by == f"{user.id}|{req.worker}":
         return _out(job, uow)  # a retried call
     _claimed(job, user, req.worker)
+    if job.restoration_id:
+        return _finish_restoration(uow, store, job, req)
 
     item_id = req.item_id or job.item_id
     if not item_id or not uow.items.get_by_id(item_id):
@@ -535,7 +643,7 @@ def finish_scan(
 def fail_scan(
     scan_id: UUID,
     req: Fail,
-    user: User = Depends(check_role(PROCESSORS)),
+    user: User = Depends(check_role(WORKERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     job = _get(uow, scan_id)

@@ -28,6 +28,10 @@ from app.models.production_material_allocation import (
 from app.models.purchase import Purchase  # noqa: F401
 from app.models.purchase_item import PurchaseItem  # noqa: F401
 from app.models.raw_material import RawMaterial  # noqa: F401
+from app.models.restoration import (  # noqa: F401
+    RestorationFile,
+    RestorationProject,
+)
 from app.models.sale import Sale  # noqa: F401
 from app.models.sale_item import SaleItem  # noqa: F401
 from app.models.scan_job import ScanJob  # noqa: F401

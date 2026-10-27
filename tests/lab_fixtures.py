@@ -36,7 +36,7 @@ def chair_parts():
 def people(db):
     """One real user per role, with a real login token (no dependency overrides)."""
     out = {}
-    for role in ("owner", "manager", "sales", "achari", "worker"):
+    for role in ("owner", "manager", "sales", "achari", "worker", "artisan"):
         u = User(
             username=f"{role}_{uuid.uuid4().hex[:6]}",
             email=f"{role}_{uuid.uuid4().hex[:6]}@example.com",

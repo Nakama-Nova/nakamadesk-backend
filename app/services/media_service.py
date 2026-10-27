@@ -103,7 +103,7 @@ PRIVATE_KINDS = {
     "nc": ({".nc", ".gcode", ".ngc", ".tap"}, 50 * MB, False),
     "source_scan": (
         {".mp4", ".mov", ".jpg", ".jpeg", ".png", ".zip"},
-        2048 * MB,
+        1024 * MB,
         False,
     ),
 }
