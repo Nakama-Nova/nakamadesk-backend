@@ -3,11 +3,13 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_uow
+from app.db.deps import check_role, get_db, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
+from app.schemas.money import ProfitReport
 from app.schemas.report import (
     GSTSummaryResponse,
     InventoryReportResponse,
@@ -15,7 +17,7 @@ from app.schemas.report import (
     SalesReportResponse,
     TopProductResponse,
 )
-from app.services import analytics_service
+from app.services import analytics_service, profit_service
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
@@ -108,6 +110,20 @@ def get_profit_loss_analytics(
         ProfitLossResponse: P&L summary and breakdown.
     """
     return analytics_service.get_profit_loss(uow, start_date, end_date)
+
+
+@router.get("/profit", response_model=ProfitReport)
+def get_real_profit(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    db: Session = Depends(get_db),
+):
+    """
+    Real profit: sales billed minus raw-material purchases, wages paid and
+    expenses, month by month. RBAC: OWNER and MANAGER.
+    """
+    return profit_service.profit_report(db, start_date, end_date)
 
 
 @router.get("/gst-summary", response_model=GSTSummaryResponse)

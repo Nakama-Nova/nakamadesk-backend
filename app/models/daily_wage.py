@@ -31,6 +31,12 @@ class DailyWage(Base):
     # payment_status: pending, paid
     payment_status = Column(String, default="pending")
     transaction_reference = Column(String, nullable=True)
+    # set when paid through a payroll pay-out; empty for legacy /wages/pay payments
+    payment_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("payroll_payments.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 

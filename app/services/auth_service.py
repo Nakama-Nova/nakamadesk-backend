@@ -80,6 +80,7 @@ def register_user(db: Session, user: UserCreate) -> User:
         status=user.status,
         is_active=user.is_active,
         base_daily_wage=user.base_daily_wage,
+        overtime_rate_per_hour=user.overtime_rate_per_hour,
     )
 
     db.add(new_user)

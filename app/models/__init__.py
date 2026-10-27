@@ -5,6 +5,7 @@ from app.models.brand import Brand  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
+from app.models.expense import Expense  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
 from app.models.inventory_movement import InventoryMovement  # noqa: F401
 from app.models.invoice_counter import InvoiceCounter  # noqa: F401
@@ -13,6 +14,11 @@ from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
 from app.models.login_attempt import LoginAttempt  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
+from app.models.payroll import (  # noqa: F401
+    PayrollPayment,
+    WorkEntry,
+    WorkerAdvance,
+)
 from app.models.price_history import RawMaterialPriceHistory  # noqa: F401
 from app.models.product_asset import ProductAsset  # noqa: F401
 from app.models.production_job import ProductionJob  # noqa: F401

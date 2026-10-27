@@ -35,4 +35,5 @@ class User(Base):
     status = Column(String, default="active")  # active, inactive, suspended
     is_active = Column(Boolean, default=True)
     base_daily_wage = Column(Numeric(10, 2), default=0.0)
+    overtime_rate_per_hour = Column(Numeric(10, 2), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
