@@ -103,4 +103,4 @@ nakama-backend/
 
 ## 📜 License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+This is **proprietary software**. Copyright (c) 2026 Chaithanya, all rights reserved. It may not be copied, modified or shared; see `LICENSE`. Third-party packages keep their own licences.
