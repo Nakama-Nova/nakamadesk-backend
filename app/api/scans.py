@@ -46,6 +46,7 @@ WORKERS = PROCESSORS + [UserRole.ARTISAN]
 LEASE = timedelta(minutes=30)
 MAX_ATTEMPTS = 3
 MIN_PHOTOS, MAX_PHOTOS = 8, 300
+MIN_RELIEF_PHOTOS = 1  # a flat carving is read from one straight-on photo
 MB = 1024 * 1024
 # source kind -> (extensions, max bytes per file, max files)
 SOURCES = {
@@ -61,6 +62,9 @@ class ScanParams(BaseModel):
     real_width_mm: Optional[float] = Field(default=None, gt=0, le=5000)
     quality: Literal["fast", "normal", "high"] = "normal"
     gcode: bool = False
+    # full = a 3D object photographed all the way around (needs a GPU worker);
+    # relief = a flat carving read from one straight-on photo (any PC can do it)
+    shape: Literal["full", "relief"] = "full"
 
 
 class ScanCreate(BaseModel):
@@ -355,7 +359,10 @@ def complete_upload(
     exts, max_bytes, max_files = SOURCES[job.source_kind]
     if len(keys) > max_files or any(Path(k).suffix.lower() not in exts for k in keys):
         raise HTTPException(status_code=422, detail="Files do not match this scan type")
-    if job.source_kind == "photos" and len(keys) < MIN_PHOTOS:
+    relief = (job.params or {}).get("shape") == "relief"
+    if job.source_kind == "photos" and relief and len(keys) < MIN_RELIEF_PHOTOS:
+        raise HTTPException(status_code=422, detail="Add at least one photo")
+    if job.source_kind == "photos" and not relief and len(keys) < MIN_PHOTOS:
         raise HTTPException(
             status_code=422,
             detail=f"Take at least {MIN_PHOTOS} photos, walking around the piece",
