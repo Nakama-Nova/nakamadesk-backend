@@ -2,11 +2,13 @@ import logging
 import uuid
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from app.models.attendance import Attendance
 from app.models.customer import Customer
+from app.models.enums import UserRole
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
@@ -44,6 +46,42 @@ def _get_model_class(entity: str):
     return None
 
 
+# Sync must grant no more than the REST routes do. Lists (not sets): UserRole is a
+# str Enum whose hash differs from the plain string stored on User.role.
+_ALL_ROLES = (
+    UserRole.OWNER,
+    UserRole.MANAGER,
+    UserRole.SALES,
+    UserRole.ACHARI,
+    UserRole.WORKER,
+)
+_COST_VIEWERS = (UserRole.OWNER, UserRole.MANAGER)
+_SALES_ROLES = (UserRole.OWNER, UserRole.MANAGER, UserRole.SALES)
+
+# Who may push changes for each entity (same as POST/PUT/DELETE on its REST routes).
+PUSH_ROLES = {
+    "sale": _SALES_ROLES,
+    "item": _COST_VIEWERS,
+    "raw_material": _COST_VIEWERS,
+    "attendance": _SALES_ROLES,
+}
+# Who may pull each entity (same as its REST GET routes). Items are readable by all
+# staff with cost fields hidden; attendance is own-rows-only outside _SALES_ROLES.
+PULL_ROLES = {
+    "sale": _SALES_ROLES,
+    "item": _ALL_ROLES,
+    "raw_material": _COST_VIEWERS,
+    "attendance": _ALL_ROLES,
+}
+
+
+def _role_of(user: User) -> Optional[UserRole]:
+    try:
+        return UserRole(user.role)
+    except ValueError:
+        return None  # an unknown role gets nothing
+
+
 class OperationValidator:
     """Validator for incoming sync operations from clients."""
 
@@ -61,6 +99,22 @@ class OperationValidator:
         if op.entity not in SYNC_HANDLER_REGISTRY:
             return f"Unknown entity: {op.entity}"
         return None
+
+    @staticmethod
+    def check_maker(op: SyncOperation, user: User) -> Optional[str]:
+        """Error message if the client says someone else made this change, else None."""
+        if op.user_id is None or op.user_id == user.id:
+            return None
+        return (
+            "This change was made by a different user. Sign in as that user to send it."
+        )
+
+    @staticmethod
+    def authorize(op: SyncOperation, user: User) -> Optional[str]:
+        """Error message if this user's role may not push this entity, else None."""
+        if _role_of(user) in PUSH_ROLES.get(op.entity, ()):
+            return None
+        return f"Access denied: your role may not sync '{op.entity}' changes"
 
 
 class ConflictResolver(ABC):
@@ -629,6 +683,14 @@ class OperationDispatcher:
 
             # 2. Validation
             err = OperationValidator.validate(op)
+            if not err:
+                # Reported as its own status so a client can keep the change queued
+                # for the right user instead of treating it as a dead operation.
+                err = OperationValidator.check_maker(op, current_user)
+                if err:
+                    aggregator.add_result(op.id, None, "wrong_user", err)
+                    continue
+                err = OperationValidator.authorize(op, current_user)
             if err:
                 aggregator.add_result(op.id, None, "failed", err)
                 continue
@@ -668,6 +730,7 @@ def process_push_sync(
 def pull_sync(
     uow: AbstractUnitOfWork,
     last_sync: datetime,
+    current_user: User,
     limit: int = 100,
     offset: int = 0,
 ) -> SyncPullResponse:
@@ -680,6 +743,7 @@ def pull_sync(
     Args:
         uow (AbstractUnitOfWork): Unit of Work.
         last_sync (datetime): Timestamp of the last successful sync.
+        current_user (User): Who is pulling; limits what they may read.
         limit (int): Maximum records per entity.
         offset (int): Records to skip.
 
@@ -688,6 +752,11 @@ def pull_sync(
     """
     # Enforce global max limit for stability
     limit = min(limit, 100)
+
+    role = _role_of(current_user)
+
+    def may_read(entity: str) -> bool:
+        return role in PULL_ROLES[entity]
 
     # helper row to dict
     def to_dict_list(rows):
@@ -718,6 +787,8 @@ def pull_sync(
         .limit(limit)
         .offset(offset)
         .all()
+        if may_read("item")
+        else []
     )
     sales = (
         uow.session.query(Sale)
@@ -727,14 +798,21 @@ def pull_sync(
         .limit(limit)
         .offset(offset)
         .all()
+        if may_read("sale")
+        else []
     )
+    attendance_q = uow.session.query(Attendance).filter(
+        Attendance.updated_at > last_sync
+    )
+    if role not in _SALES_ROLES:
+        attendance_q = attendance_q.filter(Attendance.user_id == current_user.id)
     attendance = (
-        uow.session.query(Attendance)
-        .filter(Attendance.updated_at > last_sync)
-        .order_by(Attendance.updated_at, Attendance.id)
+        attendance_q.order_by(Attendance.updated_at, Attendance.id)
         .limit(limit)
         .offset(offset)
         .all()
+        if may_read("attendance")
+        else []
     )
     raw_materials = (
         uow.session.query(RawMaterial)
@@ -743,16 +821,29 @@ def pull_sync(
         .limit(limit)
         .offset(offset)
         .all()
+        if may_read("raw_material")
+        else []
     )
 
+    readable = [e for e in PULL_ROLES if may_read(e)]
     deleted = (
         uow.session.query(SyncTombstone)
-        .filter(SyncTombstone.deleted_at > last_sync)
+        .filter(
+            SyncTombstone.deleted_at > last_sync,
+            SyncTombstone.entity.in_(readable),
+        )
         .order_by(SyncTombstone.deleted_at, SyncTombstone.id)
         .limit(limit)
         .offset(offset)
         .all()
     )
+
+    item_dicts = to_dict_list(items)
+    if role not in _COST_VIEWERS:
+        # what an item cost is for the owner and managers only (as on GET /items)
+        for d in item_dicts:
+            d["purchase_price"] = Decimal("0.00")
+            d["production_cost"] = Decimal("0.00")
 
     return SyncPullResponse(
         deleted=[
@@ -763,7 +854,7 @@ def pull_sync(
             }
             for t in deleted
         ],
-        items=to_dict_list(items),
+        items=item_dicts,
         sales=to_dict_list(sales),
         attendance=to_dict_list(attendance),
         raw_materials=to_dict_list(raw_materials),
