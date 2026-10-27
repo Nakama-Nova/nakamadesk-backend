@@ -1,21 +1,79 @@
-MIT License
+VRIKSHA STUDIO SOFTWARE LICENCE (PROPRIETARY)
 
-Copyright (c) 2026 Chaithanya
+Copyright (c) 2026 Chaithanya. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software, including its source code, designs, text, images and
+documentation (the "Software"), is the confidential and proprietary property of
+Chaithanya (the "Owner"). It is licensed, not sold. No one may copy it, modify it
+or share it except as this licence allows.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. WHAT IS ALLOWED
+   The Owner grants the person or business the Owner has authorised (the
+   "Licensee") a limited, non-exclusive, non-transferable, revocable licence to
+   install and use the Software, in the form the Owner supplies it, on devices
+   the Owner approves, for the Licensee's own internal business operations.
+   The Licensee's staff and contractors may use it for that purpose under the
+   Licensee's responsibility.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. WHAT IS NOT ALLOWED
+   Without the Owner's prior written permission, no one may:
+   (a) copy or reproduce the Software, except for one backup copy and for
+       installing it on devices the Owner approves;
+   (b) modify, adapt, translate, or create anything derived from the Software;
+   (c) decompile, disassemble or reverse engineer the Software, or try to
+       obtain its source code, except to the extent the law does not allow
+       this restriction;
+   (d) distribute, publish, sell, rent, lease, lend, sublicense or otherwise
+       make the Software available to anyone else, including by uploading it
+       to a repository, package index, file-sharing site or any other service;
+   (e) use the Software, or any part of it, to build a competing or similar
+       product, or to offer it as a service to other people or businesses;
+   (f) remove or change any copyright or licence notice, or get around any
+       technical protection, access control, licence check or update
+       mechanism.
+
+3. SOURCE CODE THAT CAN BE SEEN
+   Where the source code is visible (for example in a code repository), it is
+   visible only so that authorised people can work on and review it. Being able
+   to see, clone or download it gives no right to use, copy, modify or share it.
+   If a repository is public, the only rights that others have are those that
+   the hosting service's own terms of service require (such as viewing it and
+   forking it on that service); no other right is granted.
+
+4. THIRD-PARTY COMPONENTS
+   The Software includes or uses components that belong to other people (for
+   example Qt and PyQt, Flutter, Three.js and the Cormorant Garamond and Inter
+   fonts). Each of those stays under its own licence, which is listed in the
+   file THIRD_PARTY_LICENSES.txt where one is supplied, or in that component's
+   own licence file. This licence does not change those licences, and nothing
+   in it limits any right they give you for those components.
+
+5. OWNERSHIP
+   The Owner keeps all rights, title and interest in the Software. No licence
+   is granted by implication or by conduct. If you send the Owner suggestions
+   or feedback, the Owner may use them freely without payment.
+
+6. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+   PARTICULAR PURPOSE AND NON-INFRINGEMENT. The Licensee is responsible for
+   checking bills, tax, stock and wage figures before relying on them.
+
+7. LIMIT OF LIABILITY
+   To the fullest extent the law allows, the Owner is not liable for any
+   indirect, incidental, special or consequential loss, or for lost profit,
+   lost data or business interruption, arising from the Software. The Owner's
+   total liability for any claim is limited to the amount the Licensee paid the
+   Owner for the Software.
+
+8. ENDING THE LICENCE
+   This licence ends automatically if the Licensee breaks it, and the Owner may
+   end it at any time by written notice. When it ends, the Licensee must stop
+   using the Software and delete every copy. Sections 2 to 9 continue after it
+   ends.
+
+9. LAW
+   This licence is governed by the laws of India.
+
+To ask for permission to do something this licence does not allow, contact the
+Owner through the Nakama-Nova organisation on GitHub (github.com/Nakama-Nova).
