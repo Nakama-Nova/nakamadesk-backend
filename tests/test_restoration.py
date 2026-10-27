@@ -397,3 +397,65 @@ def test_capture_size_limits_are_100mb_a_photo_and_1gb_a_video(client, people, s
     assert (
         "100 MB" in presign("photos", "a.jpg", "image/jpeg", 200 * MB).json()["detail"]
     )
+
+
+# --------------------------------------------- a bad ending does not leave "processing"
+def test_a_failed_scan_puts_the_project_back_to_capturing(client, people, store):
+    owner = people["owner"]["h"]
+    p = new_project(client, owner)
+    scan = queue_restoration(client, owner, store, p)
+    assert (
+        client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
+        == "processing"
+    )
+    assert claim(client, owner, scan["id"]).status_code == 200
+    r = client.post(
+        f"/scans/{scan['id']}/fail",
+        headers=owner,
+        json={"worker": PC, "error": "COLMAP was not found"},
+    )
+    assert r.status_code == 200
+    assert (
+        client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
+        == "capturing"
+    )
+
+
+def test_another_active_scan_keeps_the_project_processing(client, people, store):
+    owner = people["owner"]["h"]
+    p = new_project(client, owner)
+    first, second = queue_restoration(client, owner, store, p), queue_restoration(
+        client, owner, store, p
+    )
+    claim(client, owner, first["id"])
+    client.post(
+        f"/scans/{first['id']}/fail",
+        headers=owner,
+        json={"worker": PC, "error": "bad photos"},
+    )
+    assert (
+        client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
+        == "processing"
+    )  # second is waiting
+    assert (
+        client.post(f"/scans/{second['id']}/cancel", headers=owner).status_code == 200
+    )
+    assert (
+        client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
+        == "capturing"
+    )
+
+
+def test_a_failure_never_overrides_a_status_the_artisans_chose(client, people, store):
+    owner = people["owner"]["h"]
+    p = new_project(client, owner)
+    scan = queue_restoration(client, owner, store, p)
+    client.patch(f"/restorations/{p['id']}", headers=owner, json={"status": "carving"})
+    claim(client, owner, scan["id"])
+    client.post(
+        f"/scans/{scan['id']}/fail", headers=owner, json={"worker": PC, "error": "x"}
+    )
+    assert (
+        client.get(f"/restorations/{p['id']}", headers=owner).json()["status"]
+        == "carving"
+    )
