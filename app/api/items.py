@@ -29,7 +29,11 @@ def _for(user: User, item) -> ItemResponse:
     if user.role in COST_VIEWERS:
         return out
     return out.model_copy(
-        update={"purchase_price": Decimal("0.00"), "production_cost": Decimal("0.00")}
+        update={
+            "purchase_price": Decimal("0.00"),
+            "production_cost": Decimal("0.00"),
+            "profit_percent": None,
+        }
     )
 
 

@@ -853,6 +853,7 @@ def pull_sync(
         for d in item_dicts:
             d["purchase_price"] = Decimal("0.00")
             d["production_cost"] = Decimal("0.00")
+            d["profit_percent"] = None
 
     return SyncPullResponse(
         deleted=[

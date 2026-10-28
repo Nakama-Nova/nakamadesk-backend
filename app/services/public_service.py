@@ -32,7 +32,7 @@ from app.schemas.public import (
     PublicOrderLine,
     PublicProduct,
 )
-from app.services import media_service
+from app.services import media_service, pricing
 from app.services.order_service import _generate_order_number
 
 
@@ -81,7 +81,7 @@ def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str])
         name=item.name,
         item_type=item.item_type or "furniture",
         short_desc=item.short_desc,
-        price=item.selling_price,
+        price=pricing.with_gst(item.selling_price, item.gst_percent),
         made_to_order=item.made_to_order,
         lead_time_days=item.lead_time_days,
         in_stock=(item.current_stock or 0) > 0,
@@ -225,7 +225,10 @@ def checkout(uow: AbstractUnitOfWork, req: CheckoutRequest) -> PublicOrder:
                 detail=f"{item.name} is made to order: pay an advance by UPI instead",
             )
 
-    total = sum((by_slug[s].selling_price * q for s, q in wanted.items()), Decimal("0"))
+    def price(slug: str) -> Decimal:
+        return pricing.with_gst(by_slug[slug].selling_price, by_slug[slug].gst_percent)
+
+    total = sum((price(s) * q for s, q in wanted.items()), Decimal("0"))
     customer = _customer_for(uow, req.name, phone, req.email, req.address, req.pincode)
     address = {
         "address": req.address,
@@ -250,7 +253,7 @@ def checkout(uow: AbstractUnitOfWork, req: CheckoutRequest) -> PublicOrder:
                     item_id=by_slug[s].id,
                     item_name=by_slug[s].name,
                     quantity=q,
-                    unit_price=by_slug[s].selling_price,
+                    unit_price=price(s),
                 )
                 for s, q in wanted.items()
             ],
