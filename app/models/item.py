@@ -44,6 +44,8 @@ class Item(Base):
     purchase_price = Column(Numeric(10, 2), default=0.0)
     selling_price = Column(Numeric(10, 2), default=0.0)
     gst_percent = Column(Numeric(10, 2), default=0.0)
+    # set: the selling price follows cost + this profit %; empty: the price is typed by hand
+    profit_percent = Column(Numeric(7, 2), nullable=True)
     hsn_code = Column(String, index=True)
     current_stock = Column(Integer, default=0)
     min_stock = Column(Integer, default=5)

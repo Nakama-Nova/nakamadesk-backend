@@ -4,9 +4,10 @@ from decimal import Decimal
 from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.core.constants import GST_ALLOWED
+from app.services import pricing
 
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -25,6 +26,9 @@ class ItemBase(BaseModel):
     purchase_price: Decimal = Decimal("0.00")
     selling_price: Decimal = Decimal("0.00")
     gst_percent: Decimal = Decimal("0.00")
+    profit_percent: Optional[Decimal] = Field(
+        default=None, ge=0, le=1000, max_digits=7, decimal_places=2
+    )
     hsn_code: Optional[str] = None
     current_stock: int = 0
     min_stock: int = 5
@@ -95,6 +99,9 @@ class ItemUpdate(BaseModel):
     purchase_price: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
     gst_percent: Optional[Decimal] = None
+    profit_percent: Optional[Decimal] = Field(
+        default=None, ge=0, le=1000, max_digits=7, decimal_places=2
+    )
     hsn_code: Optional[str] = None
     current_stock: Optional[int] = None
     min_stock: Optional[int] = None
@@ -131,3 +138,9 @@ class ItemResponse(ItemBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @computed_field
+    @property
+    def price_with_gst(self) -> Decimal:
+        """What a customer pays: the selling price plus its GST."""
+        return pricing.with_gst(self.selling_price, self.gst_percent)

@@ -29,7 +29,7 @@ from app.models.raw_material import RawMaterial
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemUpdate
 from app.schemas.stock import StockUpdate
-from app.services import sku_service
+from app.services import pricing, sku_service
 
 logger = logging.getLogger(__name__)
 
@@ -425,6 +425,8 @@ def create_item(uow: AbstractUnitOfWork, item_data: ItemCreate) -> Item:
             if not data.get("sku"):
                 data["sku"] = sku_service.next_sku(uow.session, data.get("item_type"))
             new_item = Item(**data)
+            if "selling_price" not in item_data.model_fields_set:
+                pricing.reprice(new_item)  # priced by profit %: work the price out
             prepare_catalog_fields(uow, new_item)
             uow.items.add(new_item)
             uow.commit()
@@ -459,6 +461,8 @@ def update_item(
         update_dict = item_data.model_dump(exclude_unset=True)
         for key, value in update_dict.items():
             setattr(item, key, value)
+        if "selling_price" not in update_dict and {"purchase_price", "production_cost", "profit_percent"} & set(update_dict):  # fmt: skip
+            pricing.reprice(item)  # the cost or profit % moved: the price follows
 
         prepare_catalog_fields(uow, item)
         uow.commit()
