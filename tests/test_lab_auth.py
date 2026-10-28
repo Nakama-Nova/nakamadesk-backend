@@ -2,8 +2,8 @@
 
 import uuid
 
+import jwt
 import pytest
-from jose import jwt
 
 from app.core.security import (
     ALGORITHM,

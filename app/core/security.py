@@ -1,9 +1,9 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
 
 from app.core.config import settings
 
@@ -58,7 +58,7 @@ def verify_token(token: str) -> dict:
                 detail="Invalid token: missing subject",
             )
         return payload
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
