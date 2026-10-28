@@ -38,8 +38,8 @@ def people(db):
     out = {}
     for role in ("owner", "manager", "sales", "achari", "worker", "artisan"):
         u = User(
-            username=f"{role}_{uuid.uuid4().hex[:6]}",
-            email=f"{role}_{uuid.uuid4().hex[:6]}@example.com",
+            username=f"{role}_{uuid.uuid4().hex[:12]}",
+            email=f"{role}_{uuid.uuid4().hex[:12]}@example.com",
             password_hash="x",
             role=role,
             is_active=True,

@@ -114,7 +114,7 @@ def test_access_with_invalid_token(client: TestClient):
 def test_access_with_expired_token(client: TestClient):
     from datetime import datetime, timedelta, timezone
 
-    from jose import jwt
+    import jwt
 
     from app.core.security import ALGORITHM, SECRET_KEY
 
