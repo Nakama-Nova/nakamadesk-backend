@@ -5,6 +5,7 @@ from app.models.brand import Brand  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
+from app.models.design import Design, DesignProduct  # noqa: F401
 from app.models.expense import Expense  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
 from app.models.inventory_movement import InventoryMovement  # noqa: F401

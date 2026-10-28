@@ -21,7 +21,9 @@ STATUSES = (
     "processing",  # the workshop PC is building the 3D model
     "review",  # results are in; artisans check them
     "carving",  # being recarved or repaired
-    "restored",  # finished
+    "finishing",  # a bought piece being fine-finished
+    "painting",  # ... and painted
+    "restored",  # finished (for a bought piece: ready to sell)
     "on_hold",
     "cancelled",
 )
@@ -42,8 +44,19 @@ class RestorationProject(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
+    # temple = restoring a piece of a temple; finishing = a piece bought from another
+    # artisan that is being fine-finished and painted (item_id is that piece)
+    kind = Column(String, nullable=False, default="temple", server_default="temple")
+    item_id = Column(
+        UUID(as_uuid=True), ForeignKey("items.id", ondelete="SET NULL"), nullable=True
+    )
+    supplier_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("suppliers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     title = Column(String, nullable=False)
-    temple_name = Column(String, nullable=False)
+    temple_name = Column(String, nullable=True)  # required for temple projects only
     location = Column(String, nullable=True)
     piece = Column(String, nullable=True)  # e.g. "Dwarapalaka door panel, left"
     condition_notes = Column(Text, nullable=True)

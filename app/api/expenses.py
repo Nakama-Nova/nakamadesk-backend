@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db
+from app.db.deps import RESTORATION_ROLES, check_role, get_db
 from app.models.enums import UserRole
 from app.models.expense import Expense
+from app.models.restoration import RestorationProject
 from app.models.user import User
 from app.schemas.money import (
     ExpenseCreate,
@@ -22,6 +23,19 @@ from app.services import profit_service
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
 BOOKKEEPERS = [UserRole.OWNER, UserRole.MANAGER]
+
+
+def _check_restoration(db: Session, user: User, restoration_id) -> None:
+    """Linking an expense to a restoration is for the owner (who may see restorations)."""
+    if restoration_id is None:
+        return
+    if user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the owner can link an expense to a restoration",
+        )
+    if not db.get(RestorationProject, restoration_id):
+        raise HTTPException(status_code=404, detail="Restoration not found")
 
 
 def _get(db: Session, expense_id: UUID) -> Expense:
@@ -38,6 +52,7 @@ def add_expense(
     current_user: User = Depends(check_role(BOOKKEEPERS)),
 ):
     """Record money spent (rent, power, transport, tools...). OWNER, MANAGER."""
+    _check_restoration(db, current_user, data.restoration_id)
     fields = data.model_dump()
     fields["category"] = data.category.strip().title()
     expense = Expense(**fields, created_by=current_user.id)
@@ -53,6 +68,7 @@ def list_expenses(
     end_date: Optional[date] = Query(None),
     category: Optional[str] = Query(None),
     include_voided: bool = Query(False),
+    restoration_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(check_role(BOOKKEEPERS)),
 ):
@@ -65,6 +81,8 @@ def list_expenses(
         query = query.filter(Expense.spent_on <= end_date)
     if category:
         query = query.filter(func.lower(Expense.category) == category.lower())
+    if restoration_id:
+        query = query.filter(Expense.restoration_id == restoration_id)
     return query.order_by(Expense.spent_on.desc(), Expense.created_at.desc()).all()
 
 
@@ -89,7 +107,22 @@ def edit_expense(
     expense = _get(db, expense_id)
     if expense.voided_at:
         raise HTTPException(status_code=409, detail="A voided expense cannot be edited")
-    for key, value in data.model_dump(exclude_unset=True).items():
+    changes = data.model_dump(exclude_unset=True)
+    if (
+        "restoration_id" in changes
+        and changes["restoration_id"] != expense.restoration_id
+    ):
+        # moving an expense onto, off or between projects changes what a piece has cost
+        if (
+            changes["restoration_id"] is None
+            and current_user.role not in RESTORATION_ROLES
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner can take an expense off a restoration",
+            )
+        _check_restoration(db, current_user, changes["restoration_id"])
+    for key, value in changes.items():
         if key in ("category", "spent_on", "amount", "method") and value is None:
             continue  # these can never be blank
         setattr(expense, key, value.strip().title() if key == "category" else value)
