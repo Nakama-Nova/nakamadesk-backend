@@ -51,6 +51,10 @@ def safe(text, fallback="-") -> str:
     return escape(text).replace("\n", "<br/>") if text else fallback
 
 
+def method_word(method) -> str:
+    return "UPI" if method == "upi" else safe((method or "").title())
+
+
 def day(iso) -> str:
     return date.fromisoformat(str(iso)[:10]).strftime("%d %b %Y") if iso else "-"
 
@@ -305,7 +309,7 @@ def _order_confirmation(letter, p) -> list:
         Spacer(1, 8),
     ]
     if p.get("payments"):
-        rows = [[day(x["paid_on"]), safe(x["method"]), safe(x.get("reference")), money(x["amount"])] for x in p["payments"]]  # fmt: skip
+        rows = [[day(x["paid_on"]), method_word(x["method"]), safe(x.get("reference")), money(x["amount"])] for x in p["payments"]]  # fmt: skip
         out += [P("Payments received", "label"), Spacer(1, 2), _grid(["Date", "Method", "Reference", "Amount"], rows, [30 * mm, 36 * mm, 70 * mm, 30 * mm], right_cols=(3,)), Spacer(1, 8)]  # fmt: skip
     if Decimal(p["advance"]) > 0:
         out.append(P(f"Received with thanks from <b>{safe(p['party'].get('name'))}</b> an advance of {money(p['advance'])} ({amount_in_words(p['advance'])}) against this order.", "body"))  # fmt: skip
@@ -342,7 +346,7 @@ def _purchase_receipt(letter, p) -> list:
         _kv(
             [
                 ("Paid on", day(pay["paid_on"])),
-                ("Method", safe(pay["method"])),
+                ("Method", method_word(pay["method"])),
                 ("Reference", safe(pay.get("reference"))),
             ]
         ),  # fmt: skip
