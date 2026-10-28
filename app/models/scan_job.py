@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     ForeignKey,
@@ -41,6 +42,10 @@ class ScanJob(Base):
         UUID(as_uuid=True),
         ForeignKey("restoration_projects.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    # seen and processed by the owner and artisans only (a restoration, or a sculpture)
+    artisan_only = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

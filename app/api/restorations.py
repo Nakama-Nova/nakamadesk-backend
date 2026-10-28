@@ -9,6 +9,7 @@ them. Capture and the workshop PC use /scans with a restoration_id.
 
 import re
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import List, Literal, Optional
 from uuid import UUID
@@ -19,8 +20,14 @@ from sqlalchemy import func
 
 from app.api.scans import ScanOut, _out
 from app.db.deps import RESTORATION_ROLES, check_role, get_uow
+from app.models.design import Design
+from app.models.enums import UserRole
+from app.models.expense import Expense
+from app.models.item import Item
+from app.models.payroll import WorkEntry
 from app.models.restoration import STATUSES, RestorationFile, RestorationProject
 from app.models.scan_job import ScanJob
+from app.models.supplier import Supplier
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.services.object_store import S3Store, get_store
@@ -33,6 +40,8 @@ Status = Literal[
     "processing",
     "review",
     "carving",
+    "finishing",
+    "painting",
     "restored",
     "on_hold",
     "cancelled",
@@ -41,12 +50,18 @@ assert set(Status.__args__) == set(STATUSES)
 
 
 class RestorationCreate(BaseModel):
+    # temple: restoring a piece of a temple (needs temple_name).
+    # finishing: a piece bought from another artisan, to be fine-finished and painted
+    # (needs item_id, the piece; supplier_id says who it was bought from).
+    kind: Literal["temple", "finishing"] = "temple"
     title: str = Field(min_length=1, max_length=120)
-    temple_name: str = Field(min_length=1, max_length=120)
+    temple_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     location: Optional[str] = Field(default=None, max_length=160)
     piece: Optional[str] = Field(default=None, max_length=160)
     condition_notes: Optional[str] = Field(default=None, max_length=2000)
     lead_artisan_id: Optional[UUID] = None
+    item_id: Optional[UUID] = None
+    supplier_id: Optional[UUID] = None
 
 
 class RestorationUpdate(BaseModel):
@@ -57,12 +72,20 @@ class RestorationUpdate(BaseModel):
     condition_notes: Optional[str] = Field(default=None, max_length=2000)
     lead_artisan_id: Optional[UUID] = None
     status: Optional[Status] = None
+    item_id: Optional[UUID] = None
+    supplier_id: Optional[UUID] = None
 
 
 class RestorationOut(BaseModel):
     id: UUID
+    kind: str
     title: str
-    temple_name: str
+    temple_name: Optional[str]
+    item_id: Optional[UUID]
+    item_sku: Optional[str]
+    item_name: Optional[str]
+    supplier_id: Optional[UUID]
+    supplier_name: Optional[str]
     location: Optional[str]
     piece: Optional[str]
     condition_notes: Optional[str]
@@ -85,9 +108,31 @@ class FileOut(BaseModel):
     created_at: datetime
 
 
+class DesignRef(BaseModel):
+    id: UUID
+    sku: str
+    name: str
+    status: str
+
+
 class RestorationDetail(RestorationOut):
     scans: List[ScanOut]
     files: List[FileOut]
+    designs: List[DesignRef] = []
+
+
+class CostOut(BaseModel):
+    """What a piece has cost so far: bought price + labour paid on it + paint and the like."""
+
+    item_id: Optional[UUID]
+    item_sku: Optional[str]
+    item_name: Optional[str]
+    purchase_price: Decimal
+    labour: Decimal
+    expenses: Decimal
+    total: Decimal
+    selling_price: Optional[Decimal]
+    profit_if_sold: Optional[Decimal]
 
 
 class TeamMember(BaseModel):
@@ -118,6 +163,13 @@ def _check_lead(uow: AbstractUnitOfWork, lead_id: Optional[UUID]) -> None:
         )
 
 
+def _check_links(uow: AbstractUnitOfWork, item_id, supplier_id) -> None:
+    if item_id and not uow.session.get(Item, item_id):
+        raise HTTPException(status_code=404, detail="Item not found")
+    if supplier_id and not uow.session.get(Supplier, supplier_id):
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+
 def _out_project(uow: AbstractUnitOfWork, p: RestorationProject) -> dict:
     scans = (
         uow.session.query(func.count(ScanJob.id))
@@ -130,10 +182,18 @@ def _out_project(uow: AbstractUnitOfWork, p: RestorationProject) -> dict:
         .scalar()
     )
     lead = uow.users.get_by_id(p.lead_artisan_id) if p.lead_artisan_id else None
+    item = uow.session.get(Item, p.item_id) if p.item_id else None
+    supplier = uow.session.get(Supplier, p.supplier_id) if p.supplier_id else None
     return {
         "id": p.id,
+        "kind": p.kind,
         "title": p.title,
         "temple_name": p.temple_name,
+        "item_id": p.item_id,
+        "item_sku": item.sku if item else None,
+        "item_name": item.name if item else None,
+        "supplier_id": p.supplier_id,
+        "supplier_name": supplier.name if supplier else None,
         "location": p.location,
         "piece": p.piece,
         "condition_notes": p.condition_notes,
@@ -173,6 +233,13 @@ def create_restoration(
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     _check_lead(uow, req.lead_artisan_id)
+    if req.kind == "temple" and not (req.temple_name or "").strip():
+        raise HTTPException(status_code=422, detail="Enter the temple's name")
+    if req.kind == "finishing" and not req.item_id:
+        raise HTTPException(
+            status_code=422, detail="Choose the piece that is being finished"
+        )
+    _check_links(uow, req.item_id, req.supplier_id)
     project = RestorationProject(**req.model_dump(), created_by=user.id)
     uow.session.add(project)
     uow.commit()
@@ -212,10 +279,17 @@ def get_restoration(
         .order_by(RestorationFile.created_at.desc())
         .all()
     )
+    designs = (
+        uow.session.query(Design)
+        .filter(Design.restoration_id == project.id)
+        .order_by(Design.created_at)
+        .all()
+    )
     return {
         **_out_project(uow, project),
         "scans": [_out(s, uow) for s in scans],
         "files": [FileOut.model_validate(f, from_attributes=True) for f in files],
+        "designs": [DesignRef.model_validate(d, from_attributes=True) for d in designs],
     }
 
 
@@ -228,9 +302,21 @@ def update_restoration(
 ):
     project = _project(uow, restoration_id)
     changes = req.model_dump(exclude_unset=True)
-    for required in ("title", "temple_name", "status"):
+    for required in ("title", "status"):
         if required in changes and changes[required] is None:
             raise HTTPException(status_code=422, detail=f"{required} cannot be empty")
+    if (
+        project.kind == "temple"
+        and "temple_name" in changes
+        and not (changes["temple_name"] or "").strip()
+    ):
+        raise HTTPException(status_code=422, detail="temple_name cannot be empty")
+    if project.kind == "finishing" and "item_id" in changes and not changes["item_id"]:
+        raise HTTPException(
+            status_code=422, detail="A finishing project needs its piece"
+        )
+    if "item_id" in changes or "supplier_id" in changes:
+        _check_links(uow, changes.get("item_id"), changes.get("supplier_id"))
     if "lead_artisan_id" in changes:
         _check_lead(uow, changes["lead_artisan_id"])
     for key, value in changes.items():
@@ -261,3 +347,50 @@ def download_file(
         "filename": f"{stem}-{row.kind}{Path(row.key).suffix}",
         "size_bytes": row.size_bytes,
     }
+
+
+@router.get("/{restoration_id}/cost", response_model=CostOut)
+def restoration_cost(
+    restoration_id: UUID,
+    user: User = Depends(check_role([UserRole.OWNER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    What the piece has cost: the price it was bought at, labour paid on it (piece work
+    and overtime entered against the piece) and the expenses linked to this project.
+    Money, so OWNER only.
+    """
+    project = _project(uow, restoration_id)
+    item = uow.session.get(Item, project.item_id) if project.item_id else None
+
+    def money(value) -> Decimal:
+        return Decimal(value or 0).quantize(Decimal("0.01"))
+
+    labour = Decimal(0)
+    if item:
+        labour = (
+            uow.session.query(func.coalesce(func.sum(WorkEntry.amount), 0))
+            .filter(WorkEntry.item_id == item.id)
+            .scalar()
+        )
+    spent = (
+        uow.session.query(func.coalesce(func.sum(Expense.amount), 0))
+        .filter(Expense.restoration_id == project.id, Expense.voided_at.is_(None))
+        .scalar()
+    )
+    purchase = money(item.purchase_price) if item else money(0)
+    total = purchase + money(labour) + money(spent)
+    selling = (
+        money(item.selling_price) if item and (item.selling_price or 0) > 0 else None
+    )
+    return CostOut(
+        item_id=item.id if item else None,
+        item_sku=item.sku if item else None,
+        item_name=item.name if item else None,
+        purchase_price=purchase,
+        labour=money(labour),
+        expenses=money(spent),
+        total=total,
+        selling_price=selling,
+        profit_if_sold=(selling - total) if selling is not None else None,
+    )

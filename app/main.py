@@ -17,6 +17,7 @@ from app.api import (
     bom,
     customers,
     dashboard,
+    designs,
     expenses,
     health,
     invoices,
@@ -81,6 +82,7 @@ app.include_router(uploads.router)
 app.include_router(lab.router)
 app.include_router(scans.router)
 app.include_router(restorations.router)
+app.include_router(designs.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
 app.include_router(masters.categories)

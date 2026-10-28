@@ -187,7 +187,7 @@ def _visible(job: ScanJob, user: User) -> None:
     all. A restoration scan is seen by the owner and every artisan, and by nobody else
     (a manager is told it does not exist).
     """
-    if job.restoration_id:
+    if job.artisan_only:
         if user.role in RESTORATION_ROLES:
             return
     elif user.role in PROCESSORS or job.created_by == user.id:
@@ -197,7 +197,7 @@ def _visible(job: ScanJob, user: User) -> None:
 
 def _may_process(job: ScanJob, user: User) -> None:
     """Who may run a job on the workshop PC: owner/manager, or for a restoration owner/artisan."""
-    allowed = RESTORATION_ROLES if job.restoration_id else PROCESSORS
+    allowed = RESTORATION_ROLES if job.artisan_only else PROCESSORS
     if user.role not in allowed:
         raise HTTPException(status_code=404, detail="Scan not found")
 
@@ -269,8 +269,18 @@ def create_scan(
         raise HTTPException(
             status_code=422, detail="A scan is for a product or a restoration, not both"
         )
-    if req.item_id and not uow.items.get_by_id(req.item_id):
+    item = uow.items.get_by_id(req.item_id) if req.item_id else None
+    if req.item_id and not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    # a restoration, or a sculpture (a temple carving): the artisans' own work
+    artisan_only = bool(req.restoration_id) or bool(
+        item and item.item_type == "sculpture"
+    )
+    if artisan_only and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="Restoration and sculpture scans are for the owner and artisans",
+        )
     if req.restoration_id:
         if user.role not in RESTORATION_ROLES:
             raise HTTPException(
@@ -282,6 +292,7 @@ def create_scan(
     job = ScanJob(
         item_id=req.item_id,
         restoration_id=req.restoration_id,
+        artisan_only=artisan_only,
         created_by=user.id,
         source_kind=req.source_kind,
         params=req.params.model_dump(),
@@ -433,11 +444,9 @@ def list_scans(
     """
     q = uow.session.query(ScanJob)
     if user.role not in RESTORATION_ROLES:
-        q = q.filter(ScanJob.restoration_id.is_(None))
+        q = q.filter(ScanJob.artisan_only.is_(False))
     if user.role not in PROCESSORS:
-        q = q.filter(
-            or_(ScanJob.created_by == user.id, ScanJob.restoration_id.isnot(None))
-        )
+        q = q.filter(or_(ScanJob.created_by == user.id, ScanJob.artisan_only.is_(True)))
     if restoration_id:
         q = q.filter(ScanJob.restoration_id == restoration_id)
     if status:
@@ -631,6 +640,11 @@ def finish_scan(
     if len(set(keys)) != len(keys):
         raise HTTPException(status_code=422, detail="The same file is listed twice")
     for a in req.assets:  # check everything first so a failure attaches nothing
+        if a.visibility == "public" and user.role not in PROCESSORS:
+            raise HTTPException(
+                status_code=403,
+                detail="Only the owner or a manager can publish a file to the website",
+            )
         if a.visibility == "public" and not media_service.can_be_public(a.kind):
             raise HTTPException(
                 status_code=400,

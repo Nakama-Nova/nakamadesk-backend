@@ -9,6 +9,7 @@ people saving at the same moment get different numbers. A code someone typed by 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.models.design import Design
 from app.models.item import Item
 
 PREFIXES = {"furniture": "FUR", "sculpture": "SCU"}
@@ -20,10 +21,18 @@ def prefix_for(item_type: str) -> str:
 
 
 def next_sku(db: Session, item_type: str) -> str:
-    """The next free code for this kind of item. Runs in the caller's transaction, and the
-    counter row stays locked until it commits, which is what keeps concurrent saves apart.
-    """
-    prefix = prefix_for(item_type)
+    """The next free code for this kind of item (FUR-0001, SCU-0001)."""
+    return _next_code(db, prefix_for(item_type), Item)
+
+
+def next_design_sku(db: Session) -> str:
+    """The next free design code (DES-0001)."""
+    return _next_code(db, "DES", Design)
+
+
+def _next_code(db: Session, prefix: str, model) -> str:
+    """Runs in the caller's transaction, and the counter row stays locked until it commits,
+    which is what keeps concurrent saves apart. A code already taken is skipped."""
     while True:
         n = db.execute(
             text(
@@ -34,5 +43,5 @@ def next_sku(db: Session, item_type: str) -> str:
             {"p": prefix},
         ).scalar_one()
         sku = f"{prefix}-{n:0{WIDTH}d}"
-        if not db.query(Item.id).filter(Item.sku == sku).first():
+        if not db.query(model.id).filter(model.sku == sku).first():
             return sku

@@ -16,6 +16,9 @@ class ExpenseCreate(BaseModel):
     payee: Optional[str] = Field(default=None, max_length=120)
     method: PayMethod = "cash"
     notes: Optional[str] = Field(default=None, max_length=500)
+    restoration_id: Optional[UUID] = (
+        None  # spent on one restoration or finishing project
+    )
 
 
 class ExpenseUpdate(BaseModel):
@@ -27,6 +30,7 @@ class ExpenseUpdate(BaseModel):
     payee: Optional[str] = Field(default=None, max_length=120)
     method: Optional[PayMethod] = None
     notes: Optional[str] = Field(default=None, max_length=500)
+    restoration_id: Optional[UUID] = None
 
 
 class ExpenseVoid(BaseModel):
@@ -41,6 +45,7 @@ class ExpenseResponse(BaseModel):
     payee: Optional[str] = None
     method: str
     notes: Optional[str] = None
+    restoration_id: Optional[UUID] = None
     created_by: Optional[UUID] = None
     created_at: datetime
     voided_at: Optional[datetime] = None

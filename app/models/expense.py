@@ -39,6 +39,13 @@ class Expense(Base):
     payee = Column(String, nullable=True)
     method = Column(String, nullable=False, default="cash", server_default="cash")
     notes = Column(Text, nullable=True)
+    # paint, wood, polish... spent on one restoration or finishing project
+    restoration_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("restoration_projects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
