@@ -1,5 +1,5 @@
 """
-Where the desktop app finds its updates.
+Where the desktop app and the phone app find their updates.
 
 The installers are published as GitHub Releases of a PRIVATE repository, so
 the app cannot read them itself. This server reads them with a read-only token
@@ -19,16 +19,19 @@ from app.core.config import settings
 
 API = "https://api.github.com"
 INSTALLER = re.compile(r"^VrikshaStudiosDesk-Setup-[0-9A-Za-z.\-]+\.exe$")
+APK = re.compile(r"^VrikshaCapture-[0-9A-Za-z.\-]+\.apk$")
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 CACHE_SECONDS = 300
 TIMEOUT = 10
 
 _cache: dict = {"at": 0.0, "value": None}
+_mobile_cache: dict = {"at": 0.0, "value": None}
 
 
 def reset() -> None:
-    """Forget the cached answer (used by tests)."""
+    """Forget the cached answers (used by tests)."""
     _cache.update(at=0.0, value=None)
+    _mobile_cache.update(at=0.0, value=None)
 
 
 def _headers(accept: str = "application/vnd.github+json") -> dict:
@@ -55,10 +58,10 @@ def _get(url: str, **kwargs):
         ) from None
 
 
-def _read_checksum(asset_id: int) -> str:
+def _read_checksum(asset_id: int, repo: Optional[str] = None) -> str:
     """The SHA-256 published next to the installer ('<hash>  <file name>')."""
     resp = _get(
-        f"{API}/repos/{settings.GITHUB_RELEASES_REPO}/releases/assets/{asset_id}",
+        f"{API}/repos/{repo or settings.GITHUB_RELEASES_REPO}/releases/assets/{asset_id}",
         headers=_headers("application/octet-stream"),
     )
     token = (
@@ -70,16 +73,22 @@ def _read_checksum(asset_id: int) -> str:
 
 
 def latest() -> Optional[dict]:
-    """The newest published installer, or None. Cached for a few minutes."""
+    """The newest published desktop installer, or None. Cached for a few minutes."""
+    return _latest(settings.GITHUB_RELEASES_REPO, INSTALLER, _cache)
+
+
+def latest_mobile() -> Optional[dict]:
+    """The newest published phone app (.apk), or None. Cached for a few minutes."""
+    return _latest(settings.GITHUB_MOBILE_RELEASES_REPO, APK, _mobile_cache)
+
+
+def _latest(repo: str, file_name: re.Pattern, cache: dict) -> Optional[dict]:
     _need_token()
     now = time.monotonic()
-    if _cache["value"] is not None and now - _cache["at"] < CACHE_SECONDS:
-        return _cache["value"]
+    if cache["value"] is not None and now - cache["at"] < CACHE_SECONDS:
+        return cache["value"]
 
-    resp = _get(
-        f"{API}/repos/{settings.GITHUB_RELEASES_REPO}/releases/latest",
-        headers=_headers(),
-    )
+    resp = _get(f"{API}/repos/{repo}/releases/latest", headers=_headers())
     if resp.status_code == 404:
         return None  # nothing published yet
     if resp.status_code in (401, 403):
@@ -92,7 +101,7 @@ def latest() -> Optional[dict]:
     release = resp.json()
     match = VERSION.match(release.get("tag_name") or "")
     assets = {a["name"]: a for a in release.get("assets", [])}
-    installer = next((a for n, a in assets.items() if INSTALLER.match(n)), None)
+    installer = next((a for n, a in assets.items() if file_name.match(n)), None)
     checksum = assets.get(f"{installer['name']}.sha256") if installer else None
     if not match or not installer or not checksum:
         return None  # a release without the installer files is not an update
@@ -102,18 +111,18 @@ def latest() -> Optional[dict]:
         "notes": (release.get("body") or "").strip()[:2000],
         "installer_name": installer["name"],
         "size": int(installer.get("size") or 0),
-        "sha256": _read_checksum(checksum["id"]),
+        "sha256": _read_checksum(checksum["id"], repo),
         "asset_id": installer["id"],
     }
-    _cache.update(at=now, value=value)
+    cache.update(at=now, value=value)
     return value
 
 
-def installer_address(asset_id: int) -> str:
+def installer_address(asset_id: int, repo: Optional[str] = None) -> str:
     """A short-lived signed address for the installer (valid for minutes)."""
     _need_token()
     resp = _get(
-        f"{API}/repos/{settings.GITHUB_RELEASES_REPO}/releases/assets/{asset_id}",
+        f"{API}/repos/{repo or settings.GITHUB_RELEASES_REPO}/releases/assets/{asset_id}",
         headers=_headers("application/octet-stream"),
         allow_redirects=False,
     )

@@ -45,6 +45,10 @@ class Settings:
         "GITHUB_RELEASES_REPO", "Nakama-Nova/nakama-desktop"
     )
     GITHUB_RELEASES_TOKEN: str = os.getenv("GITHUB_RELEASES_TOKEN", "")
+    # the phone app's releases (an .apk and its .sha256 attached to a v1.2.3 release)
+    GITHUB_MOBILE_RELEASES_REPO: str = os.getenv(
+        "GITHUB_MOBILE_RELEASES_REPO", "Nakama-Nova/vriksha-mobile"
+    )
 
     if not DATABASE_URL:
         if ENV == "test":
