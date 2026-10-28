@@ -36,6 +36,7 @@ from app.models.restoration import (  # noqa: F401
 from app.models.sale import Sale  # noqa: F401
 from app.models.sale_item import SaleItem  # noqa: F401
 from app.models.scan_job import ScanJob  # noqa: F401
+from app.models.sku_counter import SkuCounter  # noqa: F401
 from app.models.supplier import Supplier  # noqa: F401
 from app.models.sync import SyncLog  # noqa: F401
 from app.models.user import User  # noqa: F401

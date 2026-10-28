@@ -66,6 +66,14 @@ class Item(Base):
     dimensions_mm = Column(JSONB, nullable=True)  # {"l":700,"w":650,"h":950}
 
     # --- 3D Lab (staff only; never part of the public API) -----------------
+    # furniture, or sculpture (a temple carving). The code (SKU) is generated from it.
+    item_type = Column(
+        String,
+        nullable=False,
+        default="furniture",
+        server_default="furniture",
+        index=True,
+    )
     is_furniture = Column(
         Boolean, nullable=False, default=False, server_default="false"
     )

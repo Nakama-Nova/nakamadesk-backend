@@ -29,6 +29,7 @@ from app.models.raw_material import RawMaterial
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemUpdate
 from app.schemas.stock import StockUpdate
+from app.services import sku_service
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +338,12 @@ def remove_finished_goods(
 # ---------------------------------------------------------------------------
 
 
-def get_items(uow: AbstractUnitOfWork, limit: int = 50, offset: int = 0) -> List[Item]:
+def get_items(
+    uow: AbstractUnitOfWork,
+    limit: int = 50,
+    offset: int = 0,
+    item_type: Optional[str] = None,
+) -> List[Item]:
     """
     Retrieve a list of inventory items with pagination.
 
@@ -349,7 +355,11 @@ def get_items(uow: AbstractUnitOfWork, limit: int = 50, offset: int = 0) -> List
     Returns:
         List[Item]: List of item records.
     """
-    return uow.items.session.query(Item).limit(limit).offset(offset).all()
+    query = uow.items.session.query(Item)
+    if item_type:
+        query = query.filter(Item.item_type == item_type)
+    # a fixed order, so reading page after page never repeats or skips an item
+    return query.order_by(Item.created_at, Item.id).limit(limit).offset(offset).all()
 
 
 def get_item(uow: AbstractUnitOfWork, item_id: UUID) -> Optional[Item]:
@@ -409,11 +419,19 @@ def create_item(uow: AbstractUnitOfWork, item_data: ItemCreate) -> Item:
     Returns:
         Item: The newly created item object.
     """
-    new_item = Item(**item_data.model_dump())
-    with uow:
-        prepare_catalog_fields(uow, new_item)
-        uow.items.add(new_item)
-        uow.commit()
+    data = item_data.model_dump()
+    try:
+        with uow:
+            if not data.get("sku"):
+                data["sku"] = sku_service.next_sku(uow.session, data.get("item_type"))
+            new_item = Item(**data)
+            prepare_catalog_fields(uow, new_item)
+            uow.items.add(new_item)
+            uow.commit()
+    except IntegrityError:
+        raise HTTPException(
+            status_code=409, detail="That product code (SKU) is already in use"
+        ) from None
     uow.refresh(new_item)
     logger.info(f"Item created: {new_item.sku} (ID: {new_item.id})")
     return new_item
