@@ -28,9 +28,14 @@ def _out(a: ProductAsset) -> AssetResponse:
 @router.get("/{item_id}/assets", response_model=List[AssetResponse])
 def list_assets(
     item_id: UUID,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(check_role(STAFF + [UserRole.ARTISAN])),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
+    """Owner and manager see every product's files; an artisan only a sculpture's (their own work)."""
+    if current_user.role == UserRole.ARTISAN:
+        item = uow.items.get_by_id(item_id)
+        if not item or item.item_type != "sculpture":
+            raise HTTPException(status_code=404, detail="Product not found")
     rows = (
         uow.session.query(ProductAsset)
         .filter(ProductAsset.item_id == item_id)

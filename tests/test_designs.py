@@ -560,3 +560,42 @@ def test_an_artisan_can_run_a_sculpture_scan_but_not_publish_it(client, people, 
     chair = new_item(client, owner, "Armchair")
     furniture_scan = queue(client, owner, store, item_id=chair["id"])
     assert claim(client, artisan, furniture_scan["id"]).status_code == 404
+
+
+def test_an_artisan_can_list_a_sculptures_files_but_not_furniture(client, people):
+    owner = people["owner"]["h"]
+    carving = new_item(client, owner, "Madhanika", item_type="sculpture")
+    chair = new_item(client, owner, "Armchair")
+    assert (
+        client.get(
+            f"/items/{carving['id']}/assets", headers=people["artisan"]["h"]
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            f"/items/{chair['id']}/assets", headers=people["artisan"]["h"]
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/items/{uuid.uuid4()}/assets", headers=people["artisan"]["h"]
+        ).status_code
+        == 404
+    )
+    for role in ("sales", "achari", "worker"):
+        assert (
+            client.get(
+                f"/items/{carving['id']}/assets", headers=people[role]["h"]
+            ).status_code
+            == 403
+        )
+    for item in (carving, chair):  # owner and manager keep seeing every product's files
+        for role in ("owner", "manager"):
+            assert (
+                client.get(
+                    f"/items/{item['id']}/assets", headers=people[role]["h"]
+                ).status_code
+                == 200
+            )
