@@ -1,8 +1,6 @@
-import os
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db.deps import check_role, get_db
@@ -10,7 +8,7 @@ from app.models.enums import UserRole
 from app.models.sale import Sale
 from app.models.user import User
 from app.schemas.invoice import InvoiceResponse
-from app.services.invoice_pdf_service import generate_invoice_pdf
+from app.services.invoice_pdf_service import render_invoice_pdf
 from app.services.invoice_service import get_all_invoices, get_invoice_by_number
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -91,7 +89,7 @@ def get_invoice_pdf(
         db (Session): Database session.
 
     Returns:
-        FileResponse: The generated PDF file.
+        Response: The PDF, drawn in memory.
 
     Raises:
         HTTPException: If invoice is not found or PDF generation fails.
@@ -100,10 +98,17 @@ def get_invoice_pdf(
     if not sale:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
-    pdf_path = generate_invoice_pdf(sale)
-    if not os.path.exists(pdf_path):
-        raise HTTPException(status_code=500, detail="Failed to generate PDF")
+    try:
+        pdf = render_invoice_pdf(sale)
+    except (
+        Exception
+    ) as exc:  # say why, instead of a bare 500 the desktop cannot explain
+        raise HTTPException(
+            status_code=500, detail=f"Could not draw the bill PDF: {exc}"
+        ) from exc
 
-    return FileResponse(
-        pdf_path, media_type="application/pdf", filename=os.path.basename(pdf_path)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{invoice_number}.pdf"'},
     )

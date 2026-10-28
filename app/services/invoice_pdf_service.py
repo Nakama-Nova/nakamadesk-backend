@@ -1,4 +1,4 @@
-import os
+import io
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -7,31 +7,22 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 from app.models.sale import Sale
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-INVOICES_DIR = os.getenv("INVOICES_DIR") or os.path.join(BASE_DIR, "invoices")
 
-
-def generate_invoice_pdf(sale: Sale) -> str:
+def render_invoice_pdf(sale: Sale) -> bytes:
     """
-    Generate a professional PDF invoice for a completed sale transaction.
+    Draw the PDF bill for a completed sale and return it.
 
-    The PDF includes company branding, customer details, line items with taxes,
-    and a summary of totals. Files are stored in the `invoices/` directory.
+    Drawn in memory and never written to disk, so it works wherever the server runs
+    (a serverless disk is read-only) and two people printing at once cannot clash.
 
     Args:
         sale (Sale): The sale model instance containing transaction data and items.
 
     Returns:
-        str: Absolute file path to the generated PDF document.
+        bytes: The PDF document.
     """
-    # Ensure directory exists
-    os.makedirs(INVOICES_DIR, exist_ok=True)
-
-    # Define file path
-    filename = f"{sale.invoice_number}.pdf"
-    filepath = os.path.join(INVOICES_DIR, filename)
-
-    doc = SimpleDocTemplate(filepath, pagesize=A4)
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
     styles = getSampleStyleSheet()
     elements = []
 
@@ -143,5 +134,4 @@ def generate_invoice_pdf(sale: Sale) -> str:
 
     # Build PDF
     doc.build(elements)
-
-    return filepath
+    return buffer.getvalue()
