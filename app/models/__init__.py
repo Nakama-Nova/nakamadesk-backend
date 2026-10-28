@@ -14,6 +14,7 @@ from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
 from app.models.login_attempt import LoginAttempt  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
+from app.models.order_payment import OrderPayment  # noqa: F401
 from app.models.payroll import (  # noqa: F401
     PayrollPayment,
     WorkEntry,

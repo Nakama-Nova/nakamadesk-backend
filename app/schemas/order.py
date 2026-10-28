@@ -7,7 +7,7 @@ used throughout the codebase.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -86,6 +86,41 @@ class OrderCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class PaymentCreate(BaseModel):
+    """Money received against an order (advance, instalment or the balance)."""
+
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    method: Literal["cash", "upi", "bank", "cheque", "other"] = "cash"
+    reference: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=200)
+    paid_on: Optional[date] = None  # default: today
+
+
+class PaymentResponse(BaseModel):
+    id: UUID
+    amount: Decimal
+    method: str
+    reference: Optional[str] = None
+    note: Optional[str] = None
+    paid_on: date
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OrderUpdate(BaseModel):
+    """Staff edits to an order that is still open. Only the fields sent change."""
+
+    estimated_amount: Optional[Decimal] = Field(
+        default=None, ge=0, max_digits=12, decimal_places=2
+    )
+    final_amount: Optional[Decimal] = Field(
+        default=None, ge=0, max_digits=12, decimal_places=2
+    )
+    expected_delivery: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
+
+
 class OrderStatusUpdate(BaseModel):
     """Schema for updating the lifecycle status of an order."""
 
@@ -105,6 +140,8 @@ class OrderResponse(BaseModel):
     id: UUID
     order_number: str
     customer_id: Optional[UUID] = None
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
     order_type: str
     status: str
 
@@ -125,6 +162,7 @@ class OrderResponse(BaseModel):
     notes: Optional[str] = None
 
     items: List[OrderItemResponse] = []
+    payments: List[PaymentResponse] = []
 
     created_at: datetime
     updated_at: Optional[datetime] = None

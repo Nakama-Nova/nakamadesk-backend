@@ -19,7 +19,13 @@ from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
+from app.schemas.order import (
+    OrderCreate,
+    OrderResponse,
+    OrderStatusUpdate,
+    OrderUpdate,
+    PaymentCreate,
+)
 from app.services import order_service
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
@@ -64,6 +70,9 @@ def list_orders(
     customer_id: Optional[UUID] = None,
     order_type: Optional[str] = Query(None, description="Filter: standard|custom"),
     source: Optional[str] = Query(None, description="Filter: pos|web"),
+    search: Optional[str] = Query(
+        None, description="Order number, customer name or phone contains this text"
+    ),
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
@@ -94,6 +103,7 @@ def list_orders(
         customer_id=customer_id,
         order_type=order_type,
         source=source,
+        search=search,
     )
 
 
@@ -157,3 +167,30 @@ def update_order_status(
         HTTPException 400: If the transition is not permitted.
     """
     return order_service.update_order_status(uow, order_id, update_data)
+
+
+@router.post("/{order_id}/payments", response_model=OrderResponse, status_code=201)
+def add_order_payment(
+    order_id: UUID,
+    data: PaymentCreate,
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Record money received against an order (advance, instalment or the balance).
+    The order's advance_paid becomes the sum of its payments. RBAC: OWNER, MANAGER, SALES.
+    """
+    return order_service.add_payment(uow, order_id, data, current_user.id)
+
+
+@router.patch("/{order_id}", response_model=OrderResponse)
+def update_order(
+    order_id: UUID,
+    data: OrderUpdate,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Edit the amounts, expected delivery or notes of an open order. RBAC: OWNER, MANAGER."""
+    return order_service.update_order(uow, order_id, data)
