@@ -23,6 +23,7 @@ from app.api import (
     invoices,
     items,
     lab,
+    letters,
     masters,
     media,
     orders,
@@ -83,6 +84,7 @@ app.include_router(lab.router)
 app.include_router(scans.router)
 app.include_router(restorations.router)
 app.include_router(designs.router)
+app.include_router(letters.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
 app.include_router(masters.categories)
