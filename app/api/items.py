@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -59,6 +59,9 @@ def create_item(
 def get_items(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    item_type: Optional[str] = Query(
+        None, pattern="^(furniture|sculpture)$", description="furniture or sculpture"
+    ),
     current_user: User = Depends(check_role(READERS)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
@@ -78,7 +81,8 @@ def get_items(
         List[ItemResponse]: List of inventory items.
     """
     return [
-        _for(current_user, i) for i in inventory_service.get_items(uow, limit, offset)
+        _for(current_user, i)
+        for i in inventory_service.get_items(uow, limit, offset, item_type)
     ]
 
 

@@ -22,6 +22,7 @@ from app.schemas.sync import (
     SyncPullResponse,
     SyncPushResponse,
 )
+from app.services import sku_service
 
 logger = logging.getLogger(__name__)
 
@@ -501,9 +502,16 @@ class ItemSyncHandler(GenericSyncHandler):
             if hasattr(payload, "model_dump")
             else payload
         )
-        if not payload_data.get("name") or not payload_data.get("sku"):
-            return None, "'name' and 'sku' are required to create an item"
-        return super().apply_create(uow, payload, current_user, op)
+        if not payload_data.get("name"):
+            return None, "'name' is required to create an item"
+        if not payload_data.get(
+            "sku"
+        ):  # created offline without a code: the server gives it
+            payload_data = dict(payload_data)
+            payload_data["sku"] = sku_service.next_sku(
+                uow.session, payload_data.get("item_type")
+            )
+        return super().apply_create(uow, payload_data, current_user, op)
 
 
 class AttendanceSyncHandler(GenericSyncHandler):

@@ -78,7 +78,7 @@ def test_catalog_shows_only_published_and_never_costs(auth_client: TestClient):
     row = rows[0]
     assert row["slug"] == shown["slug"]
     assert set(row) == {
-        "slug", "name", "short_desc", "price", "made_to_order", "lead_time_days",
+        "slug", "name", "item_type", "short_desc", "price", "made_to_order", "lead_time_days",
         "in_stock", "wood_type", "dimensions_mm", "category", "images", "renders",
         "model_url",
     }  # fmt: skip

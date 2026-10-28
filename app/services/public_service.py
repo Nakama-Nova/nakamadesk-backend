@@ -79,6 +79,7 @@ def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str])
     return PublicProduct(
         slug=item.slug,
         name=item.name,
+        item_type=item.item_type or "furniture",
         short_desc=item.short_desc,
         price=item.selling_price,
         made_to_order=item.made_to_order,

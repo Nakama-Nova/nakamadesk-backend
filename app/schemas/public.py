@@ -16,6 +16,7 @@ class PublicImage(BaseModel):
 class PublicProduct(BaseModel):
     slug: str
     name: str
+    item_type: str = "furniture"  # furniture or sculpture
     short_desc: Optional[str] = None
     price: Decimal
     made_to_order: bool

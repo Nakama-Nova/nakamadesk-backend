@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -51,14 +51,17 @@ class ItemPayload(BaseModel):
 
     Fields beyond `id` are optional so that partial/delta updates (e.g. a
     stock-only change) don't have to resend the full record. `name` and
-    `sku` are still required to actually create a new item — that's
+    is still required to actually create a new item (a missing `sku` is filled in) — that's
     enforced in ItemSyncHandler.apply_create, not here, so a missing field
     fails just that operation instead of the whole sync batch.
     """
 
     id: Optional[UUID] = None
     name: Optional[str] = None
-    sku: Optional[str] = None
+    sku: Optional[str] = (
+        None  # may be left out on create: the server gives the next code
+    )
+    item_type: Optional[Literal["furniture", "sculpture"]] = None
     selling_price: Optional[Decimal] = None
     current_stock: Optional[int] = None
 

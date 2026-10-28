@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, field_validator
@@ -42,6 +42,7 @@ class ItemBase(BaseModel):
     dimensions_mm: Optional[Dict[str, Any]] = None
     is_furniture: bool = False
     size_presets: Optional[Dict[str, Any]] = None
+    item_type: Literal["furniture", "sculpture"] = "furniture"
 
     @field_validator("slug")
     @classmethod
@@ -53,8 +54,17 @@ class ItemBase(BaseModel):
 
 class ItemCreate(ItemBase):
     """
-    Schema for adding a new item to the inventory.
+    Schema for adding a new item to the inventory. Leave sku out and the server gives
+    the next code for the item's type (FUR-0001, SCU-0001...).
     """
+
+    sku: Optional[str] = None
+
+    @field_validator("sku")
+    @classmethod
+    def blank_sku_means_auto(cls, v):
+        v = (v or "").strip()
+        return v or None
 
     @field_validator("gst_percent")
     @classmethod
@@ -100,6 +110,7 @@ class ItemUpdate(BaseModel):
     dimensions_mm: Optional[Dict[str, Any]] = None
     is_furniture: Optional[bool] = None
     size_presets: Optional[Dict[str, Any]] = None
+    item_type: Optional[Literal["furniture", "sculpture"]] = None
 
     @field_validator("slug")
     @classmethod
