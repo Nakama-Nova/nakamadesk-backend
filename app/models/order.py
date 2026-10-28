@@ -98,3 +98,17 @@ class Order(Base):
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
     )
     production_jobs = relationship("ProductionJob", back_populates="order")
+    payments = relationship(
+        "OrderPayment",
+        back_populates="order",
+        cascade="all, delete-orphan",
+        order_by="OrderPayment.created_at",
+    )
+
+    @property
+    def customer_name(self):
+        return self.customer.name if self.customer else None
+
+    @property
+    def customer_phone(self):
+        return self.customer.phone if self.customer else None

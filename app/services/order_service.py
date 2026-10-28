@@ -10,18 +10,26 @@ are Day 2 and Day 3 concerns.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
-from sqlalchemy.orm import joinedload
+from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload, selectinload
 
+from app.models.customer import Customer
 from app.models.order import Order
 from app.models.order_item import OrderItem
+from app.models.order_payment import OrderPayment
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.order import OrderCreate, OrderStatusUpdate
+from app.schemas.order import (
+    OrderCreate,
+    OrderStatusUpdate,
+    OrderUpdate,
+    PaymentCreate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +167,11 @@ def get_order(uow: AbstractUnitOfWork, order_id: UUID) -> Optional[Order]:
     """
     return (
         uow.session.query(Order)
-        .options(joinedload(Order.items))
+        .options(
+            joinedload(Order.items),
+            joinedload(Order.customer),
+            selectinload(Order.payments),
+        )
         .filter(Order.id == order_id)
         .first()
     )
@@ -173,6 +185,7 @@ def list_orders(
     customer_id: Optional[UUID] = None,
     order_type: Optional[str] = None,
     source: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> List[Order]:
     """
     List orders with optional filtering and pagination.
@@ -189,7 +202,11 @@ def list_orders(
     Returns:
         List[Order]: Matching orders with items loaded.
     """
-    query = uow.session.query(Order).options(joinedload(Order.items))
+    query = uow.session.query(Order).options(
+        joinedload(Order.items),
+        joinedload(Order.customer),
+        selectinload(Order.payments),
+    )
 
     if status:
         query = query.filter(Order.status == status)
@@ -199,6 +216,15 @@ def list_orders(
         query = query.filter(Order.order_type == order_type)
     if source:
         query = query.filter(Order.source == source)
+    if search and search.strip():
+        like = f"%{search.strip()}%"
+        query = query.outerjoin(Customer, Order.customer_id == Customer.id).filter(
+            or_(
+                Order.order_number.ilike(like),
+                Customer.name.ilike(like),
+                Customer.phone.ilike(like),
+            )
+        )
 
     return query.order_by(Order.created_at.desc()).limit(limit).offset(offset).all()
 
@@ -268,3 +294,81 @@ def update_order_status(
     uow.refresh(order)
     logger.info("Order %s transitioned to '%s'", order.order_number, order.status)
     return get_order(uow, order.id)
+
+
+def add_payment(
+    uow: AbstractUnitOfWork, order_id: UUID, data: PaymentCreate, user_id: UUID
+) -> Order:
+    """
+    Record money received against an order. Locks the order row so two people taking
+    a payment at the same moment cannot both pass the balance check, and refuses more
+    than is still due (when the order has an amount) or any payment on a cancelled order.
+    """
+    amount = Decimal(data.amount).quantize(Decimal("0.01"))
+    with uow:
+        order = (
+            uow.session.query(Order)
+            .filter(Order.id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if order.status == "cancelled":
+            raise HTTPException(
+                status_code=409, detail="A cancelled order cannot take payments"
+            )
+        paid = Decimal(order.advance_paid or 0)
+        base = Decimal(
+            order.final_amount
+            if (order.final_amount or 0) > 0
+            else order.estimated_amount or 0
+        )
+        if base > 0 and paid + amount > base:
+            raise HTTPException(
+                status_code=400,
+                detail=f"That is more than the balance due (Rs {base - paid})",
+            )
+        uow.session.add(
+            OrderPayment(
+                order_id=order.id,
+                amount=amount,
+                method=data.method,
+                reference=data.reference,
+                note=data.note,
+                paid_on=data.paid_on or date.today(),
+                created_by=user_id,
+            )
+        )
+        order.advance_paid = paid + amount
+        uow.commit()
+    logger.info("Payment of %s recorded on order %s", amount, order.order_number)
+    return get_order(uow, order_id)
+
+
+def update_order(uow: AbstractUnitOfWork, order_id: UUID, data: OrderUpdate) -> Order:
+    """Edit the amounts, delivery date or notes of an order that is still open."""
+    changes = data.model_dump(exclude_unset=True)
+    with uow:
+        order = (
+            uow.session.query(Order)
+            .filter(Order.id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if order.status in ("delivered", "cancelled"):
+            raise HTTPException(
+                status_code=409, detail=f"A {order.status} order cannot be edited"
+            )
+        final = changes.get("final_amount")
+        if final is not None and 0 < final < Decimal(order.advance_paid or 0):
+            raise HTTPException(
+                status_code=400,
+                detail=f"The final amount is less than the Rs {order.advance_paid} already paid",
+            )
+        for key, value in changes.items():
+            setattr(order, key, value)
+        uow.commit()
+    return get_order(uow, order_id)
