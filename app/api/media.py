@@ -42,6 +42,10 @@ def get_media(key: str, store: Optional[S3Store] = Depends(get_store_or_none)):
     # MEDIA_DIR (no ../ escapes).
     base = Path(settings.MEDIA_DIR).resolve()
     path = (base / key).resolve()
-    if base not in path.parents or not path.is_file():
+    try:
+        path.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not path.is_file():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(path, media_type=media_type, headers=headers)
