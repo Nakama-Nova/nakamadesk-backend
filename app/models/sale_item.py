@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, func, text
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -32,6 +41,8 @@ class SaleItem(Base):
     cgst_amount = Column(Numeric(10, 2), default=0.0)
     sgst_amount = Column(Numeric(10, 2), default=0.0)
     total_price = Column(Numeric(10, 2), default=0.0)
+    # the words for a line with no catalogue product (a custom piece, other charges)
+    description = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
@@ -41,5 +52,5 @@ class SaleItem(Base):
 
     @property
     def item_name(self):
-        """Product name for API responses (None if the item row is gone)."""
-        return self.item.name if self.item else None
+        """Product name for API responses, or the line's own words for a custom piece."""
+        return self.item.name if self.item else self.description

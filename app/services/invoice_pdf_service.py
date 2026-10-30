@@ -4,7 +4,9 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from sqlalchemy.orm import object_session
 
+from app.models.order import Order
 from app.models.sale import Sale
 
 
@@ -71,7 +73,7 @@ def render_invoice_pdf(sale: Sale) -> bytes:
             price = getattr(item, "price_at_sale", Decimal("0.0"))
 
             # Try to get item name
-            item_name = "Unknown Item"
+            item_name = getattr(item, "description", None) or "Unknown Item"
             if item.item:
                 item_name = getattr(item.item, "name", item_name)
 
@@ -128,9 +130,32 @@ def render_invoice_pdf(sale: Sale) -> bytes:
         elements.append(
             Paragraph(f"<b>SGST Total:</b> Rs. {total_sgst:.2f}", right_align_style)
         )
+    discount = sale.discount or Decimal("0.0")
+    if discount > 0:
+        elements.append(
+            Paragraph(f"<b>Discount:</b> -Rs. {discount:.2f}", right_align_style)
+        )
+    # the bill's own total is authoritative (it already has the discount taken off)
+    grand_total = sale.total_amount if sale.total_amount is not None else grand_total
     elements.append(
         Paragraph(f"<b>Grand Total:</b> Rs. {grand_total:.2f}", right_align_style)
     )
+
+    # A bill made from an order says which order, and what is still to pay on it
+    order = object_session(sale).query(Order).filter(Order.sale_id == sale.id).first()
+    if order is not None:
+        received = Decimal(order.advance_paid or 0)
+        elements.append(Spacer(1, 10))
+        elements.append(Paragraph(f"<b>Order:</b> {order.order_number}", info_style))
+        elements.append(
+            Paragraph(f"<b>Received so far:</b> Rs. {received:.2f}", right_align_style)
+        )
+        elements.append(
+            Paragraph(
+                f"<b>Balance due:</b> Rs. {max(Decimal(grand_total) - received, Decimal('0')):.2f}",
+                right_align_style,
+            )
+        )
 
     # Build PDF
     doc.build(elements)
