@@ -44,7 +44,7 @@ class SaleItemResponse(BaseModel):
     """
 
     id: UUID
-    item_id: UUID
+    item_id: Optional[UUID] = None  # none for a custom piece or other charges
     item_name: Optional[str] = None
     quantity: int
     price_at_sale: Decimal

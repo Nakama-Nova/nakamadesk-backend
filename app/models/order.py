@@ -98,12 +98,18 @@ class Order(Base):
         "OrderItem", back_populates="order", cascade="all, delete-orphan"
     )
     production_jobs = relationship("ProductionJob", back_populates="order")
+    sale = relationship("Sale", foreign_keys=[sale_id])
     payments = relationship(
         "OrderPayment",
         back_populates="order",
         cascade="all, delete-orphan",
         order_by="OrderPayment.created_at",
     )
+
+    @property
+    def invoice_number(self):
+        """The bill made from this order, once there is one."""
+        return self.sale.invoice_number if self.sale else None
 
     @property
     def customer_name(self):

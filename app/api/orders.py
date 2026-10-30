@@ -13,7 +13,7 @@ RBAC design:
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
@@ -21,12 +21,14 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.order import (
     OrderCreate,
+    OrderInvoiceRequest,
     OrderResponse,
     OrderStatusUpdate,
     OrderUpdate,
     PaymentCreate,
 )
-from app.services import order_service
+from app.schemas.sale import SaleResponse
+from app.services import order_invoice_service, order_service
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -194,3 +196,28 @@ def update_order(
 ):
     """Edit the amounts, expected delivery or notes of an open order. RBAC: OWNER, MANAGER."""
     return order_service.update_order(uow, order_id, data)
+
+
+@router.post("/{order_id}/invoice", response_model=SaleResponse, status_code=201)
+def invoice_order(
+    order_id: UUID,
+    response: Response,
+    req: OrderInvoiceRequest = Body(default_factory=OrderInvoiceRequest),
+    current_user: User = Depends(
+        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
+    ),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Make the bill (invoice) for an order: its pieces at the prices agreed on the order,
+    stock taken off for catalogue pieces, the payments already received carried over, and
+    the order linked to the bill. Asking again returns the same bill (200).
+
+    RBAC: OWNER, MANAGER, SALES.
+    """
+    sale, created = order_invoice_service.invoice_order(
+        uow, order_id, current_user.id, allow_negative_stock=req.allow_negative_stock
+    )
+    if not created:
+        response.status_code = 200
+    return sale

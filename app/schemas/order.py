@@ -144,6 +144,8 @@ class OrderResponse(BaseModel):
     customer_phone: Optional[str] = None
     order_type: str
     status: str
+    sale_id: Optional[UUID] = None  # the bill made from this order
+    invoice_number: Optional[str] = None
 
     custom_specs: Optional[Dict[str, Any]] = None
     reference_image_url: Optional[str] = None
@@ -175,3 +177,12 @@ class OrderResponse(BaseModel):
         base = self.final_amount if self.final_amount > 0 else self.estimated_amount
         self.balance_due = max(Decimal("0.00"), base - self.advance_paid)
         return self
+
+
+class OrderInvoiceRequest(BaseModel):
+    """Make the bill for an order. Stock is checked unless told otherwise."""
+
+    allow_negative_stock: bool = Field(
+        default=False,
+        description="Bill even if a piece is not in stock (the goods have already gone out)",
+    )

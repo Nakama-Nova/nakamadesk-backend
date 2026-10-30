@@ -23,6 +23,7 @@ from app.models.customer import Customer
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.order_payment import OrderPayment
+from app.models.sale import Sale
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.order import (
     OrderCreate,
@@ -30,6 +31,7 @@ from app.schemas.order import (
     OrderUpdate,
     PaymentCreate,
 )
+from app.services.order_invoice_service import payment_status as invoice_status
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +273,11 @@ def update_order_status(
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
+        if update_data.status == "cancelled" and order.sale_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This order has been billed ({order.invoice_number}). Cancel the bill first",
+            )
         allowed = _ALLOWED.get(order.status, set())
         if update_data.status not in allowed:
             raise HTTPException(
@@ -341,6 +348,10 @@ def add_payment(
             )
         )
         order.advance_paid = paid + amount
+        if order.sale_id:  # its bill shows what is still to pay
+            sale = uow.session.get(Sale, order.sale_id)
+            sale.payment_status = invoice_status(order.advance_paid, sale.total_amount)
+            sale.payment_method = data.method
         uow.commit()
     logger.info("Payment of %s recorded on order %s", amount, order.order_number)
     return get_order(uow, order_id)
@@ -361,6 +372,11 @@ def update_order(uow: AbstractUnitOfWork, order_id: UUID, data: OrderUpdate) -> 
         if order.status in ("delivered", "cancelled"):
             raise HTTPException(
                 status_code=409, detail=f"A {order.status} order cannot be edited"
+            )
+        if order.sale_id and ({"estimated_amount", "final_amount"} & set(changes)):
+            raise HTTPException(
+                status_code=409,
+                detail=f"This order has been billed ({order.invoice_number}), so its amount cannot change",
             )
         final = changes.get("final_amount")
         if final is not None and 0 < final < Decimal(order.advance_paid or 0):
