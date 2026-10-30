@@ -1,5 +1,6 @@
 """Serves uploaded product photos and models at /media/<storage_key>."""
 
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -38,14 +39,10 @@ def get_media(key: str, store: Optional[S3Store] = Depends(get_store_or_none)):
         except KeyError:
             raise HTTPException(status_code=404, detail="Not found") from None
         return Response(content=data, media_type=media_type, headers=headers)
-    # Otherwise a file on this server's disk: resolve it and require it to sit under
-    # MEDIA_DIR (no ../ escapes).
-    base = Path(settings.MEDIA_DIR).resolve()
-    path = (base / key).resolve()
-    try:
-        path.relative_to(base)
-    except ValueError:
+    # Otherwise a file on this server's disk. Normalise the path and require it to stay
+    # inside MEDIA_DIR (no ../ escapes), the pattern static analysis recognises as safe.
+    base = os.path.realpath(settings.MEDIA_DIR)
+    full = os.path.realpath(os.path.join(base, key))
+    if not full.startswith(base + os.sep) or not os.path.isfile(full):
         raise HTTPException(status_code=404, detail="Not found")
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Not found")
-    return FileResponse(path, media_type=media_type, headers=headers)
+    return FileResponse(full, media_type=media_type, headers=headers)
