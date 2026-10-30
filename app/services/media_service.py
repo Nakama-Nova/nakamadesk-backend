@@ -112,7 +112,16 @@ def delete(storage_key: str, storage: str = "local", store=None) -> None:
             if store is not None:
                 store.delete(storage_key)
         else:
-            (Path(settings.MEDIA_DIR) / storage_key).unlink(missing_ok=True)
+            media_root = Path(settings.MEDIA_DIR).resolve()
+            candidate = (media_root / storage_key).resolve()
+
+            # Refuse to touch paths outside MEDIA_DIR (absolute paths / traversal).
+            try:
+                candidate.relative_to(media_root)
+            except ValueError:
+                return
+
+            candidate.unlink(missing_ok=True)
     except Exception:  # noqa: BLE001
         pass
 
