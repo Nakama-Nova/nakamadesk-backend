@@ -134,7 +134,7 @@ def _products_for(uow: AbstractUnitOfWork, items: List[Item]) -> List[PublicProd
             ProductAsset.item_id.in_(ids),
             # THE gate: staff-only and private-store files never reach the website
             ProductAsset.visibility == "public",
-            ProductAsset.storage == "local",
+            ProductAsset.storage.in_(media_service.MEDIA_STORAGES),
         )
         .order_by(ProductAsset.sort, ProductAsset.created_at)
     ):

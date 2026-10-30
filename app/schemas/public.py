@@ -90,6 +90,6 @@ class AssetResponse(BaseModel):
     sort: int
     bytes: int
     visibility: str = "public"  # public | staff
-    storage: str = "local"  # local | s3
+    storage: str = "local"  # local | public | s3
 
     model_config = ConfigDict(from_attributes=True)

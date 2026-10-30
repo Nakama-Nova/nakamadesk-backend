@@ -6,7 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.uploads import asset_out
-from app.core.config import settings
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.product_asset import ProductAsset
@@ -14,7 +13,7 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import AssetResponse
 from app.services import media_service
-from app.services.object_store import S3Store
+from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/items", tags=["Product assets"])
 
@@ -53,13 +52,14 @@ async def upload_asset(
     sort: int = Form(0),
     current_user: User = Depends(check_role(STAFF)),
     uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
 ):
     """Upload a JPG/PNG/WebP photo (10 MB max) or a .glb model (25 MB max)."""
     if not uow.items.get_by_id(item_id):
         raise HTTPException(status_code=404, detail="Item not found")
     data = await file.read(media_service.max_read_size())
     kind, ext = media_service.validate(file.content_type or "", data)
-    key = media_service.save(item_id, ext, data)
+    key, storage = media_service.save_public(item_id, ext, data, store)
     asset = ProductAsset(
         item_id=item_id,
         kind=kind,
@@ -69,14 +69,14 @@ async def upload_asset(
         sort=sort,
         alt=alt,
         visibility="public",  # photos/models uploaded here are the public catalogue
-        storage="local",
+        storage=storage,
     )
     try:
         with uow:
             uow.session.add(asset)
             uow.commit()
     except Exception:
-        media_service.delete(key)  # don't leave an orphan file behind
+        media_service.delete(key, storage, store)  # don't leave an orphan file behind
         raise
     uow.refresh(asset)
     return _out(asset)
@@ -88,6 +88,7 @@ def delete_asset(
     asset_id: UUID,
     current_user: User = Depends(check_role(STAFF)),
     uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
 ):
     asset = (
         uow.session.query(ProductAsset)
@@ -101,7 +102,7 @@ def delete_asset(
         uow.session.delete(asset)
         uow.commit()
     if storage == "s3":
-        if settings.S3_BUCKET:
-            S3Store().delete(key)
+        if store is not None:
+            store.delete(key)
     else:
-        media_service.delete(key)
+        media_service.delete(key, storage, store)
