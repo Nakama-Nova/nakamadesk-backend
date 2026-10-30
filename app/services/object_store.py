@@ -84,9 +84,24 @@ class S3Store:
                 return None
             raise
 
+    def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
+        """Store a small file the server already holds (a public product photo)."""
+        self._client.put_object(
+            Bucket=self.bucket, Key=key, Body=data, ContentType=content_type
+        )
+
     def get_bytes(self, key: str, max_bytes: int) -> bytes:
         """Read an object (used to publish a small file to the public disk)."""
-        body = self._client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        try:
+            body = self._client.get_object(Bucket=self.bucket, Key=key)["Body"]
+        except ClientError as e:
+            if e.response.get("Error", {}).get("Code") in (
+                "404",
+                "NoSuchKey",
+                "NotFound",
+            ):
+                raise KeyError(key) from None
+            raise
         return body.read(max_bytes + 1)
 
     def delete(self, key: str) -> None:

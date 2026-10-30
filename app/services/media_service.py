@@ -67,8 +67,23 @@ def validate(content_type: str, data: bytes) -> Tuple[str, str]:
     return kind, ext
 
 
+# Where a public file (the shop's photos and 3D models) lives, product_assets.storage:
+#   "public"  the object store, under public/..., served by /media (what production uses:
+#             a serverless disk is wiped between requests, so files cannot live there)
+#   "local"   this server's own disk (development and tests, where there is no store)
+# Both are shown on the website; "s3" files stay private and are never listed publicly.
+PUBLIC_PREFIX = "public/"
+MEDIA_STORAGES = ("local", "public")
+_CONTENT_TYPES = {
+    "jpg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "glb": "model/gltf-binary",
+}
+
+
 def save(item_id: uuid.UUID, ext: str, data: bytes) -> str:
-    """Write the file and return its storage_key (relative path)."""
+    """Write the file to this server's disk and return its storage_key (relative path)."""
     key = f"items/{item_id}/{uuid.uuid4().hex}.{ext}"
     path = Path(settings.MEDIA_DIR) / key
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,11 +91,30 @@ def save(item_id: uuid.UUID, ext: str, data: bytes) -> str:
     return key
 
 
-def delete(storage_key: str) -> None:
+def save_public(
+    item_id: uuid.UUID, ext: str, data: bytes, store=None
+) -> Tuple[str, str]:
+    """
+    Keep a public file and return (storage_key, storage). With an object store it goes
+    there; without one (development, tests) it goes to this server's disk.
+    """
+    if store is None:
+        return save(item_id, ext, data), "local"
+    key = f"{PUBLIC_PREFIX}items/{item_id}/{uuid.uuid4().hex}.{ext}"
+    store.put_bytes(key, data, _CONTENT_TYPES.get(ext, "application/octet-stream"))
+    return key, "public"
+
+
+def delete(storage_key: str, storage: str = "local", store=None) -> None:
+    """Remove a public file. Never fails the request: a stray file is harmless."""
     try:
-        (Path(settings.MEDIA_DIR) / storage_key).unlink(missing_ok=True)
-    except OSError:
-        pass  # a stray file is harmless; never fail the request over it
+        if storage == "public":
+            if store is not None:
+                store.delete(storage_key)
+        else:
+            (Path(settings.MEDIA_DIR) / storage_key).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def url(storage_key: str) -> str:
@@ -94,6 +128,7 @@ MB = 1024 * 1024
 
 # kind -> (allowed extensions, max bytes, may be shown on the website?)
 PRIVATE_KINDS = {
+    "image": ({".jpg", ".jpeg", ".png", ".webp"}, 10 * MB, True),
     "render": ({".jpg", ".jpeg", ".png", ".webp"}, 15 * MB, True),
     "glb": ({".glb"}, 100 * MB, True),
     "part_model": ({".glb"}, 50 * MB, False),
@@ -108,7 +143,11 @@ PRIVATE_KINDS = {
     ),
 }
 # What is allowed on the PUBLIC disk (what validate() above checks and limits).
-PUBLISHABLE_MAX = {"render": MAX_BYTES["image"], "glb": MAX_BYTES["glb"]}
+PUBLISHABLE_MAX = {
+    "image": MAX_BYTES["image"],
+    "render": MAX_BYTES["image"],
+    "glb": MAX_BYTES["glb"],
+}
 _CONTENT_TYPE = re.compile(r"^[a-z]+/[a-z0-9][a-z0-9.+-]*$")
 
 

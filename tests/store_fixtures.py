@@ -29,7 +29,13 @@ class FakeStore:
     def head(self, key):
         return len(self.objects[key]) if key in self.objects else None
 
+    def put_bytes(self, key, data, content_type):
+        self.objects[key] = data
+        self.types = {**getattr(self, "types", {}), key: content_type}
+
     def get_bytes(self, key, max_bytes):
+        if key not in self.objects:
+            raise KeyError(key)  # what the real store raises for a missing object
         return self.objects[key][: max_bytes + 1]
 
     def delete(self, key):

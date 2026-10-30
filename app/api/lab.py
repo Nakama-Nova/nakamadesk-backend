@@ -38,7 +38,7 @@ from app.schemas.lab import (
     PresetsIn,
     SizeIn,
 )
-from app.services import lab_service
+from app.services import lab_service, media_service
 from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/lab", tags=["3D Lab"])
@@ -144,7 +144,7 @@ def part_model(
     )
     if not asset:
         raise HTTPException(status_code=404, detail="No model for this part")
-    if asset.storage == "local":
+    if asset.storage in media_service.MEDIA_STORAGES:
         return RedirectResponse(f"/media/{asset.storage_key}")
     if store is None:
         raise HTTPException(status_code=503, detail="File storage is not set up yet")

@@ -125,7 +125,7 @@ def download_asset(
     )
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
-    if asset.storage == "local":
+    if asset.storage in media_service.MEDIA_STORAGES:
         return RedirectResponse(media_service.url(asset.storage_key))
     name = f"{asset.kind}{Path(asset.storage_key).suffix}"
     if store is None:
@@ -140,7 +140,7 @@ def asset_out(a: ProductAsset) -> AssetResponse:
         kind=a.kind,
         url=(
             media_service.url(a.storage_key)
-            if a.storage == "local"
+            if a.storage in media_service.MEDIA_STORAGES
             else f"/items/{a.item_id}/assets/{a.id}/download"
         ),
         alt=a.alt,

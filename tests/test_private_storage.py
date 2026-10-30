@@ -8,7 +8,6 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.core.config import settings
 from app.main import app
 from app.services import media_service
 from app.services.object_store import get_store
@@ -159,13 +158,16 @@ def test_only_render_and_glb_can_be_published(auth_client: TestClient, store):
         assert r.status_code == 400, kind
 
 
-def test_publishing_copies_to_the_public_disk(auth_client: TestClient, store):
+def test_publishing_copies_to_public_storage(auth_client: TestClient, store):
     item = make_item(auth_client)
     key = put_object(store, item["id"], "render", ".png", PNG)
     r = register(auth_client, item["id"], key, "render", visibility="public")
     assert r.status_code == 201, r.text
     a = r.json()
-    assert (a["visibility"], a["storage"]) == ("public", "local")
+    assert (a["visibility"], a["storage"]) == ("public", "public")
+    assert a["url"].startswith(
+        "/media/public/"
+    )  # kept in the store, not on the server disk
     assert key not in store.objects  # the private copy is gone
     assert auth_client.get(a["url"]).headers["content-type"] == "image/png"
 
@@ -196,24 +198,14 @@ def test_only_owner_and_manager_can_register(worker_client: TestClient, store):
     assert register(worker_client, str(uuid.uuid4()), key, "stl").status_code == 403
 
 
-def test_deleting_an_s3_asset_deletes_the_object(
-    auth_client: TestClient, store, monkeypatch
-):
+def test_deleting_an_s3_asset_deletes_the_object(auth_client: TestClient, store):
     item = make_item(auth_client)
     key = put_object(store, item["id"], "stl", ".stl", b"x" * 10)
     asset = register(auth_client, item["id"], key, "stl").json()
-
-    deleted = []
-
-    class Recorder:
-        def delete(self, k):
-            deleted.append(k)
-
-    monkeypatch.setattr(settings, "S3_BUCKET", "test-bucket")
-    monkeypatch.setattr("app.api.assets.S3Store", lambda: Recorder())
+    assert key in store.objects
     r = auth_client.delete(f"/items/{item['id']}/assets/{asset['id']}")
     assert r.status_code == 204
-    assert deleted == [key]
+    assert key not in store.objects
 
 
 # ----------------------------------------------------------------- THE leak test

@@ -36,7 +36,7 @@ def attach_private_asset(
     """
     The caller has already checked that the item exists and that `key` is one it
     may attach. Staff-only files stay in the private store. A public file is
-    copied to the server disk after the usual content checks, and the private
+    copied to public storage after the usual content checks, and the private
     copy is deleted, so the private bucket never serves the website.
     """
     if kind not in media_service.PRIVATE_KINDS:
@@ -69,8 +69,9 @@ def attach_private_asset(
                 detail=f"Too large to publish (max {cap // media_service.MB} MB). Keep it staff-only",
             )
         _, checked_ext = media_service.validate(content_type, data)
-        stored_key = media_service.save(item_id, checked_ext, data)
-        storage = "local"
+        stored_key, storage = media_service.save_public(
+            item_id, checked_ext, data, store
+        )
 
     asset = ProductAsset(
         item_id=item_id,
@@ -89,10 +90,10 @@ def attach_private_asset(
             uow.session.add(asset)
             uow.commit()
     except Exception:
-        if storage == "local":
-            media_service.delete(stored_key)
+        if storage in media_service.MEDIA_STORAGES:
+            media_service.delete(stored_key, storage, store)
         raise
-    if storage == "local":
+    if storage in media_service.MEDIA_STORAGES:
         store.delete(key)  # the private copy is no longer needed
     uow.refresh(asset)
     return asset
