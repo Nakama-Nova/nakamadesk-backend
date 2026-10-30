@@ -7,6 +7,7 @@ delete() and url() here and nothing else.
 """
 
 import io
+import os
 import re
 import uuid
 from pathlib import Path
@@ -82,10 +83,19 @@ _CONTENT_TYPES = {
 }
 
 
+def _local_path(storage_key: str) -> Path:
+    """The file for a storage key on this server's disk, refusing anything outside MEDIA_DIR."""
+    base = os.path.realpath(settings.MEDIA_DIR)
+    full = os.path.realpath(os.path.join(base, storage_key))
+    if not full.startswith(base + os.sep):
+        raise ValueError("path is outside the media folder")
+    return Path(full)
+
+
 def save(item_id: uuid.UUID, ext: str, data: bytes) -> str:
     """Write the file to this server's disk and return its storage_key (relative path)."""
     key = f"items/{item_id}/{uuid.uuid4().hex}.{ext}"
-    path = Path(settings.MEDIA_DIR) / key
+    path = _local_path(key)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return key
@@ -112,16 +122,7 @@ def delete(storage_key: str, storage: str = "local", store=None) -> None:
             if store is not None:
                 store.delete(storage_key)
         else:
-            media_root = Path(settings.MEDIA_DIR).resolve()
-            candidate = (media_root / storage_key).resolve()
-
-            # Refuse to touch paths outside MEDIA_DIR (absolute paths / traversal).
-            try:
-                candidate.relative_to(media_root)
-            except ValueError:
-                return
-
-            candidate.unlink(missing_ok=True)
+            _local_path(storage_key).unlink(missing_ok=True)
     except Exception:  # noqa: BLE001
         pass
 
