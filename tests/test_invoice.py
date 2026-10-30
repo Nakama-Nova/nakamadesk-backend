@@ -152,3 +152,28 @@ def test_taxed_sale_still_prints_tax_invoice(auth_client: TestClient):
     text = _pdf_text(auth_client, sale["invoice_number"])
     assert "Invoice:" in text
     assert "CGST" in text
+
+
+def test_the_bill_pdf_is_drawn_in_memory_and_never_written_to_disk(
+    auth_client: TestClient, tmp_path, monkeypatch
+):
+    """A serverless disk is read-only: printing a bill must not depend on writing a file."""
+    monkeypatch.chdir(tmp_path)
+    item = auth_client.post(
+        "/items/",
+        json={
+            "sku": "MEM-PDF",
+            "name": "Stool",
+            "selling_price": 500,
+            "current_stock": 3,
+        },
+    ).json()
+    sale = auth_client.post(
+        "/sales/", json={"items": [{"item_id": item["id"], "quantity": 1}]}
+    ).json()
+    r = auth_client.get(f"/invoices/{sale['invoice_number']}/pdf")
+    assert r.status_code == 200 and r.content.startswith(b"%PDF")
+    assert r.headers["content-type"] == "application/pdf"
+    assert sale["invoice_number"] in r.headers["content-disposition"]
+    assert list(tmp_path.iterdir()) == []  # nothing was written anywhere
+    assert auth_client.get("/invoices/NOPE-1/pdf").status_code == 404
