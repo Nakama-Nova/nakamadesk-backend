@@ -44,7 +44,7 @@ def register(
     Returns:
         UserResponse: The newly created user.
     """
-    return auth_service.register_user(db, user)
+    return auth_service.register_user(db, user, actor_id=current_user.id)
 
 
 @router.post("/login")
@@ -76,7 +76,7 @@ def login(
     password_ok = auth_service.verify_password(form_data.password, stored)
 
     if not user or not password_ok:
-        logger.warning(f"Authentication failure for '{form_data.username}' from {ip}")
+        logger.warning("Authentication failure for %r from %s", form_data.username, ip)
         login_guard.record_failure(db, form_data.username, ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -88,7 +88,9 @@ def login(
     login_guard.clear(db, form_data.username, ip)
 
     # Store user_id (UUID) in the token instead of just username
-    token = create_access_token({"sub": str(user.id), "username": user.username})
+    token = create_access_token(
+        {"sub": str(user.id), "username": user.username, "tv": user.token_version or 0}
+    )
 
     return {
         "access_token": token,
@@ -131,7 +133,14 @@ def list_users(
     Returns:
         List[UserResponse]: A list of all registered users.
     """
-    return auth_service.list_users(db)
+    users = auth_service.list_users(db)
+    if current_user.role in (UserRole.OWNER, UserRole.MANAGER):
+        return users
+    # sales staff pick people for attendance, but do not see what anyone is paid
+    out = [UserResponse.model_validate(u) for u in users]
+    for u in out:
+        u.base_daily_wage = u.overtime_rate_per_hour = None
+    return out
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
@@ -160,7 +169,9 @@ def reset_password(
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    auth_service.set_password(db, user, body.new_password)
+    auth_service.set_password(
+        db, user, body.new_password, actor_id=current_user.id, action="PASSWORD_RESET"
+    )
     return {"message": "Password changed"}
 
 
@@ -174,5 +185,13 @@ def change_my_password(
     user = db.get(User, current_user.id)  # in this request's own session
     if not auth_service.verify_password(body.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is wrong")
-    auth_service.set_password(db, user, body.new_password)
-    return {"message": "Password changed"}
+    auth_service.set_password(db, user, body.new_password, actor_id=user.id)
+    # the old session just ended; hand back a fresh one so the app stays signed in
+    token = create_access_token(
+        {"sub": str(user.id), "username": user.username, "tv": user.token_version}
+    )
+    return {
+        "message": "Password changed",
+        "access_token": token,
+        "token_type": "bearer",
+    }

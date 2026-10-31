@@ -6,7 +6,10 @@ from datetime import date, datetime, timezone
 from starlette.requests import Request
 
 from app.core import ratelimit
+from app.core.security import create_access_token
 from app.models.attendance import Attendance
+from app.models.audit_log import AuditLog
+from tests.test_staff import login, new_staff
 
 
 # ------------------------------------------------------------------ caller address
@@ -126,3 +129,87 @@ def test_sales_user_cannot_set_own_wage_through_sync(client_as, db):
     db.refresh(row)
     assert float(row.daily_wage) == float(user.base_daily_wage or 0)
     assert row.payment_status == "pending"
+
+
+# ------------------------------------------------------------------ ending sessions
+def _bearer(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_tokens_from_before_token_versions_still_work(client, people):
+    # no `tv` claim = version 0 = a fresh account, so the deploy signs nobody out
+    token = create_access_token({"sub": people["worker"]["id"]})
+    assert client.get("/auth/me", headers=_bearer(token)).status_code == 200
+
+
+def test_password_reset_ends_the_old_session(client, people):
+    owner = people["owner"]["h"]
+    user, name = new_staff(client, owner)
+    old = _bearer(login(client, name, "StartPass123").json()["access_token"])
+    assert client.get("/auth/me", headers=old).status_code == 200
+    reset = client.post(
+        f"/auth/users/{user['id']}/reset-password",
+        headers=owner,
+        json={"new_password": "ResetPass123"},
+    )
+    assert reset.status_code == 200
+    assert client.get("/auth/me", headers=old).status_code == 401
+    new = _bearer(login(client, name, "ResetPass123").json()["access_token"])
+    assert client.get("/auth/me", headers=new).status_code == 200
+
+
+def test_changing_my_password_keeps_me_signed_in_with_a_new_token(client, people):
+    user, name = new_staff(client, people["owner"]["h"])
+    old = _bearer(login(client, name, "StartPass123").json()["access_token"])
+    body = {"current_password": "StartPass123", "new_password": "MyOwnPass123"}
+    r = client.post("/auth/me/password", headers=old, json=body)
+    assert r.status_code == 200
+    assert client.get("/auth/me", headers=old).status_code == 401
+    assert (
+        client.get("/auth/me", headers=_bearer(r.json()["access_token"])).status_code
+        == 200
+    )
+
+
+def test_changing_a_role_ends_that_users_session(client, people):
+    owner = people["owner"]["h"]
+    user, name = new_staff(client, owner, role="worker")
+    old = _bearer(login(client, name, "StartPass123").json()["access_token"])
+    r = client.patch(f"/auth/users/{user['id']}", headers=owner, json={"role": "sales"})
+    assert r.status_code == 200
+    assert client.get("/auth/me", headers=old).status_code == 401
+
+
+def test_editing_only_a_phone_number_does_not_end_the_session(client, people):
+    owner = people["owner"]["h"]
+    user, name = new_staff(client, owner)
+    old = _bearer(login(client, name, "StartPass123").json()["access_token"])
+    r = client.patch(f"/auth/users/{user['id']}", headers=owner, json={"phone": "98"})
+    assert r.status_code == 200
+    assert client.get("/auth/me", headers=old).status_code == 200
+
+
+# ------------------------------------------------------------------ wages and audit trail
+def test_only_owner_and_manager_see_wages_in_the_staff_list(client, people):
+    new_staff(client, people["owner"]["h"])  # has base_daily_wage 800
+    for role, sees in (("owner", True), ("manager", True), ("sales", False)):
+        rows = client.get("/auth/", headers=people[role]["h"]).json()
+        assert rows, role
+        assert any(r["base_daily_wage"] is not None for r in rows) is sees, role
+
+
+def test_account_changes_leave_an_audit_trail(client, people, db):
+    owner = people["owner"]
+    user, _ = new_staff(client, owner["h"])
+    client.patch(
+        f"/auth/users/{user['id']}", headers=owner["h"], json={"role": "sales"}
+    )
+    client.post(
+        f"/auth/users/{user['id']}/reset-password",
+        headers=owner["h"],
+        json={"new_password": "ResetPass123"},
+    )
+    rows = db.query(AuditLog).filter(AuditLog.row_id == user["id"]).all()
+    assert {r.action for r in rows} >= {"INSERT", "UPDATE", "PASSWORD_RESET"}
+    assert all(str(r.user_id) == owner["id"] for r in rows)
+    assert "hash" not in str([r.old_data for r in rows] + [r.new_data for r in rows])

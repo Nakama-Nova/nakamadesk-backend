@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
+from app.services import audit
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -46,7 +47,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def register_user(db: Session, user: UserCreate) -> User:
+def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
     """
     Register a new user in the system.
 
@@ -84,6 +85,15 @@ def register_user(db: Session, user: UserCreate) -> User:
     )
 
     db.add(new_user)
+    db.flush()
+    audit.record(
+        db,
+        actor_id,
+        "users",
+        new_user.id,
+        "INSERT",
+        new={"username": new_user.username, "role": new_user.role},
+    )
     db.commit()
     db.refresh(new_user)
     return new_user
@@ -164,15 +174,27 @@ def update_user(db: Session, actor: User, user_id, data: UserUpdate) -> User:
     if "email" in changes and changes["email"] != user.email:
         if db.query(User).filter(User.email == changes["email"]).first():
             raise HTTPException(status_code=400, detail="Email already in use")
+    old = {k: getattr(user, k) for k in changes}
     for key, value in changes.items():
         setattr(user, key, value)
     if "is_active" in changes:
         user.status = "active" if user.is_active else "inactive"
+    # a changed role or a switch-off ends this person's current sessions
+    if changes.get("role", user.role) != old.get("role", user.role) or (
+        "is_active" in changes and changes["is_active"] != old["is_active"]
+    ):
+        user.token_version = (user.token_version or 0) + 1
+    audit.record(db, actor.id, "users", user.id, "UPDATE", old=old, new=changes)
     db.commit()
     db.refresh(user)
     return user
 
 
-def set_password(db: Session, user: User, new_password: str) -> None:
+def set_password(
+    db: Session, user: User, new_password: str, actor_id=None, action="PASSWORD_CHANGE"
+) -> None:
+    """New password; every session issued before it stops working."""
     user.password_hash = hash_password(new_password)
+    user.token_version = (user.token_version or 0) + 1
+    audit.record(db, actor_id, "users", user.id, action)
     db.commit()

@@ -122,3 +122,38 @@ jobs:
       - name: Say so when a load test was too slow
         if: steps.load.outcome == 'failure'
         run: echo "::warning::A load test was slower than its limit on this CI machine. This does not fail the build. See the log above, and rerun locally with 'pytest tests/performance'."
+
+  # Informational for now, like the load tests: a finding raises a warning and never
+  # blocks a merge or the deploy that waits for this workflow. Once the first findings
+  # are cleared, delete the two `continue-on-error` lines to make them gate.
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Known vulnerabilities in pinned dependencies
+        id: audit
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --no-deps --disable-pip
+
+      - name: Say so when a dependency has a known vulnerability
+        if: steps.audit.outcome == 'failure'
+        run: echo "::warning::pip-audit found a vulnerable dependency. See the log above, then bump the pin in requirements.txt."
+
+      - name: Secrets committed to the repository
+        id: secrets
+        continue-on-error: true
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.18.4 detect --source /repo --no-banner --redact
+
+      - name: Say so when a secret was found
+        if: steps.secrets.outcome == 'failure'
+        run: echo "::warning::gitleaks found something that looks like a secret. See the log above; rotate it if it is real."

@@ -23,6 +23,13 @@ def get_uow(db: Session = Depends(get_db)):
     return SQLAlchemyUnitOfWork(db)
 
 
+def check_token_version(payload: dict, user: User) -> None:
+    """A token made before the user's password/role/status last changed is dead.
+    Tokens from before this existed carry no `tv`, which counts as version 0."""
+    if payload.get("tv", 0) != (user.token_version or 0):
+        raise HTTPException(status_code=401, detail="Session expired, sign in again")
+
+
 def get_current_user(
     token: str = Depends(oauth2_scheme), uow: AbstractUnitOfWork = Depends(get_uow)
 ) -> User:
@@ -39,6 +46,7 @@ def get_current_user(
         raise HTTPException(status_code=401, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Account is switched off")
+    check_token_version(payload, user)
     return user
 
 
@@ -97,6 +105,7 @@ def get_lab_user(
     user = uow.users.get_by_id(payload.get("sub"))
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found")
+    check_token_version(payload, user)
     if user.role not in LAB_ROLES:
         raise HTTPException(status_code=403, detail="Not permitted for your role")
     return user
