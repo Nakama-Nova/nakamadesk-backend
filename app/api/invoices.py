@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -10,6 +11,8 @@ from app.models.user import User
 from app.schemas.invoice import InvoiceResponse
 from app.services.invoice_pdf_service import render_invoice_pdf
 from app.services.invoice_service import get_all_invoices, get_invoice_by_number
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -100,11 +103,10 @@ def get_invoice_pdf(
 
     try:
         pdf = render_invoice_pdf(sale)
-    except (
-        Exception
-    ) as exc:  # say why, instead of a bare 500 the desktop cannot explain
+    except Exception as exc:
+        logger.exception("Could not draw the bill PDF for %s", invoice_number)
         raise HTTPException(
-            status_code=500, detail=f"Could not draw the bill PDF: {exc}"
+            status_code=500, detail="Could not draw the bill PDF"
         ) from exc
 
     return Response(

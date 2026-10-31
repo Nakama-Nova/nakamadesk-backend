@@ -14,15 +14,16 @@ _DEV_DEFAULT_SECRET_KEY = (
 SECRET_KEY = os.getenv(
     "SECRET_KEY", _DEV_DEFAULT_SECRET_KEY
 )  # Use a secure env var in prod
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ALGORITHM = "HS256"  # fixed in code: an env var must not be able to weaken it
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
-if settings.ENV not in ("dev", "test") and (
-    not SECRET_KEY or SECRET_KEY == _DEV_DEFAULT_SECRET_KEY
+if settings.IS_PROD and (
+    not SECRET_KEY or SECRET_KEY == _DEV_DEFAULT_SECRET_KEY or len(SECRET_KEY) < 32
 ):
     raise RuntimeError(
-        f"SECRET_KEY is unset (or still the dev default) while ENV={settings.ENV!r}. "
-        "Set a real SECRET_KEY in the environment before starting the app outside dev/test."
+        f"SECRET_KEY is unset, the dev default, or shorter than 32 characters "
+        f"while ENV={settings.ENV!r}. Set a real SECRET_KEY in the environment "
+        "before starting the app outside dev/test."
     )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")

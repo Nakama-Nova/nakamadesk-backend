@@ -9,6 +9,8 @@ class Settings:
     APP_NAME: str = os.getenv("APP_NAME", "NakamaDesk")
 
     ENV: str = os.getenv("ENV", "dev")
+    # ENV defaults to "dev", so running on Vercel also counts as production.
+    IS_PROD: bool = ENV not in ("dev", "test") or bool(os.getenv("VERCEL"))
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
     DEV_DATABASE_URL: str = os.getenv("DEV_DATABASE_URL", "")
