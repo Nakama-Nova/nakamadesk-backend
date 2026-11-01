@@ -1,10 +1,60 @@
 # Vriksha Studios: Microservices Design
 
-**Status:** Draft v1 for review · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
+**Status:** Draft v2 for review (updated with the owner's answers, §0) · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
 
 **This document supersedes** decisions D1 (one monolith), D5 (guest checkout only) and the "one shop, one machine" and "about ₹1,000 a month" answers in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §0–1. Those were right for the stage the business was in; the requirements below are not that stage. Everything else in that document (Next.js storefront, `<model-viewer>`, R2 for files, UPI-first payments, GST rules) still holds unless stated here.
 
 Legend: ✅ taken from the repo · ⚠️ assumption, please confirm.
+
+---
+
+## 0. Owner answers (2026-11-01): these override anything below that conflicts
+
+| Fact | Consequence |
+|---|---|
+| **Budget about ₹5,000 a month.** | One VM, no managed database, no Kubernetes. The infrastructure choices in §4, §9.3 and §12 are cut down accordingly (see "Right-sized stack" below). |
+| **Two people: you and me.** | One engineer plus an assistant cannot run 14 services. Boundaries stay (as packages and separate databases), but **we ship 5 containers, not 14**, and one language (Python) for the backend. |
+| **4 locations, more later.** | `location_id` is in the model from day one for stock, sales, attendance and cash. Adding a fifth location is a row, not a project. ⚠️ I assume each location keeps its own stock and till, with transfers between them. Tell me if stock is shared. |
+| **Razorpay.** | `payments` is a Razorpay adapter behind a small provider interface (see "Razorpay" below). |
+
+### Right-sized stack (what we actually build first)
+
+| Decision in the full design | Right-sized replacement | Why |
+|---|---|---|
+| 13 services | **5 app containers**: `api` (commerce + erp-core as separate packages and databases), `finance`, `worker` (notification sender, outbox relay, scheduled jobs), `media3d`, and `ai-worker` on your own machine | Finance is the one context worth a hard wall from day one (money, audit, own database). The rest stay packages until there is a reason |
+| Notification in TypeScript | **Python**, inside `worker` | One backend language for two people. Still a separate process with its own queue, so a slow email provider never blocks an order |
+| Keycloak | **Keep the existing, hardened auth module**; add a customer account type (email or phone OTP, order history) with separate tokens and no staff roles | Keycloak is a 0.7 GB Java app and another thing to patch. Revisit when you need Google login, MFA for many people, or more engineers |
+| Redpanda | **Postgres outbox + NATS JetStream** (about 50 MB, replayable) | Same pattern as the full design, a tenth of the memory |
+| ClickHouse + dbt | **Postgres views + Metabase** (add later; Metabase wants about 1 GB) | At 300 orders a day, Postgres answers every report |
+| Managed Postgres | **One Postgres 16 container, separate databases per context**, nightly `pg_dump` plus WAL archiving to R2, a monthly restore test | Managed Postgres alone would eat the budget. The restore test is what makes this safe |
+| Vercel for the storefront | **Next.js container on the same VM behind Caddy, with Cloudflare (free) in front** ⚠️ | Vercel's free Hobby plan is for non-commercial use, and Pro is about ₹1,700 a month. Check current terms |
+| API on Vercel serverless | **API in Docker on the VM** | Serverless cannot run NATS, workers or long jobs. The move happens in step 1 below |
+
+**Memory plan for one 8 GB VM** (estimates): Caddy 30 MB · api 400 MB · finance 200 MB · worker 200 MB · media3d 250 MB · storefront 350 MB · Postgres 1.2 GB · Redis 100 MB · NATS 50 MB → about 3 GB, leaving room for the OS, swap and Metabase later.
+
+**Monthly cost** (rough, check current prices): VM 8 GB in Mumbai or Bangalore ₹3,000–3,500 · R2 storage and backups ₹100–300 · domain about ₹70 · Cloudflare ₹0 · monitoring (Grafana Cloud free tier, Sentry free) ₹0 → **about ₹3,500–4,000**, inside your ₹5,000. Not included, and they scale with use: Razorpay fees per payment (about 2%, check Razorpay's current pricing), SMS and WhatsApp messages, and the GPU machine you already own.
+
+### Razorpay
+- **Needs business KYC to go live** ⚠️ (your trade licence was still pending). **Test mode works without it**, so we build and test the whole flow now and switch keys when approved.
+- Checkout: the backend creates a Razorpay **Order** (amount in paise, `receipt` = our order number), the storefront opens Razorpay Checkout (UPI, cards, netbanking), and the backend **verifies the signature** (HMAC-SHA256 of `order_id|payment_id`) before trusting the result.
+- Webhooks (`payment.captured`, `payment.failed`, `refund.processed`) arrive with `X-Razorpay-Signature`; we verify, then dedupe on the event id. The webhook, not the browser redirect, is the source of truth.
+- **Custom orders:** a Razorpay **Payment Link** for the advance, sent by WhatsApp or SMS.
+- **Refunds** go through the Refunds API and post a reversing entry in Finance.
+- Until KYC passes, staff record UPI advances by hand, and the same `payment.captured` event is published, so nothing downstream changes.
+- The provider interface (`create_intent`, `verify`, `refund`) keeps Razorpay replaceable.
+
+### Build order for two people
+Each step ships on its own and leaves the system working.
+
+| Step | What | Size |
+|---|---|---|
+| 1 | Docker images and compose on the VM; move the API off Vercel; backups to R2 with a restore test; import-linter rules for context boundaries; outbox table | M |
+| 2 | `locations`, devices, `location_id` on stock, sales and attendance; per-location stock and transfers | M |
+| 3 | Customer accounts, catalog read API, storefront on the new APIs, Razorpay checkout in test mode, reservations | L |
+| 4 | `finance` container: ledger and posting rules in **shadow mode** for a month, reconciled to the paisa, then cut over | L |
+| 5 | Machines and tools registers, budgets in Finance | M |
+| 6 | `media3d` + `ai-worker`: scan jobs, 3D links with manager confirmation | M |
+| 7 | Metabase dashboards; split `erp-core` further only if something hurts | S–M |
 
 ---
 
@@ -46,6 +96,8 @@ Existing FastAPI/SQLAlchemy/Postgres code ✅ (about 40 models, 40 services), an
 
 ## 2. Recommendation in one screen
 
+> §0 overrides this section where they differ: with a ₹5,000 budget and two people, we ship 5 containers, not 6 deployables plus a platform stack.
+
 1. **Build the target below, but get there in phases.** A big-bang rewrite into 14 services will stall. Use the strangler pattern: carve services out of the running monolith, one at a time, each with a parity check.
 2. **Phase 0 is a modular monolith** with enforced context boundaries, an outbox and Docker images. It is the cheapest step and every later extraction depends on it.
 3. **Separate first what has a real reason to be separate**: Notification (failure isolation), Media/3D + AI worker (GPU, Python-ML runtime, runs on your own machine), Analytics (read-only, zero risk), then Identity, Order, Stock, Finance.
@@ -63,7 +115,7 @@ Each row is a context with its own database. "Phase-1 unit" says which deployabl
 | Service | Owns | Tech | Store | Phase-1 unit |
 |---|---|---|---|---|
 | **gateway** | TLS, routing, rate limits, request ids | Traefik (off the shelf) | none | gateway |
-| **identity** | Staff realm and customer realm: credentials, MFA, sessions, social/phone-OTP login | Keycloak (off the shelf) | Postgres | identity |
+| **identity** | Staff and customer accounts: credentials, sessions, OTP login. Phase 1: the existing auth module; Keycloak is the full-scale option (§0) | Python/FastAPI (Keycloak later) | Postgres | `api` |
 | **directory** | Locations, plant units, devices (which desktop belongs to which location) | Python/FastAPI | Postgres | `erp-core` |
 | **customer** | Customer profiles, addresses, consent, guest→account merge by verified phone | Python/FastAPI | Postgres | `commerce` |
 | **catalog** | Products, categories, variants, prices list, publish state, links to media | Python/FastAPI + Meilisearch | Postgres + search + Redis | `commerce` |
@@ -93,14 +145,14 @@ Phase-1 deployables: `commerce`, `erp-core`, `finance`, `notification`, `media3d
 | Concern | Choice | Reason | Cost of the choice |
 |---|---|---|---|
 | Core services | **Python 3.12, FastAPI, SQLAlchemy 2, Alembic** | 40 models and 40 services already exist and are tested ✅. Rewriting is the single biggest risk | Python is not the fastest, irrelevant at this load |
-| Notification | **TypeScript (Node 22)** | Shares email/WhatsApp template tooling (React Email/MJML) with the storefront, so there are two languages in the whole system, not three | One more runtime to patch |
+| Notification | **Python, in the `worker` process** (full-scale option: a TypeScript service sharing templates with the storefront) | One backend language for a two-person team | Splits out later if load or ownership demands it |
 | Storefront | **Next.js on Vercel** ✅ (D4) | Static pages, SEO, `<model-viewer>` for 3D | Vercel cannot run workers or the broker, so those live in Docker |
-| Identity | **Keycloak**, two realms (staff, customers) | Do not write auth. Gives OIDC, MFA, social and OTP login, session revocation. Replaces my hand-rolled `token_version` | Heavy (about 0.7 GB RAM), and a Java component to upgrade |
-| Event backbone | **Redpanda** (Kafka API, one binary) | Durable log with replay: Finance and Analytics can rebuild from history | Needs ~1 GB RAM and ops knowledge. Lighter alternative: NATS JetStream; pick this if you stay small |
+| Identity | **Phase 1: existing auth module + customer accounts. Full scale: Keycloak**, two realms | Keycloak gives OIDC, MFA, social and OTP login for free, but costs 0.7 GB and a Java component to patch. Not worth it for two people yet | Hand-rolled auth needs care; keep the audit tests ✅ |
+| Event backbone | **Phase 1: Postgres outbox + NATS JetStream.** Full scale: Redpanda (Kafka API) | Durable, replayable log; Finance and Analytics can rebuild from history. NATS needs about 50 MB, Redpanda about 1 GB | Smaller ecosystem than Kafka; the event envelope is the same, so a later switch is cheap |
 | Relational | **PostgreSQL 16, one database per service** | Strong consistency inside a context; the team knows it | Several instances to back up (use managed) |
 | Cache / rate limits | **Redis 7** | Sessions, catalog cache, rate limits, notification dedupe | |
 | Search | **Meilisearch** | Typo-tolerant product search with almost no tuning | Replaceable behind the catalog API |
-| Analytics | **ClickHouse + dbt + Metabase** (phase 1: Postgres read replica + Metabase) | Columnar scans for reports; SQL, not services | Do not start with ClickHouse; earn it |
+| Analytics | **Phase 1: Postgres views + Metabase.** Full scale: ClickHouse + dbt + Metabase | Columnar scans for reports; SQL, not services | Do not start with ClickHouse; earn it |
 | Files | **S3-compatible**: MinIO on-prem, **Cloudflare R2** in cloud ✅ | Cheap, free egress, signed URLs | |
 | Service-to-service | **REST + OpenAPI** (sync), **events** (async) | Debuggable with curl. gRPC only if a hot path proves it | Chatty calls need care |
 | Contracts | `contracts/` repo folder: OpenAPI per service, JSON Schema per event (CloudEvents envelope) | Breaking changes fail CI | Discipline |
@@ -362,29 +414,25 @@ Per-service pipeline on path changes: black/ruff or eslint, unit tests, **contra
 
 | Stage | What runs | Rough monthly |
 |---|---|---|
-| Today | 1 small VPS, Postgres on it | ₹700–900 (the earlier budget) |
-| Phase 0–1 | 1 VM (4 vCPU / 8 GB), managed small Postgres, R2 | ₹4,000–8,000 |
-| Phase 2–4 | 1–2 VMs (8 vCPU / 16 GB), managed Postgres ×2, Redpanda, Keycloak, Grafana Cloud free | ₹10,000–20,000 |
+| Today | 1 small VPS, Postgres on it | ₹700–900 |
+| **Phase 1 (the plan, §0)** | 1 VM (8 GB), Postgres container with backups to R2, Caddy, Cloudflare free | **₹3,500–4,000** |
+| Growth | 2 VMs (app and data) or a managed Postgres, Metabase, bigger VM | ₹8,000–15,000 |
+| Full scale | Keycloak, Redpanda, ClickHouse, managed Postgres, observability stack | ₹15,000–25,000 |
 | Kubernetes / HA | multi-node, managed everything | ₹40,000+ |
 
-Ideas to lower it: put all non-Finance databases in one managed Postgres instance as separate databases; use NATS instead of Redpanda; skip ClickHouse until Postgres reports get slow; use Grafana Cloud's free tier.
+The first row to move up is the database: when backups or restore time worry you, spend on managed Postgres before anything else.
 
 ---
 
 ## 13. Migration plan (strangler fig)
 
-Each step ends with the old code deleted, not left running in parallel.
+The build order for the two of us is in §0. The rules for each step:
 
-| Phase | Work | Size | Exit criteria |
-|---|---|---|---|
-| **0. Modular monolith** | Package per context; `import-linter` forbids cross-imports; add outbox table and event publisher; contracts folder; Dockerfile and compose for the monolith | M | CI fails on a cross-context import; every state change emits its event |
-| **1. Platform** | Gateway, Keycloak (staff realm; migrate users), Redpanda, Redis, observability, managed Postgres, CI per service | M–L | A request is traceable from gateway to DB; staff log in through Keycloak |
-| **2. Edge services** | **Notification** (replaces `notification_service.py`), **Analytics** (read-only), **media3d + ai-worker** (replaces `lab`/`scans`) | M | Each runs in its own container; the monolith no longer imports them |
-| **3. Customer-facing** | Customer realm and accounts, `customer`, `catalog` (+ search), storefront on the new APIs; `payments` when a gateway account exists | L | Customers can register, order and track; guest checkout still works |
-| **4. Transactional core** | **stock + assets + procurement**, then **order** (saga), then **finance** run in *shadow mode* beside the old tables for a full month and reconcile to the paisa before cutover | L–XL | Finance totals equal the old reports; the old tables are retired |
-| **5. Optional splits** | Production, workforce, directory become separate deployables if there is a reason | M | |
-
-Parity technique for each extraction: dual-write or event-replay into the new service, compare read results, cut traffic over by route in the gateway, keep a rollback switch for one release, then delete.
+- Carve code out of the running monolith into a package first (enforced by `import-linter`), then into its own container only if there is a reason.
+- Every extraction is **dual-run**: the new path runs beside the old, results are compared, traffic switches by route, a rollback switch stays for one release, then the old code is deleted.
+- **Finance always goes through shadow mode** for a full month and must match the existing reports to the paisa before cutover.
+- Database changes stay additive (expand, then contract) ✅, with a restore-tested backup before any destructive step.
+- Keep the current `/sync` endpoints until every desktop is on the command outbox (§8.3), and advertise `sync_protocol_version` ✅ (ADR-0002).
 
 ---
 
@@ -397,17 +445,18 @@ Parity technique for each extraction: dual-write or event-replay into the new se
 4. **Data migration.** Moving live money data is the riskiest step; shadow mode is mandatory.
 5. **Keycloak and Redpanda are new skills.** Plan time for learning, or pick the lighter options.
 
-**Questions for you** (these change the design)
-1. **Budget:** is the ₹1,000 a month limit gone? §12 shows what each stage costs.
-2. **Team:** how many engineers, now and in six months? This sets how many deployables you can run.
-3. **Inventory masters:** is my reading of Machines / Tools / Materials in §1 right? Are budgets per location, per plant unit, or per category?
-4. **Locations:** how many shops and plants, and does each keep its own stock and cash?
-5. **Payments:** which gateway (Razorpay, PhonePe, Cashfree)? Do you have a business registration for it yet?
-6. **GST:** registered yet? This decides when tax lines appear on invoices.
-7. **Delivery and returns:** still local delivery only? Is there a returns and refund policy?
-8. **AI model:** what are its inputs (photos, video, scans) and typical output size and time? Which GPU machine?
-9. **Data protection:** do you need legal review for customer accounts under the DPDP Act?
-10. **Hosting:** which cloud or provider do you prefer, and must data stay in India?
+**Answered (2026-11-01):** budget about ₹5,000 a month · team of two · 4 locations, more later · Razorpay.
+
+**Still open** (these change the design)
+1. **Stock and cash per location:** does each of the 4 keep its own stock and till, with transfers between them? (Assumed yes.)
+2. **Inventory masters:** is my reading of Machines / Tools / Materials in §1 right? Are budgets per location, per plant unit, or per category?
+3. **Razorpay KYC:** is the trade licence in place yet? That decides when live payments start.
+4. **GST:** registered yet? This decides when tax lines appear on invoices.
+5. **Delivery and returns:** still local delivery only? Is there a returns and refund policy?
+6. **AI model:** inputs (photos, video, scans), output size, and run time? Which GPU machine?
+7. **Data protection:** legal review for customer accounts under the DPDP Act?
+8. **Hosting:** preferred provider, and must data stay in India?
+9. **WhatsApp:** order updates over WhatsApp Business (per-message fees, needs approval) or SMS and email first?
 
 ## 15. What I'd revisit as it grows
 - Split `erp-core` and `commerce` further once separate teams or release cadences exist.
