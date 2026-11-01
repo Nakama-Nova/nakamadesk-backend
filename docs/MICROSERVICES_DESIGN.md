@@ -1,6 +1,6 @@
 # Vriksha Studios: Microservices Design
 
-**Status:** Draft v2 for review (updated with the owner's answers, §0) · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
+**Status:** Draft v3 for review (updated with the owner's answers, §0) · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
 
 **This document supersedes** decisions D1 (one monolith), D5 (guest checkout only) and the "one shop, one machine" and "about ₹1,000 a month" answers in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §0–1. Those were right for the stage the business was in; the requirements below are not that stage. Everything else in that document (Next.js storefront, `<model-viewer>`, R2 for files, UPI-first payments, GST rules) still holds unless stated here.
 
@@ -14,8 +14,40 @@ Legend: ✅ taken from the repo · ⚠️ assumption, please confirm.
 |---|---|
 | **Budget about ₹5,000 a month.** | One VM, no managed database, no Kubernetes. The infrastructure choices in §4, §9.3 and §12 are cut down accordingly (see "Right-sized stack" below). |
 | **Two people: you and me.** | One engineer plus an assistant cannot run 14 services. Boundaries stay (as packages and separate databases), but **we ship 5 containers, not 14**, and one language (Python) for the backend. |
-| **4 locations, more later.** | `location_id` is in the model from day one for stock, sales, attendance and cash. Adding a fifth location is a row, not a project. ⚠️ I assume each location keeps its own stock and till, with transfers between them. Tell me if stock is shared. |
+| **4 locations, more later: three production units and one open shop.** | `location_id` is in the model from day one for stock, sales and attendance. Adding a fifth location is a row, not a project. The layout is in "Your site" below. |
+| **Track the current budget of Machines and of raw-item inventory.** | Finance holds a budget for each of those two categories and shows budget, spent, remaining and the current value (see "Budgets" below). |
+| **Trade licence and GST registration: both still to come.** | No GST on any bill yet. Razorpay stays in test mode and staff record UPI payments by hand until the licence and KYC are done. Both are switches, not rebuilds (see "Licence and GST" below). |
 | **Razorpay.** | `payments` is a Razorpay adapter behind a small provider interface (see "Razorpay" below). |
+
+### Your site (4 locations)
+
+| Location | Kind | What happens there | Stock held | Till |
+|---|---|---|---|---|
+| **Manufacturing Unit** (by hand) | plant | Carving, joinery, assembly by craftspeople | Wood, consumables, work in progress | no |
+| **Machinery Unit** | plant | Cutting, turning, CNC. **The machines live here** | Wood, work in progress | no |
+| **Painting Unit** | plant | Finishing, polish, paint | Finishing materials, work in progress | no |
+| **Open Shop** | shop | Sells the finished goods; online orders are packed and delivered from here ⚠️ | Finished goods | **yes**: the counter till, UPI |
+
+How goods move: **buy raw material → receive into a unit → transfer between units as the job moves → transfer finished goods to the Shop → sell.** Every move between units is a stock transfer (two ledger movements, with an *in transit* state), so you can always see where each piece is and what it is worth.
+
+- **QC is a checkpoint, not a location.** It was one of the plant units in the earlier PR 67 brief, but it is not one of your four. Quality check becomes a pass/fail step on the production job (by a manager or achari) before the piece goes to the Shop. If you do want QC as its own place, it is one more row.
+- **The `plant_units` table from PR 67 becomes the `locations` table** (add a `kind` of plant or shop, and a `has_till` flag). The owner creates the four. The Shop gets a GPS circle too, so sales staff attendance can be checked the same way.
+- **Only the Shop has a till.** Online payments go to Razorpay, not a till. Petty cash for the plants can be added later as its own account.
+- Online orders reserve stock **at the Shop**, or become a production job if made to order.
+
+### Budgets
+You want the *current* budget of **Machines** and of **raw-item inventory**. Finance keeps one monthly (or yearly) budget per category:
+
+| Category | Spent comes from | Current value shown |
+|---|---|---|
+| **Machines** | Machine purchases, repairs, maintenance | Net book value of the machines (cost minus depreciation) |
+| **Raw items** | Raw-material purchases received | Stock on hand × weighted average cost, per unit |
+
+Each category shows **budget, spent so far, remaining, and current value**, with an alert at 80% and 100%. Going over budget **warns, it does not block** a purchase, so the workshop never stalls on a screen. The owner sets budgets; managers read. Tools and other categories can be added as lines later. Because every spend carries a `location_id`, the same numbers can be cut per unit later without changing the model.
+
+### Licence and GST
+- **Trade licence not yet issued** → Razorpay cannot go live (it needs business KYC). We build and test in Razorpay **test mode**, and staff record UPI payments by hand until then. The switch is replacing the keys.
+- **GST not yet registered** → every bill is a plain consecutive "Bill" with no tax lines ✅ (already how the app works). Finance already has a tax account and a `gst_enabled` setting, off for now. Registering later means turning it on from a chosen date, which starts the tax series; earlier bills are not rewritten. Ask your CA for the turnover threshold and whether you may take online orders before the licence arrives. I can't advise on that.
 
 ### Right-sized stack (what we actually build first)
 
@@ -49,10 +81,10 @@ Each step ships on its own and leaves the system working.
 | Step | What | Size |
 |---|---|---|
 | 1 | Docker images and compose on the VM; move the API off Vercel; backups to R2 with a restore test; import-linter rules for context boundaries; outbox table | M |
-| 2 | `locations`, devices, `location_id` on stock, sales and attendance; per-location stock and transfers | M |
+| 2 | Turn `plant_units` into `locations` (the 3 units + the Shop); `location_id` on stock, sales and attendance; stock transfers between units; Shop till | M |
 | 3 | Customer accounts, catalog read API, storefront on the new APIs, Razorpay checkout in test mode, reservations | L |
 | 4 | `finance` container: ledger and posting rules in **shadow mode** for a month, reconciled to the paisa, then cut over | L |
-| 5 | Machines and tools registers, budgets in Finance | M |
+| 5 | Machines and tools registers; Machines and Raw-items budgets in Finance | M |
 | 6 | `media3d` + `ai-worker`: scan jobs, 3D links with manager confirmation | M |
 | 7 | Metabase dashboards; split `erp-core` further only if something hurts | S–M |
 
@@ -68,12 +100,12 @@ Each step ships on its own and leaves the system working.
    - **Tools**: durable items (chisels, clamps) issued to and returned by a person, with condition and replacement tracking.
    - **Materials and consumables**: wood (by species, grade, cft), adhesive, finish. Quantities move through a ledger, per location.
    - Finished goods (things we sell) are stock too, per location.
-   - **Budgets** cover all of the above and live in Finance (§6.6).
+   - **Budgets** for Machines and for raw-item inventory live in Finance (§0, §6.6).
 4. **Finance** sees everything: online orders, in-store sales, purchases, wages, expenses, machine depreciation. It produces invoices, a ledger, budgets versus actuals, and receivables and payables.
-5. **Multiple locations** (shops, plant sites) each run the desktop app. Stock, sales and attendance are per location.
+5. **Four locations** (Manufacturing Unit, Machinery Unit, Painting Unit, Open Shop; more later) each run the desktop app. Stock, sales and attendance are per location; only the Shop has a till (§0).
 6. **Separate services**: Notification, Order, Finance, Analytics and the others below, each in Docker, tied together.
 7. **Local AI model** produces 3D models from photos or scans; the output is mapped to products.
-8. Plant units (Manufacturing/Production, Painting/Processing, QC) with GPS-verified attendance ✅ (already built, PR 67).
+8. Plant units with GPS-verified attendance ✅ (built in PR 67; the real layout and the QC change are in §0).
 
 ### Non-functional
 | | Target | Why |
@@ -314,7 +346,7 @@ Subscribes to events, renders a template per channel and locale, respects custom
 `directory` owns `locations(id, name, kind: shop|plant|warehouse, address, geo)`, `plant_units(location_id, …)` ✅, and `devices(id, location_id, enrolled_by)`. A manager enrols a desktop once; its token carries `device_id` and `loc`. Every write carries `X-Location-Id`, which the service checks against the token.
 
 ### 8.2 What is per location
-Stock balances, sales, attendance, cash drawers, and budgets (optional). Catalog, customers and suppliers are global.
+Stock balances, sales and attendance. The till exists only at the Shop. Catalog, customers, suppliers and budgets are global; budgets can be cut by location in reports because every spend is tagged with one.
 
 ### 8.3 Replace LWW sync with commands + outbox
 Because the internet is almost always available:
@@ -445,18 +477,17 @@ The build order for the two of us is in §0. The rules for each step:
 4. **Data migration.** Moving live money data is the riskiest step; shadow mode is mandatory.
 5. **Keycloak and Redpanda are new skills.** Plan time for learning, or pick the lighter options.
 
-**Answered (2026-11-01):** budget about ₹5,000 a month · team of two · 4 locations, more later · Razorpay.
+**Answered (2026-11-01):** budget about ₹5,000 a month · team of two · 4 locations (3 production units + 1 shop) · Razorpay · Machines and raw-item budgets · trade licence and GST both still to come.
 
-**Still open** (these change the design)
-1. **Stock and cash per location:** does each of the 4 keep its own stock and till, with transfers between them? (Assumed yes.)
-2. **Inventory masters:** is my reading of Machines / Tools / Materials in §1 right? Are budgets per location, per plant unit, or per category?
-3. **Razorpay KYC:** is the trade licence in place yet? That decides when live payments start.
-4. **GST:** registered yet? This decides when tax lines appear on invoices.
-5. **Delivery and returns:** still local delivery only? Is there a returns and refund policy?
-6. **AI model:** inputs (photos, video, scans), output size, and run time? Which GPU machine?
-7. **Data protection:** legal review for customer accounts under the DPDP Act?
-8. **Hosting:** preferred provider, and must data stay in India?
-9. **WhatsApp:** order updates over WhatsApp Business (per-message fees, needs approval) or SMS and email first?
+**Still open** (none blocks the first build step)
+1. **QC:** a checkpoint on the job (my plan), or its own location?
+2. **Where does raw material arrive?** Into which unit, or a store? (I assume the Manufacturing and Machinery units.)
+3. **Online orders:** packed and delivered from the Shop, and local delivery only? Any returns and refund policy?
+4. **Budget period:** monthly or yearly for Machines and raw items, and who approves going over?
+5. **AI model:** inputs (photos, video, scans), output size, run time, and which GPU machine?
+6. **Data protection:** legal review for customer accounts under the DPDP Act?
+7. **Hosting:** preferred provider, and must data stay in India?
+8. **WhatsApp:** order updates over WhatsApp Business (per-message fees, needs approval) or SMS and email first?
 
 ## 15. What I'd revisit as it grows
 - Split `erp-core` and `commerce` further once separate teams or release cadences exist.
