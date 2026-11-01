@@ -16,6 +16,7 @@ from app.api import (
     attendance,
     auth,
     bom,
+    budgets,
     customers,
     dashboard,
     designs,
@@ -87,6 +88,7 @@ app.include_router(plant_units.router)
 app.include_router(stock_locations.router)
 app.include_router(account.router)
 app.include_router(machines.router)
+app.include_router(budgets.router)
 app.include_router(tools.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)

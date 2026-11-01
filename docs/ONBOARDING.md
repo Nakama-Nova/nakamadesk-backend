@@ -55,6 +55,7 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Stock by location (`/stock/levels`, `/stock/unassigned`, `GET /stock/transfers`) | owner, manager, sales |
 | Stock transfers (`POST /stock/transfers`) | owner, manager |
 | Machines (`/machines/*`) | owner, manager |
+| Budgets: view (`GET /budgets/*`) | owner, manager; set or delete (`PUT`, `DELETE`): owner only |
 | Tools: add, change, issue, return, history | owner, manager; list and view: also achari; `GET /tools/mine`: any signed-in staff |
 | Customer account (`/account/*`: profile, addresses, checkout, own orders) | website shoppers only (their own token); staff tokens are refused |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
@@ -135,7 +136,20 @@ Two registers, kept apart from stock (a machine or a chisel is not something we 
 - A broken or lost tool becomes available again by `PUT` with `status: "available"` (repaired or found). A tool that is out cannot be changed until it is returned.
 - `GET /tools/mine`: the tools you hold now (any signed-in staff).
 
-Cost feeds the Machines budget (next PR): the purchase cost on the purchase date and maintenance cost on the day it was done.
+Cost feeds the Machines budget (4f): the purchase cost on the purchase date and maintenance cost on the day it was done.
+
+## 4f. Budgets (Machines and raw materials)
+
+The owner sets how much to spend on **Machines** and on **raw materials**, for a calendar **month** or an Indian **financial year** (April to March). Only the amount is stored (`budgets`); everything else is worked out from the real records each time, so a budget cannot drift from the books.
+
+- `PUT /budgets` (owner): `{category, period, starts_on, amount, notes}`. `starts_on` can be any day in the period; it moves to the 1st of the month, or to 1 April. Setting the same period again changes the amount. `DELETE /budgets/{id}` removes a budget, never the spending.
+- `GET /budgets/current` (owner, manager): this month and this financial year for both categories. Each shows `amount` (empty if none is set), `spent`, `remaining` (negative when over), `percent_used`, `state` and `current_value`.
+- `GET /budgets/warnings`: only the budgets at 80% or more, or over. `GET /budgets` lists every budget that was set, newest period first.
+- **Spent, machines:** the cost of machines bought in the period (by purchase date) plus the cost of maintenance done in it (by the date it was done). Retired machines still count for the past.
+- **Spent, raw materials:** the line totals of **confirmed** purchases dated in the period. Pending and cancelled purchases do not count. Wood that was collected free (a stock adjustment, no purchase) adds stock but spends nothing.
+- **Current value:** machines still in use after depreciation; raw materials at stock on hand x current price (not a weighted average cost yet).
+- **State:** `no_budget`, `ok`, `warning` (80% or more used), `over` (all used). A zero budget is `over` as soon as anything is spent. Percentages round half up.
+- **Going over only warns.** Nothing blocks a purchase or a repair. "The owner approves going over" currently means the owner raises the budget. A request-and-approve step, per-location budgets and alerts in the notification feed are not built.
 
 ## 5. Running it locally
 
