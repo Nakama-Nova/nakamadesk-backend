@@ -12,7 +12,7 @@ mccabe==0.7.0
 mypy_extensions==1.1.0
 pathspec==1.0.4
 platformdirs==4.9.4
-pluggy==1.6.0
+pluggy==1.7.0
 pycodestyle==2.14.0
 pyflakes==3.4.0
 pytokens==0.4.1
