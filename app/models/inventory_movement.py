@@ -63,6 +63,13 @@ class InventoryMovement(Base):
     quantity = Column(Numeric(10, 4), nullable=False)
     unit_cost = Column(Numeric(10, 2), nullable=True)
 
+    # Where the stock moved. Empty = not placed at a location (the old behaviour).
+    location_id = Column(
+        UUID(as_uuid=True), ForeignKey("plant_units.id"), nullable=True, index=True
+    )
+    # The two movements of one transfer between locations share this id.
+    transfer_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+
     notes = Column(Text, nullable=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(

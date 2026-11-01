@@ -30,7 +30,7 @@ def only_my_units(db):
 def make_unit(db, code, lat=LAT, lon=LON, radius=50, **kw):
     unit = PlantUnit(
         name=f"{code} {uuid.uuid4().hex[:6]}",
-        code=f"{code}{uuid.uuid4().hex[:8]}".upper(),
+        code=f"{code[:3]}{uuid.uuid4().hex[:6]}".upper(),  # at most 10 characters
         latitude=lat,
         longitude=lon,
         radius_m=radius,

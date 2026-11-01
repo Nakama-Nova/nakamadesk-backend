@@ -38,6 +38,7 @@ from app.api import (
     restorations,
     sales,
     scans,
+    stock_locations,
     sync,
     uploads,
     wages,
@@ -80,6 +81,7 @@ app.include_router(raw_materials.router)
 app.include_router(bom.router)
 app.include_router(attendance.router)
 app.include_router(plant_units.router)
+app.include_router(stock_locations.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)
 app.include_router(payroll.router)

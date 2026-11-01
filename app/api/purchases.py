@@ -10,7 +10,7 @@ RBAC:
   - SALES: read-only
 """
 
-from typing import List
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -113,6 +113,7 @@ def get_purchase(
 @router.patch("/{purchase_id}/confirm", response_model=PurchaseResponse)
 def confirm_purchase(
     purchase_id: UUID,
+    location_id: Optional[UUID] = None,
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
@@ -130,6 +131,8 @@ def confirm_purchase(
 
     Args:
         purchase_id (UUID): Unique identifier of the purchase to confirm.
+        location_id (UUID): Query parameter. The unit that received the goods
+            (empty = not placed at a location yet).
         current_user (User): Authenticated user.
         uow (AbstractUnitOfWork): Unit of Work.
 
@@ -141,5 +144,5 @@ def confirm_purchase(
         HTTPException 400: If already confirmed or cancelled.
     """
     return purchase_service.confirm_purchase(
-        uow, purchase_id, confirmed_by=current_user.id
+        uow, purchase_id, confirmed_by=current_user.id, location_id=location_id
     )

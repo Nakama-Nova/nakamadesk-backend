@@ -35,6 +35,10 @@ class Sale(Base):
         UUID(as_uuid=True), unique=True, nullable=True, index=True
     )  # For idempotency
 
+    # Where it was sold: the Shop for counter sales. Empty on sales from before locations.
+    location_id = Column(
+        UUID(as_uuid=True), ForeignKey("plant_units.id"), nullable=True, index=True
+    )
     order_type = Column(String, default="in-store")  # in-store, online
     sub_total = Column(Numeric(10, 2), default=0.0)
     tax_total = Column(Numeric(10, 2), default=0.0)

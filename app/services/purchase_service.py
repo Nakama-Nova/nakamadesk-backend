@@ -11,6 +11,7 @@ Existing purchase CRUD will be added here as the system grows.
 
 import logging
 from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -20,7 +21,7 @@ from app.models.purchase import Purchase
 from app.models.purchase_item import PurchaseItem
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.purchase import PurchaseCreate
-from app.services import inventory_service
+from app.services import inventory_service, stock_location_service
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,7 @@ def confirm_purchase(
     uow: AbstractUnitOfWork,
     purchase_id: UUID,
     confirmed_by: UUID,
+    location_id: Optional[UUID] = None,
 ) -> Purchase:
     """
     Confirm a purchase and update raw material stock atomically.
@@ -166,6 +168,8 @@ def confirm_purchase(
         HTTPException 400: If a purchase item references an unknown material.
     """
     with uow:
+        if location_id is not None:
+            stock_location_service.get_location(uow.session, location_id)
         purchase = (
             uow.session.query(Purchase)
             .filter(Purchase.id == purchase_id)
@@ -207,6 +211,7 @@ def confirm_purchase(
                     reference_type="purchase",
                     reference_id=purchase_id,
                     created_by=confirmed_by,
+                    location_id=location_id,
                     notes=(
                         f"Purchase confirmation: "
                         f"{purchase.invoice_number or purchase_id}"

@@ -32,6 +32,8 @@ class SaleCreate(BaseModel):
     client_id: Optional[UUID] = None  # For idempotency
     items: List[SaleItemCreate]
     order_type: str = "in-store"
+    # Where it was sold. Left out, the Shop is used when there is exactly one.
+    location_id: Optional[UUID] = None
     discount: Decimal = Field(default=Decimal("0.00"), ge=0)
     payment_method: Optional[str] = None
     payment_status: str = "pending"
@@ -68,6 +70,7 @@ class SaleResponse(BaseModel):
     invoice_date: Optional[datetime] = None
     customer_id: Optional[UUID] = None
     user_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
     order_type: str
     sub_total: Decimal
     tax_total: Decimal

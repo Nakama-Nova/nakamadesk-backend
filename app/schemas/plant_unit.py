@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -15,6 +15,9 @@ class PlantUnitIn(BaseModel):
     longitude: Longitude
     radius_m: float = Field(gt=0, le=5000, allow_inf_nan=False)
     is_active: bool = True
+    # plant (default) or shop. Left out on an update, the stored value is kept.
+    kind: Optional[Literal["plant", "shop"]] = None
+    has_till: Optional[bool] = None
 
     @field_validator("name", "code")
     @classmethod
@@ -32,6 +35,8 @@ class PlantUnitIn(BaseModel):
 
 class PlantUnitOut(PlantUnitIn):
     id: UUID
+    kind: Literal["plant", "shop"] = "plant"
+    has_till: bool = False
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
