@@ -54,7 +54,7 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Plant units | list: any signed-in user; create, update: owner only |
 | Stock by location (`/stock/levels`, `/stock/unassigned`, `GET /stock/transfers`) | owner, manager, sales |
 | Stock transfers (`POST /stock/transfers`) | owner, manager |
-| Customer account (`/account/*`) | website shoppers only (their own token); staff tokens are refused |
+| Customer account (`/account/*`: profile, addresses, checkout, own orders) | website shoppers only (their own token); staff tokens are refused |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
 | Orders | create, list, get: owner, manager, sales; status change: owner, manager |
 | Production jobs | create, start, complete: owner, manager; list and get: owner, manager, achari |
@@ -104,7 +104,11 @@ Shoppers sign in on vrikshastudios.com with a one-time code sent to their email.
 - The token carries `scope: "customer"` and the account's `token_version`. Staff routes refuse any scoped token, and `/account/*` refuses staff tokens, so neither works on the other's routes. Tokens last 7 days.
 - `GET` and `PATCH /account/me` (name, phone as typed and **not verified**, marketing consent), `POST /account/logout-all` (ends every session), `DELETE /account/me` (removes the personal data, keeps an empty row, frees the email).
 - **Email** goes through any SMTP server: set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` (`notifications@vrikshastudios.com`) and optionally `EMAIL_REPLY_TO` (`info@vrikshastudios.com`) (see `deploy/compose/.env.example`). With no `SMTP_HOST`, development writes the email to the log so you can read the code; production answers 503 rather than silently dropping codes.
-- **Not done yet:** linking an account to the phone-keyed `customers` row and merging guest orders needs a verified phone (SMS comes later). Orders for a signed-in shopper, saved addresses and Razorpay checkout are the next parts of step 3.
+- **Saved addresses:** `GET/POST /account/addresses`, `PUT/DELETE /account/addresses/{id}`. Up to 10; the first saved is the default, and deleting the default promotes the newest of the rest. Always read through the account, so another shopper's address is a 404.
+- **Orders as a signed-in shopper:** `POST /account/checkout` takes the items plus a saved `address_id` or a one-off `address` (exactly one). Name and phone default from the address, then the account; the account's email is used. It runs the **same code as guest checkout** (`/public/checkout`): prices come from the server, stock and the pincode list are checked, the order is a draft and nothing is charged. The only difference is that the order records the account (`orders.account_id`). `POST /account/enquiry` does the same for a custom-piece request. `GET /account/orders` (newest first, paged) and `GET /account/orders/{number}` show only orders tied to the account, using the same cost-free `PublicOrder` shape.
+- Guest checkout and `GET /public/orders/{number}?phone=` are unchanged. A guest order is **not** pulled into an account because the phone matches, since the phone is not verified.
+- Deleting the account removes the saved addresses and personal data; orders stay as business records (the workshop still has to deliver them) with the customer details they already hold.
+- **Not done yet:** linking an account to the phone-keyed `customers` row and merging guest orders needs a verified phone (SMS comes later). Razorpay checkout in test mode and stock reservations are the next part of step 3.
 
 ## 5. Running it locally
 

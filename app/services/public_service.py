@@ -199,7 +199,9 @@ def _customer_for(
     return customer
 
 
-def checkout(uow: AbstractUnitOfWork, req: CheckoutRequest) -> PublicOrder:
+def checkout(
+    uow: AbstractUnitOfWork, req: CheckoutRequest, account_id=None
+) -> PublicOrder:
     phone = normalize_phone(req.phone)
     if not is_serviceable(req.pincode):
         raise HTTPException(
@@ -242,6 +244,7 @@ def checkout(uow: AbstractUnitOfWork, req: CheckoutRequest) -> PublicOrder:
         return Order(
             order_number=number,
             customer_id=customer.id,
+            account_id=account_id,
             order_type="standard",
             status="draft",
             source="web",
@@ -259,10 +262,12 @@ def checkout(uow: AbstractUnitOfWork, req: CheckoutRequest) -> PublicOrder:
             ],
         )
 
-    return _to_public_order(_new_order_with_retry(uow, build))
+    return to_public_order(_new_order_with_retry(uow, build))
 
 
-def enquiry(uow: AbstractUnitOfWork, req: EnquiryRequest) -> PublicOrder:
+def enquiry(
+    uow: AbstractUnitOfWork, req: EnquiryRequest, account_id=None
+) -> PublicOrder:
     phone = normalize_phone(req.phone)
     customer = _customer_for(uow, req.name, phone)
     specs = {
@@ -277,6 +282,7 @@ def enquiry(uow: AbstractUnitOfWork, req: EnquiryRequest) -> PublicOrder:
         return Order(
             order_number=number,
             customer_id=customer.id,
+            account_id=account_id,
             order_type="custom",
             status="draft",
             source="web",
@@ -286,7 +292,7 @@ def enquiry(uow: AbstractUnitOfWork, req: EnquiryRequest) -> PublicOrder:
             items=[OrderItem(item_name=req.what, quantity=1, unit_price=0)],
         )
 
-    return _to_public_order(_new_order_with_retry(uow, build))
+    return to_public_order(_new_order_with_retry(uow, build))
 
 
 def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder:
@@ -310,10 +316,10 @@ def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder
         raise not_found from None
     if owner != wanted:
         raise not_found
-    return _to_public_order(order)
+    return to_public_order(order)
 
 
-def _to_public_order(order: Order) -> PublicOrder:
+def to_public_order(order: Order) -> PublicOrder:
     zero = Decimal("0.00")
     final = order.final_amount or zero
     base = final if final > 0 else (order.estimated_amount or zero)

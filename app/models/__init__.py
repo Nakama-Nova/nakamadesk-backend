@@ -3,7 +3,11 @@ from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bom import BillOfMaterials  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
-from app.models.customer_account import CustomerAccount, LoginCode  # noqa: F401
+from app.models.customer_account import (  # noqa: F401
+    CustomerAccount,
+    CustomerAddress,
+    LoginCode,
+)
 from app.models.daily_wage import DailyWage  # noqa: F401
 from app.models.design import Design, DesignProduct  # noqa: F401
 from app.models.expense import Expense  # noqa: F401
