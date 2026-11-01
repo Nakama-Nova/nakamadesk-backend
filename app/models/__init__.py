@@ -18,6 +18,11 @@ from app.models.item import Item  # noqa: F401
 from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
 from app.models.letter import BusinessProfile, Letter  # noqa: F401
 from app.models.login_attempt import LoginAttempt  # noqa: F401
+from app.models.machine import (  # noqa: F401
+    Machine,
+    MachineDowntime,
+    MachineMaintenance,
+)
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
 from app.models.order_payment import OrderPayment  # noqa: F401
@@ -48,4 +53,5 @@ from app.models.stock_level import StockLevel  # noqa: F401
 from app.models.stock_reservation import StockReservation  # noqa: F401
 from app.models.supplier import Supplier  # noqa: F401
 from app.models.sync import SyncLog  # noqa: F401
+from app.models.tool import Tool, ToolIssue  # noqa: F401
 from app.models.user import User  # noqa: F401
