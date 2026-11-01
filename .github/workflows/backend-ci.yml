@@ -70,7 +70,7 @@ jobs:
       # Download from the run's "Artifacts" to read the HTML test and coverage reports.
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-test-reports
           path: reports/
