@@ -204,10 +204,22 @@ jobs:
           cat /tmp/restore.log
           grep -q "categories  backup=1  live=1" /tmp/restore.log
 
+      - name: The local development setup starts and answers on port 8000
+        run: |
+          $COMPOSE down -v
+          DEV="docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.dev.yml --env-file deploy/compose/dev.env"
+          echo "DEV=$DEV" >> "$GITHUB_ENV"
+          $DEV up -d --build api
+          for i in $(seq 1 30); do curl -fsS http://localhost:8000/health/ && exit 0; sleep 2; done
+          $DEV logs api migrate
+          exit 1
+
       - name: Logs on failure
         if: failure()
         run: $COMPOSE logs --no-color
 
       - name: Stop
         if: always()
-        run: $COMPOSE down -v
+        run: |
+          $COMPOSE down -v
+          if [ -n "$DEV" ]; then $DEV down -v; fi
