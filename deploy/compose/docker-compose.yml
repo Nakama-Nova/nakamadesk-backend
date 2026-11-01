@@ -1,0 +1,106 @@
+# One-VM deployment: Caddy (HTTPS) -> API -> Postgres, plus nightly backups to R2.
+# Run from this folder:  docker compose up -d --build        (see docs/DEPLOY.md)
+# Settings come from ./.env (copy .env.example). Nothing here holds a secret.
+name: nakama
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to your domain, e.g. api.example.com}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks: [edge]
+
+  api:
+    build: { context: ../.., dockerfile: Dockerfile }
+    image: nakama-api:${API_TAG:-local}
+    restart: unless-stopped
+    environment: &app_env
+      DATABASE_URL: postgresql://nakama:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/nakama
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY (32+ characters)}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      DELIVERY_PINCODES: ${DELIVERY_PINCODES:-}
+      GITHUB_RELEASES_TOKEN: ${GITHUB_RELEASES_TOKEN:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      # Caddy sits in front and overwrites X-Forwarded-For, so the limiter may believe it.
+      TRUST_PROXY_HEADERS: "1"
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    volumes:
+      - media:/data/media
+    mem_limit: 700m
+    networks: [edge, data]
+
+  # Runs once per deploy, before the API starts. Migrations must stay additive
+  # (docs/ONBOARDING.md) because the old API is still serving until this finishes.
+  migrate:
+    image: nakama-api:${API_TAG:-local}
+    build: { context: ../.., dockerfile: Dockerfile }
+    command: ["alembic", "upgrade", "head"]
+    environment: *app_env
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    networks: [data]
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nakama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: nakama
+    command: ["postgres", "-c", "shared_buffers=256MB", "-c", "log_min_duration_statement=500"]
+    shm_size: 256m
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nakama -d nakama"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 1500m
+    networks: [data]
+
+  # Nightly pg_dump + a copy of the media folder to R2. See deploy/backup/.
+  backup:
+    build: { context: ../backup }
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://nakama:${POSTGRES_PASSWORD}@db:5432/nakama
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-backup:nakama-backups}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_PING_URL: ${BACKUP_PING_URL:-}
+      RCLONE_CONFIG_BACKUP_TYPE: ${RCLONE_CONFIG_BACKUP_TYPE:-s3}
+      RCLONE_CONFIG_BACKUP_PROVIDER: ${RCLONE_CONFIG_BACKUP_PROVIDER:-Cloudflare}
+      RCLONE_CONFIG_BACKUP_ENDPOINT: ${S3_ENDPOINT_URL:-}
+      RCLONE_CONFIG_BACKUP_ACCESS_KEY_ID: ${BACKUP_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_BACKUP_SECRET_ACCESS_KEY: ${BACKUP_SECRET_ACCESS_KEY:-}
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - media:/media:ro
+    mem_limit: 200m
+    networks: [edge, data]
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge: {}
+  # No route out: the database can only be reached by the API, migrations and backups.
+  data:
+    internal: true

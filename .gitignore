@@ -24,3 +24,6 @@ media/
 
 full_source_dump.txt
 alembic/versions/*.ini
+
+# keep the example settings file in git
+!.env.example
