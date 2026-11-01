@@ -53,7 +53,7 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: env.MIGRATION_DATABASE_URL != ''
         with:
           python-version: "3.11"
