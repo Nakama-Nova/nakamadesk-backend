@@ -160,3 +160,54 @@ jobs:
       - name: Say so when a secret was found
         if: steps.secrets.outcome == 'failure'
         run: echo "::warning::gitleaks found something that looks like a secret. See the log above; rotate it if it is real."
+
+  # Builds the deployment images and proves the one-VM stack works end to end: the
+  # migration job runs, the API answers as a non-root user, and a backup can be
+  # restored. The backup goes to a local folder here; production sends it to R2.
+  docker:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f deploy/compose/docker-compose.yml --env-file deploy/compose/ci.env
+      LOCAL_BACKUP: -v /tmp/backups:/backups -e RCLONE_CONFIG_BACKUP_TYPE=local -e BACKUP_REMOTE=backup:/backups
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose file is valid
+        run: $COMPOSE config --quiet
+
+      - name: Build images, run migrations, start the API
+        run: $COMPOSE up -d --build api
+
+      - name: API answers its health check
+        run: |
+          for i in $(seq 1 30); do
+            $COMPOSE exec -T api python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health/', timeout=4)" && exit 0
+            sleep 2
+          done
+          $COMPOSE logs api migrate
+          exit 1
+
+      - name: Database is at the newest migration, API runs as a non-root user
+        run: |
+          current="$($COMPOSE exec -T api alembic current)"
+          echo "$current"
+          echo "$current" | grep -q "(head)"
+          test "$($COMPOSE exec -T api id -u)" != "0"
+
+      - name: Back up, then restore the backup into a scratch database
+        run: |
+          $COMPOSE exec -T db psql -U nakama -d nakama -c "insert into categories(name) values ('ci-backup-check')"
+          mkdir -p /tmp/backups
+          $COMPOSE run --rm --no-deps $LOCAL_BACKUP backup /scripts/backup.sh
+          $COMPOSE run --rm --no-deps $LOCAL_BACKUP backup /scripts/restore-test.sh > /tmp/restore.log
+          cat /tmp/restore.log
+          grep -q "categories  backup=1  live=1" /tmp/restore.log
+
+      - name: Logs on failure
+        if: failure()
+        run: $COMPOSE logs --no-color
+
+      - name: Stop
+        if: always()
+        run: $COMPOSE down -v

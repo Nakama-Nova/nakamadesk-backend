@@ -83,6 +83,8 @@ A manager marks someone present with `POST /attendance/mark-present` `{user_id, 
 
 ## 5. Running it locally
 
+To run it the way production does (Docker, Caddy, Postgres, backups), see [DEPLOY.md](DEPLOY.md). The first-login command there is the same `python -m app.cli create-owner`, run with `docker compose exec api python -m app.cli create-owner`.
+
 ### Backend
 
 ```bash

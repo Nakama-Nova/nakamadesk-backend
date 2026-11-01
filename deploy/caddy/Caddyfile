@@ -1,0 +1,9 @@
+# HTTPS in front of the API. Caddy gets and renews the certificate by itself when
+# SITE_ADDRESS is a real domain whose DNS points at this VM (ports 80 and 443 open).
+# SITE_ADDRESS=:80 serves plain HTTP, for local tests only.
+{$SITE_ADDRESS} {
+	# Caddy replaces any X-Forwarded-For a client sends, which is why the API may trust it
+	# (TRUST_PROXY_HEADERS). If you later put Cloudflare in front, add its ranges as
+	# `trusted_proxies` here first, or every visitor will look like Cloudflare.
+	reverse_proxy api:8000
+}
