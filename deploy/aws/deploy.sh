@@ -11,8 +11,12 @@ out() { aws cloudformation describe-stacks --stack-name "$STACK" \
 
 winpath() { cygpath -m "$1" 2>/dev/null || echo "$1"; } # aws.exe on Git Bash needs Windows paths
 BUCKET=$(out Bucket); INSTANCE=$(out InstanceId); URL=$(out ApiUrl)
-# Optional: SITE_ADDRESS=api2.example.com deploy.sh  serves that hostname instead of the sslip.io one.
-SITE=${SITE_ADDRESS:-}; [ -n "$SITE" ] && URL="https://$SITE"
+# Optional, and remembered on the instance for later deploys:
+#   SITE_ADDRESS=api.example.com,api2.example.com   serve these hostnames (comma, no spaces)
+#                                   instead of the sslip.io one
+#   CORS_ORIGINS=https://a.com,https://b.com   browser origins allowed to call the API
+SITE=${SITE_ADDRESS:-}; CORS=${CORS_ORIGINS:-}
+[ -n "$SITE" ] && URL="https://${SITE%%,*}"  # the first hostname answers the health check
 TAG=$(date -u +%Y%m%d%H%M%S)-$(git rev-parse --short HEAD)
 TARBALL=$(mktemp -d)/release.tgz
 
@@ -25,8 +29,11 @@ read -r -d '' REMOTE <<EOF || true
 set -euo pipefail
 export PATH=\$PATH:/snap/bin
 cloud-init status --wait >/dev/null 2>&1 || true  # first boot may still be installing Docker
+set_kv() { if grep -q "^\$1=" /opt/nakama/aws.env; then sed -i "s|^\$1=.*|\$1=\$2|" /opt/nakama/aws.env; else echo "\$1=\$2" >> /opt/nakama/aws.env; fi; }
+# Overrides are saved on the instance, so a later plain deploy keeps them.
+if [ -n "$SITE" ]; then set_kv SITE_ADDRESS "$SITE"; fi
+if [ -n "$CORS" ]; then set_kv CORS_ORIGINS "$CORS"; fi
 . /opt/nakama/aws.env
-if [ -n "$SITE" ]; then SITE_ADDRESS="$SITE"; fi
 D=/opt/nakama/releases/$TAG
 mkdir -p \$D && aws s3 cp s3://\$S3_BUCKET/deploy/$TAG.tgz - --region \$AWS_REGION | tar -xz -C \$D
 DBPW=\$(aws secretsmanager get-secret-value --region \$AWS_REGION --secret-id \$DB_SECRET_ID --query SecretString --output text)
@@ -40,7 +47,7 @@ SECRET_KEY=\$SK
 S3_BUCKET=\$S3_BUCKET
 S3_REGION=\$AWS_REGION
 CORS_ORIGINS=\$CORS_ORIGINS
-SITE_ADDRESS=\$SITE_ADDRESS
+SITE_ADDRESS="\${SITE_ADDRESS//,/, }"
 ENVEOF
 API_TAG=$TAG docker compose up -d --build
 ln -sfn \$D /opt/nakama/current
