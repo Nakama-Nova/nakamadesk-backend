@@ -8,6 +8,7 @@ from uuid import UUID
 
 from app.models.attendance import Attendance
 from app.models.customer import Customer
+from app.models.daily_wage import DailyWage
 from app.models.enums import UserRole
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
@@ -22,7 +23,8 @@ from app.schemas.sync import (
     SyncPullResponse,
     SyncPushResponse,
 )
-from app.services import sku_service
+from app.services import plant_unit_service, sku_service
+from app.services.workforce_service import calculate_wage
 
 logger = logging.getLogger(__name__)
 
@@ -200,9 +202,19 @@ class StockDeltaResolver(ConflictResolver):
         return True
 
 
+_GEO_INPUT = ("latitude", "longitude", "accuracy_m")  # what a client may send
+_ATTENDANCE_LOCATION = (*_GEO_INPUT, "plant_unit_id", "location_status")
+
 CONFLICT_RESOLVER_REGISTRY = {
-    # wage and pay status are never taken from a client update (REST /wages pays them)
-    "attendance": LWWResolver(server_only=("daily_wage", "payment_status")),
+    # wage, pay status and where it was marked are never taken from a client update
+    # (REST /wages pays them; the server matches the GPS position to a plant unit)
+    "attendance": LWWResolver(
+        server_only=(
+            "daily_wage",
+            "payment_status",
+            *_ATTENDANCE_LOCATION,
+        )
+    ),
     "item": StockDeltaResolver(),
     "raw_material": StockDeltaResolver(),
 }
@@ -289,7 +301,7 @@ class GenericSyncHandler(BaseSyncHandler):
         obj_data["id"] = record_id
 
         if hasattr(self.model_class, "user_id"):
-            obj_data["user_id"] = current_user.id
+            obj_data["user_id"] = self._row_user_id(payload_data, current_user)
         if hasattr(self.model_class, "recorded_by"):
             obj_data["recorded_by"] = current_user.id
 
@@ -318,6 +330,10 @@ class GenericSyncHandler(BaseSyncHandler):
             repo.add(new_obj)
             uow.flush()
         return record_id, None
+
+    def _row_user_id(self, payload_data: dict, current_user: User) -> UUID:
+        """Whose row this is. By default the person pushing it."""
+        return current_user.id
 
     def _attach_children(self, new_obj: Any, payload_data: dict) -> None:
         """Hook for entities whose payload carries nested rows (default: none)."""
@@ -542,9 +558,77 @@ class AttendanceSyncHandler(GenericSyncHandler):
             else payload
         )
         data["payment_status"] = "pending"
+        # a client may report a position, never the unit or its status
+        for key in ("plant_unit_id", "location_status"):
+            data.pop(key, None)
+        if all(data.get(k) is None for k in _GEO_INPUT):
+            for key in _GEO_INPUT:
+                data.pop(key, None)
+            if _role_of(current_user) not in _COST_VIEWERS:
+                data["daily_wage"] = current_user.base_daily_wage or Decimal("0")
+            return super().apply_create(uow, data, current_user, op)
+        error = self._locate(uow, data, current_user)
+        if error:
+            return None, error
+        record_id, error = super().apply_create(uow, data, current_user, op)
+        if not error:  # a replay finds the row and its wage already there
+            row = uow.attendance.get_by_id(record_id)
+            if row is not None and row.wage_entry is None:
+                uow.wages.add(
+                    DailyWage(
+                        attendance_id=row.id,
+                        amount=calculate_wage(row.status, row.daily_wage),
+                        payment_status="pending",
+                    )
+                )
+                uow.flush()
+        return record_id, error
+
+    def _row_user_id(self, payload_data: dict, current_user: User) -> UUID:
+        # a manager's GPS-marked row is about the person marked, not the manager
+        if payload_data.get("location_status"):
+            return payload_data["user_id"]
+        return current_user.id
+
+    @staticmethod
+    def _locate(
+        uow: AbstractUnitOfWork, data: dict, current_user: User
+    ) -> Optional[str]:
+        """
+        Same rules as POST /attendance/mark-present, for a row marked offline: owner or
+        manager only, present or half-day, one row a day, the wage from the person's
+        own base_daily_wage, the unit from the position. Fills `data` in; returns an
+        error message or None.
+        """
         if _role_of(current_user) not in _COST_VIEWERS:
-            data["daily_wage"] = current_user.base_daily_wage or Decimal("0")
-        return super().apply_create(uow, data, current_user, op)
+            return "Access denied: only an owner or manager can mark attendance by GPS"
+        if data.get("status") not in ("present", "half-day"):
+            return "A GPS-marked attendance must be 'present' or 'half-day'"
+        if (
+            data["user_id"] == current_user.id
+            and _role_of(current_user) != UserRole.OWNER
+        ):
+            return "You cannot mark your own attendance"
+        staff = uow.users.get_by_id(data["user_id"])
+        if not staff or not staff.is_active:
+            return "User not found"
+        clash = (
+            uow.session.query(Attendance)
+            .filter(Attendance.user_id == staff.id, Attendance.date == data["date"])
+            .first()
+        )
+        if clash is not None and str(clash.id) != str(data.get("id")):
+            return "Attendance already recorded for this user on this date"
+        try:
+            where = plant_unit_service.locate(
+                uow.session,
+                *(data.get(k) for k in _GEO_INPUT),
+            )
+        except plant_unit_service.GeoError as e:
+            return str(e)
+        data.update(where.as_columns())
+        data["daily_wage"] = staff.base_daily_wage or Decimal("0")
+        return None
 
 
 class RawMaterialSyncHandler(GenericSyncHandler):

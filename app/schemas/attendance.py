@@ -62,6 +62,11 @@ class AttendanceResponse(AttendanceBase):
 
     id: UUID
     recorded_by: UUID
+    plant_unit_id: Optional[UUID] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    accuracy_m: Optional[float] = None
+    location_status: Optional[str] = None  # on_site, off_site; empty = no GPS
     created_at: datetime
     updated_at: Optional[datetime] = None
 

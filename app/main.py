@@ -29,6 +29,7 @@ from app.api import (
     notifications,
     orders,
     payroll,
+    plant_units,
     production,
     public,
     purchases,
@@ -78,6 +79,7 @@ app.include_router(dashboard.router)
 app.include_router(raw_materials.router)
 app.include_router(bom.router)
 app.include_router(attendance.router)
+app.include_router(plant_units.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)
 app.include_router(payroll.router)
@@ -98,7 +100,6 @@ app.include_router(notifications.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
 app.include_router(masters.categories)
-app.include_router(masters.brands)
 app.include_router(masters.inventory)
 app.mount("/lab/static", StaticFiles(directory=lab.STATIC_DIR), name="lab-static")
 

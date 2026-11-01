@@ -1,4 +1,4 @@
-"""Suppliers, categories, brands, stock ledger and raw material adjustments."""
+"""Suppliers, categories, stock ledger and raw material adjustments."""
 
 import uuid
 
@@ -9,7 +9,7 @@ def sku():
     return f"MS-{uuid.uuid4().hex[:8]}"
 
 
-@pytest.mark.parametrize("path", ["/suppliers/", "/categories/", "/brands/"])
+@pytest.mark.parametrize("path", ["/suppliers/", "/categories/"])
 def test_crud_and_duplicate_names(auth_client, path):
     name = f"Name {uuid.uuid4().hex[:6]}"
     body = {"name": name} if path != "/suppliers/" else {"name": name, "phone": "98765"}
@@ -22,20 +22,15 @@ def test_crud_and_duplicate_names(auth_client, path):
     assert renamed.status_code == 200 and renamed.json()["name"] == name + " 2"
     assert auth_client.put(f"{path}{uuid.uuid4()}", json=body).status_code == 404
 
-    if (
-        path != "/suppliers/"
-    ):  # supplier names are not unique; categories and brands are
+    if path != "/suppliers/":  # supplier names are not unique; category names are
         assert auth_client.post(path, json={"name": name + " 2"}).status_code == 409
     assert auth_client.delete(f"{path}{rid}").status_code == 200
     assert auth_client.delete(f"{path}{rid}").status_code == 404
 
 
-def test_a_category_or_brand_in_use_cannot_be_deleted(auth_client):
+def test_a_category_in_use_cannot_be_deleted(auth_client):
     cat = auth_client.post(
         "/categories/", json={"name": f"Cat {uuid.uuid4().hex[:6]}"}
-    ).json()
-    brand = auth_client.post(
-        "/brands/", json={"name": f"Br {uuid.uuid4().hex[:6]}"}
     ).json()
     item = auth_client.post(
         "/items/",
@@ -44,13 +39,11 @@ def test_a_category_or_brand_in_use_cannot_be_deleted(auth_client):
             "name": "Chair",
             "selling_price": 100,
             "category_id": cat["id"],
-            "brand_id": brand["id"],
         },
     )
     assert item.status_code == 200, item.text
-    for path, row in (("/categories/", cat), ("/brands/", brand)):
-        r = auth_client.delete(f"{path}{row['id']}")
-        assert r.status_code == 409 and "used by products" in r.json()["detail"]
+    r = auth_client.delete(f"/categories/{cat['id']}")
+    assert r.status_code == 409 and "used by products" in r.json()["detail"]
 
 
 def test_a_supplier_with_purchases_cannot_be_deleted(auth_client):

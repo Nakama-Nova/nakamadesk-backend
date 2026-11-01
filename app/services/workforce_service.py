@@ -5,9 +5,13 @@ from uuid import UUID
 
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
+from app.models.enums import UserRole
+from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
+from app.schemas.plant_unit import GeoAttendanceIn
 from app.schemas.wage import WagePaymentRequest
+from app.services import plant_unit_service
 
 
 def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
@@ -157,7 +161,10 @@ def check_out(
 
 
 def mark_attendance(
-    uow: AbstractUnitOfWork, attendance_data: AttendanceCreate, recorder_id: UUID
+    uow: AbstractUnitOfWork,
+    attendance_data: AttendanceCreate,
+    recorder_id: UUID,
+    location: Optional[plant_unit_service.Location] = None,
 ) -> Attendance:
     """
     Explicitly record attendance for a specific date (used for bulk or sync).
@@ -168,6 +175,8 @@ def mark_attendance(
         uow (AbstractUnitOfWork): Unit of Work.
         attendance_data (AttendanceCreate): Details including user, date, and status.
         recorder_id (UUID): ID of the person recording.
+        location (Location): Where the recorder's phone was, already checked and
+            matched to a plant unit by the server (see mark_present_at_location).
 
     Returns:
         Attendance: The persisted attendance record.
@@ -201,7 +210,9 @@ def mark_attendance(
 
         # 1. Create attendance record
         db_attendance = Attendance(
-            **attendance_data.model_dump(), recorded_by=recorder_id
+            **attendance_data.model_dump(),
+            **(location.as_columns() if location else {}),
+            recorded_by=recorder_id,
         )
         uow.attendance.add(db_attendance)
         uow.flush()  # Get ID
@@ -217,6 +228,44 @@ def mark_attendance(
         uow.commit()
     uow.refresh(db_attendance)
     return db_attendance
+
+
+def mark_present_at_location(
+    uow: AbstractUnitOfWork, data: GeoAttendanceIn, recorder: User
+) -> Attendance:
+    """
+    A manager marks one person present from the phone, with the phone's GPS position.
+
+    The server checks the position, picks the plant unit and takes the wage from the
+    person's own base_daily_wage; none of those come from the client. A position inside
+    no unit is still recorded, as off_site, for the owner to review. The date is today
+    on the server. Everything else (one record a day, idempotent client_id, the wage
+    entry) is mark_attendance.
+    """
+    from fastapi import HTTPException
+
+    if data.user_id == recorder.id and recorder.role != UserRole.OWNER.value:
+        raise HTTPException(
+            status_code=403, detail="You cannot mark your own attendance"
+        )
+    staff = uow.users.get_by_id(data.user_id)
+    if not staff or not staff.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        location = plant_unit_service.locate(
+            uow.session, data.latitude, data.longitude, data.accuracy_m
+        )
+    except plant_unit_service.GeoError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+
+    create = AttendanceCreate(
+        user_id=staff.id,
+        date=datetime.now(timezone.utc).date(),
+        status=data.status,
+        daily_wage=staff.base_daily_wage or Decimal("0"),
+        client_id=data.client_id,
+    )
+    return mark_attendance(uow, create, recorder.id, location)
 
 
 def get_pending_wages(

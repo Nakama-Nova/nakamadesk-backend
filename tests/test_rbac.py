@@ -163,7 +163,12 @@ def test_invalid_role_rejected(client: TestClient, db):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
 
-    response = client.get("/reports/sales")
-    assert response.status_code == 403
-
-    app.dependency_overrides.clear()
+    try:
+        response = client.get("/reports/sales")
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+        # left behind, a row with a role outside the enum breaks GET /auth/ for every
+        # later test that lists users
+        db.delete(bad_user)
+        db.commit()

@@ -42,7 +42,7 @@ Legend: ✅ verified in the repo · ⚠️ assumption, please confirm.
 ```
 nakamadesk-backend (FastAPI 0.129, SQLAlchemy 2, Alembic, Postgres, JWT HS256)
   routers: auth, items, sales, customers, invoices, orders, production, purchases,
-           raw_materials, bom, attendance, wages, reports, dashboard, sync, health
+           raw_materials, bom, attendance, plant-units, wages, reports, dashboard, sync, health
   models:  Item(version_id, GST/HSN, image_url), Order(standard|custom, JSONB custom_specs,
            advance_paid), ProductionJob, BOM, InventoryMovement, Sale, Customer, SyncLog, AuditLog ...
   sync:    POST /sync/push (idempotent via SyncLog.client_id, max 500 ops), GET /sync/pull

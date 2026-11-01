@@ -21,7 +21,6 @@ class ItemBase(BaseModel):
     name: str
     description: Optional[str] = None
     category_id: Optional[UUID] = None
-    brand_id: Optional[UUID] = None
     unit: str = "pcs"
     purchase_price: Decimal = Decimal("0.00")
     selling_price: Decimal = Decimal("0.00")
@@ -94,7 +93,6 @@ class ItemUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[UUID] = None
-    brand_id: Optional[UUID] = None
     unit: Optional[str] = None
     purchase_price: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
