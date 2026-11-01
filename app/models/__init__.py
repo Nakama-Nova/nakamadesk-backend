@@ -1,6 +1,7 @@
 from app.models.attendance import Attendance  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bom import BillOfMaterials  # noqa: F401
+from app.models.budget import Budget  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.customer_account import (  # noqa: F401
