@@ -37,6 +37,8 @@ class Settings:
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
     EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
+    # Where a shopper's reply goes, if different from the sender (e.g. info@).
+    EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 

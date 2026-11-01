@@ -364,3 +364,43 @@ def test_deleting_the_account_removes_the_data_and_frees_the_email(client, outbo
         "/account/me", headers=bearer(again.json()["access_token"])
     ).json()["id"]
     assert new_id != account_id
+
+
+def test_the_email_goes_out_from_notifications_with_replies_to_info(monkeypatch):
+    from app.core.config import settings
+
+    seen = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout):
+            seen["server"] = (host, port)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def starttls(self):
+            seen["tls"] = True
+
+        def login(self, user, password):
+            seen["login"] = user
+
+        def send_message(self, msg):
+            seen["msg"] = msg
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(settings, "SMTP_USER", "mailer")
+    monkeypatch.setattr(
+        settings, "EMAIL_FROM", "Vriksha Studios <notifications@vrikshastudios.com>"
+    )
+    monkeypatch.setattr(settings, "EMAIL_REPLY_TO", "info@vrikshastudios.com")
+
+    email_service.send("shopper@example.com", "Your code: 123456", "Body")
+    msg = seen["msg"]
+    assert seen["tls"] and seen["login"] == "mailer"
+    assert msg["From"] == "Vriksha Studios <notifications@vrikshastudios.com>"
+    assert msg["Reply-To"] == "info@vrikshastudios.com"
+    assert msg["To"] == "shopper@example.com"

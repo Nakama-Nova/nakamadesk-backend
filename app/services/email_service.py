@@ -34,6 +34,8 @@ def send(to: str, subject: str, body: str) -> None:
     msg = EmailMessage()
     msg["From"] = settings.EMAIL_FROM
     msg["To"] = to
+    if settings.EMAIL_REPLY_TO:
+        msg["Reply-To"] = settings.EMAIL_REPLY_TO
     msg["Subject"] = subject
     msg.set_content(body)
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as smtp:
