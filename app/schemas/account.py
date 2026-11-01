@@ -1,8 +1,16 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    model_validator,
+)
+
+from app.schemas.public import CheckoutLine
 
 
 class CodeRequest(BaseModel):
@@ -42,3 +50,50 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     phone: Optional[str] = Field(default=None, pattern=r"^\+?\d[\d ]{6,14}$")
     marketing_consent: Optional[bool] = None
+
+
+class AddressIn(BaseModel):
+    label: Optional[str] = Field(default=None, max_length=30)
+    recipient_name: str = Field(min_length=2, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=20)
+    address: str = Field(min_length=5, max_length=300)
+    town: str = Field(min_length=2, max_length=100)
+    pincode: str = Field(pattern=r"^\d{6}$")
+    is_default: bool = False
+
+
+class AddressOut(AddressIn):
+    id: UUID
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AccountCheckoutRequest(BaseModel):
+    """
+    Place an order as a signed-in shopper. Say where to deliver with a saved
+    `address_id` or a one-off `address` (not both). Name and phone default to the
+    address, then the account; prices always come from the server.
+    """
+
+    items: List[CheckoutLine] = Field(min_length=1, max_length=20)
+    pay_option: Literal["advance_upi", "on_delivery"] = "advance_upi"
+    note: Optional[str] = Field(default=None, max_length=500)
+    address_id: Optional[UUID] = None
+    address: Optional[AddressIn] = None
+    name: Optional[str] = Field(default=None, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=20)
+
+    @model_validator(mode="after")
+    def one_address(self):
+        if (self.address_id is None) == (self.address is None):
+            raise ValueError("give either address_id or address")
+        return self
+
+
+class AccountEnquiryRequest(BaseModel):
+    what: str = Field(min_length=2, max_length=200)
+    description: str = Field(min_length=5, max_length=2000)
+    wood: Optional[str] = Field(default=None, max_length=100)
+    size: Optional[str] = Field(default=None, max_length=100)
+    budget: Optional[str] = Field(default=None, max_length=100)
+    name: Optional[str] = Field(default=None, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=20)

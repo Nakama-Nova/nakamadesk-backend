@@ -58,6 +58,35 @@ class CustomerAccount(Base):
     last_login_at = Column(DateTime, nullable=True)
 
 
+class CustomerAddress(Base):
+    """A delivery address a signed-in shopper saved. Always read through the account."""
+
+    __tablename__ = "customer_addresses"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("customer_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+    label = Column(String, nullable=True)  # "Home", "Shop"
+    recipient_name = Column(String, nullable=False)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=False)
+    town = Column(String, nullable=False)
+    pincode = Column(String, nullable=False)
+    is_default = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+
 class LoginCode(Base):
     """
     A one-time sign-in code sent by email. Only a keyed hash of the code is stored.

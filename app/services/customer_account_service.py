@@ -21,7 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.models.customer_account import CustomerAccount, LoginCode
+from app.models.customer_account import CustomerAccount, CustomerAddress, LoginCode
 from app.services import email_service
 
 logger = logging.getLogger(__name__)
@@ -169,6 +169,7 @@ def erase(db: Session, account: CustomerAccount) -> None:
     Delete the shopper's data. The row stays (orders will point at it) but holds no
     personal data, and the old email can sign up afresh as a new account.
     """
+    db.query(CustomerAddress).filter(CustomerAddress.account_id == account.id).delete()
     account.email = f"deleted-{account.id}@invalid"
     account.name = None
     account.phone = None

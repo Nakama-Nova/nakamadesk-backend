@@ -53,6 +53,13 @@ class Order(Base):
     customer_id = Column(
         UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True, index=True
     )
+    # The website account that placed it, when the shopper was signed in.
+    account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("customer_accounts.id"),
+        nullable=True,
+        index=True,
+    )
     order_type = Column(
         String, nullable=False, default="standard"
     )  # 'standard' | 'custom'
