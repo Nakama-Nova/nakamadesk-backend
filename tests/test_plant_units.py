@@ -4,7 +4,7 @@ client may and may not decide, who may mark, and the offline sync path.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
@@ -30,7 +30,7 @@ def only_my_units(db):
 def make_unit(db, code, lat=LAT, lon=LON, radius=50, **kw):
     unit = PlantUnit(
         name=f"{code} {uuid.uuid4().hex[:6]}",
-        code=f"{code}{uuid.uuid4().hex[:3]}".upper(),
+        code=f"{code}{uuid.uuid4().hex[:8]}".upper(),
         latitude=lat,
         longitude=lon,
         radius_m=radius,
@@ -588,9 +588,10 @@ def test_pull_sends_the_location_columns(client_as, db):
     client, _ = client_as("manager")
     staff = make_staff(db)
     op, att_id = att_op(staff, latitude=LAT, longitude=LON, accuracy_m=5)
+    # a far-future stamp, so the first page of a pull holds only this row
+    op["updated_at"] = "2097-06-01T12:00:00+00:00"
     assert push(client, op)["failed"] == []
-    since = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-    pulled = client.get("/sync/pull", params={"last_sync": since})
+    pulled = client.get("/sync/pull", params={"last_sync": "2097-06-01T11:59:00Z"})
     assert pulled.status_code == 200, pulled.text
     row = next(a for a in pulled.json()["attendance"] if a["id"] == att_id)
     assert row["plant_unit_id"] == str(unit.id) and row["location_status"] == "on_site"
