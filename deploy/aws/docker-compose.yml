@@ -1,0 +1,48 @@
+# AWS variant of deploy/compose: Caddy -> API, with Postgres on RDS and files in S3.
+# Run on the instance by deploy.sh; settings come from ./.env (rendered at deploy time).
+name: nakama
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    logging: *logging
+
+  api:
+    build: { context: ../.., dockerfile: Dockerfile }
+    image: nakama-api:${API_TAG:-local}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TRUST_PROXY_HEADERS: "1" # Caddy overwrites X-Forwarded-For
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    volumes:
+      - /srv/nakama/media:/data/media
+    mem_limit: 900m
+    logging: *logging
+
+  # Runs once per deploy before the API restarts. Migrations must stay additive (docs/ONBOARDING.md).
+  migrate:
+    image: nakama-api:${API_TAG:-local}
+    build: { context: ../.., dockerfile: Dockerfile }
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    restart: "no"
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

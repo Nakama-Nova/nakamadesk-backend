@@ -28,8 +28,9 @@ class S3Store:
             "s3",
             endpoint_url=settings.S3_ENDPOINT_URL or None,
             region_name=settings.S3_REGION or "auto",
-            aws_access_key_id=settings.S3_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY,
+            # empty = None, so boto3 falls back to the instance role on AWS
+            aws_access_key_id=settings.S3_ACCESS_KEY_ID or None,
+            aws_secret_access_key=settings.S3_SECRET_ACCESS_KEY or None,
             config=Config(
                 signature_version="s3v4",
                 # S3-compatible services (Supabase, R2, MinIO) want /bucket/key URLs
