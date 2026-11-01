@@ -163,7 +163,12 @@ def test_invalid_role_rejected(client: TestClient, db):
 
     app.dependency_overrides[get_current_user] = override_get_current_user
 
-    response = client.get("/reports/sales")
-    assert response.status_code == 403
-
-    app.dependency_overrides.clear()
+    try:
+        response = client.get("/reports/sales")
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+        # the test database is shared: a user whose role does not exist would make
+        # every later "list all users" call fail to serialise
+        db.delete(bad_user)
+        db.commit()
