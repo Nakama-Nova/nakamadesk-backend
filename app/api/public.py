@@ -16,6 +16,7 @@ from app.schemas.public import (
     CheckoutRequest,
     DeliveryCheck,
     EnquiryRequest,
+    PaymentInfo,
     PublicOrder,
     PublicProduct,
 )
@@ -42,6 +43,12 @@ def catalog(
 def product(slug: str, uow: AbstractUnitOfWork = Depends(get_uow)):
     """One published product with its photos and (if any) 3D model."""
     return public_service.get_product(uow, slug)
+
+
+@router.get("/payment-info", response_model=PaymentInfo)
+def payment_info():
+    """How to pay: confirm with staff by phone, then cash or UPI."""
+    return public_service.payment_info()
 
 
 @router.get("/delivery-check", response_model=DeliveryCheck)

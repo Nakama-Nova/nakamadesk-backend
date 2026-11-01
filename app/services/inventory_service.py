@@ -29,7 +29,12 @@ from app.models.raw_material import RawMaterial
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemUpdate
 from app.schemas.stock import StockUpdate
-from app.services import pricing, sku_service, stock_location_service
+from app.services import (
+    pricing,
+    reservation_service,
+    sku_service,
+    stock_location_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +276,7 @@ def remove_finished_goods(
     created_by: Optional[UUID] = None,
     allow_negative: bool = False,
     location_id: Optional[UUID] = None,
+    billing_order_id: Optional[UUID] = None,
 ) -> Item:
     """
     Deduct finished goods stock (sales path) and log the movement.
@@ -301,11 +307,16 @@ def remove_finished_goods(
         raise HTTPException(status_code=404, detail="Item not found")
 
     stock_before = item.current_stock or 0
-    if stock_before < quantity:
+    # units set aside for other shoppers' paid-for orders are not ours to sell; the
+    # order being billed may use its own
+    sellable = reservation_service.available(
+        uow.session, item, exclude_order_id=billing_order_id
+    )
+    if sellable < quantity:
         if not allow_negative:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for '{item.name}'. Available: {stock_before}",
+                detail=f"Insufficient stock for '{item.name}'. Available: {max(sellable, 0)}",
             )
         logger.warning(
             "negative stock allowed | item=%s | sold %d, had %d | sale=%s",

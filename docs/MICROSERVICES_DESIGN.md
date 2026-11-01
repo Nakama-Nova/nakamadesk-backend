@@ -17,7 +17,7 @@ Legend: ✅ taken from the repo · ⚠️ assumption, please confirm.
 | **4 locations, more later: three production units and one open shop.** | `location_id` is in the model from day one for stock, sales and attendance. Adding a fifth location is a row, not a project. The layout is in "Your site" below. |
 | **Track the current budget of Machines and of raw-item inventory.** | Finance holds a budget for each of those two categories and shows budget, spent, remaining and the current value (see "Budgets" below). |
 | **Trade licence and GST registration: both still to come.** | No GST on any bill yet. Razorpay stays in test mode and staff record UPI payments by hand until the licence and KYC are done. Both are switches, not rebuilds (see "Licence and GST" below). |
-| **Razorpay.** | `payments` is a Razorpay adapter behind a small provider interface (see "Razorpay" below). |
+| **Razorpay (2026-11-01 update: no account yet).** | For now customers pay cash or UPI after staff confirm by phone (ONBOARDING 4d). A Razorpay version is built and parked on branch `feature/razorpay-checkout`; `payments` stays a Razorpay adapter behind a small provider interface (see "Razorpay" below) for when an account exists. |
 
 ### Your site (4 locations)
 
@@ -99,7 +99,7 @@ Each step ships on its own and leaves the system working.
 |---|---|---|
 | 1 | Docker images and compose on the VM; move the API off Vercel; backups to R2 with a restore test; import-linter rules for context boundaries; outbox table | M |
 | 2 | Turn `plant_units` into `locations` (the 3 units + the Shop); `location_id` on stock, sales and attendance; stock transfers between units; Shop till | M. **Built** (see ONBOARDING 4b): shop kind and till flag, stock levels, transfers, location on sales, purchases and adjustments. Left for later: till sessions and cash counts, an in-transit state, placing production output, and the rename of the table |
-| 3 | Customer accounts, catalog read API, storefront on the new APIs, Razorpay checkout in test mode, reservations | L. Built so far: customer accounts by emailed code, saved addresses, and orders tied to the account (ONBOARDING 4c). The catalog read API already exists as `/public/catalog`. Still to do: Razorpay checkout in test mode, stock reservations |
+| 3 | Customer accounts, catalog read API, storefront on the new APIs, Razorpay checkout in test mode, reservations | L. Built so far: customer accounts by emailed code, saved addresses, and orders tied to the account (ONBOARDING 4c). The catalog read API already exists as `/public/catalog`. Customers pay cash or UPI after staff confirm by phone, and confirming holds the stock (ONBOARDING 4d), because there is no Razorpay account yet. The Razorpay checkout is built and parked on branch `feature/razorpay-checkout` |
 | 4 | `finance` container: ledger and posting rules in **shadow mode** for a month, reconciled to the paisa, then cut over | L |
 | 5 | Machines and tools registers; Machines and Raw-items budgets in Finance | M |
 | 6 | `media3d` + `ai-worker`: scan jobs, 3D links with manager confirmation | M |
