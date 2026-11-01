@@ -27,6 +27,8 @@ class Settings:
     CORS_ORIGINS: list = [
         v.strip() for v in os.getenv("CORS_ORIGINS", "").split(",") if v.strip()
     ]
+    # Phones reporting a GPS fix vaguer than this (metres) cannot mark attendance.
+    GPS_MAX_ACCURACY_M: float = float(os.getenv("GPS_MAX_ACCURACY_M", "100"))
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 

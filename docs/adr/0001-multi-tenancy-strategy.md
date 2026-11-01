@@ -20,7 +20,7 @@ grown single-tenant by omission. Concretely, today:
   `app/models/`.
 - Several tables enforce **globally** unique constraints that only make
   sense within one business: `items.sku`, `raw_materials.name`,
-  `brands.name`, `categories.name`, `users.username`, `users.email`,
+  `categories.name`, `users.username`, `users.email`,
   `sales.invoice_number`, `orders` number, `production_jobs` number.
   If two businesses ever shared one backend deployment, they would
   collide on SKUs, item names, invoice numbers, and usernames.

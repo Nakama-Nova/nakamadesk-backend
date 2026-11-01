@@ -14,6 +14,7 @@ from app.schemas.attendance import (
     AttendanceResponse,
     AttendanceUpdate,
 )
+from app.schemas.plant_unit import GeoAttendanceIn
 from app.services import workforce_service
 
 router = APIRouter(prefix="/attendance", tags=["Workforce"])
@@ -41,6 +42,26 @@ def mark_attendance(
         AttendanceResponse: The created attendance record.
     """
     return workforce_service.mark_attendance(uow, attendance, current_user.id)
+
+
+@router.post("/mark-present", response_model=AttendanceResponse)
+def mark_present_at_location(
+    body: GeoAttendanceIn,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Mark a person present from the manager's phone, with the phone's GPS position.
+
+    RBAC: OWNER and MANAGER only (SALES keeps the older routes, not this one).
+
+    The server picks the plant unit from the position and the wage from the person's
+    own base_daily_wage; the request cannot name either. A position inside no unit is
+    recorded as location_status="off_site" for the owner to review, not rejected.
+    A position that is out of range or reported with accuracy_m above
+    GPS_MAX_ACCURACY_M (100 m by default) is rejected with 422.
+    """
+    return workforce_service.mark_present_at_location(uow, body, current_user)
 
 
 @router.post("/check-in", response_model=AttendanceResponse)
@@ -124,6 +145,7 @@ def get_all_attendance(
     user_id: Optional[UUID] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
+    location_status: Optional[str] = Query(None, pattern="^(on_site|off_site)$"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(
@@ -133,6 +155,7 @@ def get_all_attendance(
 ):
     """
     Retrieve all attendance records with optional filters and pagination.
+    location_status=off_site lists the GPS-marked rows outside every plant unit.
 
     RBAC: Restricted to OWNER, MANAGER, and SALES roles.
 
@@ -140,6 +163,7 @@ def get_all_attendance(
         user_id (Optional[UUID]): Filter by user ID.
         start_date (Optional[date]): Filter by start date.
         end_date (Optional[date]): Filter by end date.
+        location_status (Optional[str]): on_site or off_site.
         limit (int): Maximum records to return.
         offset (int): Records to skip.
         current_user (User): Authenticated user.
@@ -155,6 +179,8 @@ def get_all_attendance(
         query = query.filter(Attendance.date >= start_date)
     if end_date:
         query = query.filter(Attendance.date <= end_date)
+    if location_status:
+        query = query.filter(Attendance.location_status == location_status)
     return query.limit(limit).offset(offset).all()
 
 

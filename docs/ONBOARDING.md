@@ -50,7 +50,8 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Dashboard summary | owner, manager |
 | Raw materials | create and list: owner, manager; delete: owner only |
 | BOM | create and delete: owner, achari; read: owner, manager, achari |
-| Attendance | create, check-in, check-out, list all: owner, manager, sales; `GET /my`: any; `PATCH`: owner, manager |
+| Attendance | create, check-in, check-out, list all: owner, manager, sales; `POST /mark-present` (GPS): owner, manager; `GET /my`: any; `PATCH`: owner, manager |
+| Plant units | list: any signed-in user; create, update: owner only |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
 | Orders | create, list, get: owner, manager, sales; status change: owner, manager |
 | Production jobs | create, start, complete: owner, manager; list and get: owner, manager, achari |
@@ -62,9 +63,23 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 - **Push** `POST /sync/push`: a batch (max 500) of `{id, entity, action, payload, updated_at}`. `id` is the client's operation UUID and is stored as `SyncLog.client_id` (unique), which makes pushes **idempotent**: replaying a batch is safe.
 - Each operation runs in its own **SAVEPOINT** (`begin_nested`), so one bad operation fails alone and the rest commit. Response is `{success: [...], failed: [...]}`. Unexpected errors are logged server-side and returned as a generic message.
 - Entities with handlers (`SYNC_HANDLER_REGISTRY`): `sale`, `item`, `attendance`, `raw_material`.
+- **Attendance over sync** never lets the client decide the wage, pay status, plant unit or location status. A GPS-marked row is owner/manager only; see section 4a.
 - **Conflicts**: last-write-wins by `updated_at` (`LWWResolver`). Stock on `item` and `raw_material` uses `StockDeltaResolver`: the payload value is an additive **delta**, not an absolute value.
 - **Pull** `GET /sync/pull?last_sync=...&limit=500`: returns changed rows ordered by `(updated_at, id)` plus a `deleted` list of tombstones (`{entity, record_id, deleted_at}`) from the `sync_tombstones` table. Deleting a synced model through the repository writes a tombstone automatically.
 - **Desktop side**: `services/sync_service.py` runs on a 60 s timer from `MainWindow`, pushes the SQLite outbox in batches of 200, and pulls from epoch for a full sync.
+
+## 4a. Plant units and GPS attendance
+
+The workshop has plant units (Manufacturing/Production, Painting/Processing, QC), each a circle in `plant_units`: `name`, `code`, centre `latitude`/`longitude`, `radius_m`, `is_active`. The owner creates and edits them (`POST`/`PUT /plant-units/`); any signed-in user can list them. Units are switched off with `is_active=false`, never deleted, because attendance rows point at them.
+
+A manager marks someone present with `POST /attendance/mark-present` `{user_id, status, latitude, longitude, accuracy_m, client_id?}`, sending the manager's own phone position. The server does the rest:
+
+- **GPS is untrusted input.** Latitude must be -90..90, longitude -180..180, all finite. `accuracy_m` is required and must be at most `GPS_MAX_ACCURACY_M` (default 100 m); a vaguer fix is rejected with 422 so the manager waits for a better one. The server cannot tell a spoofed position from a real one, so treat the position as a signal for the owner to review, not proof.
+- **The server picks the unit**: the active unit whose circle contains the point. If circles overlap, the nearest centre wins (ties: lower `code`). The client cannot send a unit, a wage, a pay status or a date; those fields are ignored. The wage is the person's own `base_daily_wage`, and the date is today on the server.
+- **Outside every unit**: the row is recorded, not rejected, with `plant_unit_id` empty and `location_status="off_site"`, and the usual pending wage. Rejecting would lose a real day's work whenever GPS drifts or a unit's circle is drawn too small; the owner reviews these with `GET /attendance/all?location_status=off_site`. Inside a unit the status is `on_site`; rows made without GPS have no status.
+- **Who**: owner and manager only. SALES keeps the older attendance routes but cannot mark by GPS (the shop is not a plant unit). A manager cannot mark themselves; the owner can.
+- The usual rules still apply: one attendance row a day per person, `client_id` makes a retry return the same row, and half-day pays half.
+- **Offline**: an attendance sync operation that carries `latitude`, `longitude` and `accuracy_m` is checked by the same code. The row is stored against the person marked (`user_id`), recorded by the pusher, with the same wage rule and a pending wage entry. A bad position fails that one operation. Later sync updates cannot change the position, unit, wage or pay status. Attendance sync without a position behaves as before.
 
 ## 5. Running it locally
 
@@ -138,6 +153,7 @@ Open in Android Studio (JDK 17). Package `com.nakamafurnibiz`, compileSdk and ta
 
 - Track work in GitHub Issues per repo. Small, focused commits; one concern per commit.
 - When you change a model, add an Alembic migration and make sure `alembic upgrade head` works on an empty DB.
+- Take things out in two deploys: first ship code that stops using the table or column, then drop it in a later migration. Old code still running during a deploy would otherwise query a column that is gone. Brands followed this: the code and API are gone, but the `brands` table and `items.brand_id` column are still in the database until that follow-up migration.
 - Anything that touches money, stock, or sync needs a test. Sync changes need an idempotency check (replay the same batch twice).
 - Keep routers thin; put rules in services; use the `UnitOfWork`, not raw sessions, in services.
 - Don't commit `.env`, the SQLite DB, or secrets.

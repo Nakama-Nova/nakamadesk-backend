@@ -1,7 +1,6 @@
 from app.models.attendance import Attendance  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bom import BillOfMaterials  # noqa: F401
-from app.models.brand import Brand  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.customer import Customer  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
@@ -22,6 +21,7 @@ from app.models.payroll import (  # noqa: F401
     WorkEntry,
     WorkerAdvance,
 )
+from app.models.plant_unit import PlantUnit  # noqa: F401
 from app.models.price_history import RawMaterialPriceHistory  # noqa: F401
 from app.models.product_asset import ProductAsset  # noqa: F401
 from app.models.production_job import ProductionJob  # noqa: F401

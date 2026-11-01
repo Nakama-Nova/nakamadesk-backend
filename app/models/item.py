@@ -39,7 +39,6 @@ class Item(Base):
     name = Column(String, index=True, nullable=False)
     description = Column(Text, nullable=True)
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
-    brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=True)
     unit = Column(String, default="pcs")
     purchase_price = Column(Numeric(10, 2), default=0.0)
     selling_price = Column(Numeric(10, 2), default=0.0)

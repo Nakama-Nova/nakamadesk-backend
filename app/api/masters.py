@@ -1,5 +1,5 @@
 """
-Master data the stock screens need: suppliers, categories and brands, plus the
+Master data the stock screens need: suppliers, categories, plus the
 stock movement history. All owner/manager; deleting a supplier is owner-only
 and nothing that is still in use can be deleted (409 with a clear reason).
 """
@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 
 from app.db.deps import check_role, get_uow
-from app.models.brand import Brand
 from app.models.category import Category
 from app.models.enums import UserRole
 from app.models.inventory_movement import InventoryMovement
@@ -29,7 +28,6 @@ STAFF = [UserRole.OWNER, UserRole.MANAGER]
 
 suppliers = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 categories = APIRouter(prefix="/categories", tags=["Categories"])
-brands = APIRouter(prefix="/brands", tags=["Brands"])
 inventory = APIRouter(prefix="/inventory", tags=["Inventory"])
 
 
@@ -147,7 +145,7 @@ def delete_supplier(
     return _delete(uow, row, used, "Supplier", "on past purchases")
 
 
-# ------------------------------------------------- categories and brands
+# ------------------------------------------------------------ categories
 def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
     @router.get("/", response_model=List[NameOut], name=f"list_{plural}")
     def list_rows(
@@ -188,7 +186,6 @@ def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
 
 
 _taxonomy(categories, Category, Item.category_id, "Category", "categories")
-_taxonomy(brands, Brand, Item.brand_id, "Brand", "brands")
 
 
 # ----------------------------------------------------- movement history

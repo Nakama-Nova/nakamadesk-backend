@@ -79,6 +79,12 @@ class AttendancePayload(BaseModel):
     check_out: Optional[datetime] = None
     total_hours: Optional[Decimal] = None
     daily_wage: Decimal
+    # Where the manager's phone was. Loosely typed on purpose: a bad value fails this
+    # one operation (the server checks it), not the whole push. The server picks the
+    # plant unit; a plant_unit_id sent here is ignored.
+    latitude: Optional[Any] = None
+    longitude: Optional[Any] = None
+    accuracy_m: Optional[Any] = None
 
 
 class RawMaterialPayload(BaseModel):

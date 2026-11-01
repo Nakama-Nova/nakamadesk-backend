@@ -1,7 +1,17 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Numeric, String, func, text
+from sqlalchemy import (
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Numeric,
+    String,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -40,6 +50,16 @@ class Attendance(Base):
         UUID(as_uuid=True), ForeignKey("users.id"), index=True, nullable=False
     )
     client_id = Column(UUID(as_uuid=True), unique=True, nullable=True, index=True)
+    # Where the phone said it was when a manager marked this row. All five are set by
+    # the server from the reported position, never taken from a client as given
+    # (see plant_unit_service). location_status: on_site, off_site; empty = no GPS.
+    plant_unit_id = Column(
+        UUID(as_uuid=True), ForeignKey("plant_units.id"), nullable=True, index=True
+    )
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    accuracy_m = Column(Float, nullable=True)
+    location_status = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
