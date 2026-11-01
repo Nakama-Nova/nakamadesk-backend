@@ -1,6 +1,6 @@
 # Vriksha Studios: Microservices Design
 
-**Status:** Draft v3 for review (updated with the owner's answers, §0) · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
+**Status:** Draft v4 for review (updated with the owner's answers, §0) · **Date:** 2026-11-01 · **Scope:** the whole platform at full scale: storefront with customer accounts, staff apps at several locations, inventory, orders, finance, notifications, analytics, and the local AI 3D pipeline.
 
 **This document supersedes** decisions D1 (one monolith), D5 (guest checkout only) and the "one shop, one machine" and "about ₹1,000 a month" answers in [SYSTEM_DESIGN.md](SYSTEM_DESIGN.md) §0–1. Those were right for the stage the business was in; the requirements below are not that stage. Everything else in that document (Next.js storefront, `<model-viewer>`, R2 for files, UPI-first payments, GST rules) still holds unless stated here.
 
@@ -30,7 +30,7 @@ Legend: ✅ taken from the repo · ⚠️ assumption, please confirm.
 
 How goods move: **buy raw material → receive into a unit → transfer between units as the job moves → transfer finished goods to the Shop → sell.** Every move between units is a stock transfer (two ledger movements, with an *in transit* state), so you can always see where each piece is and what it is worth.
 
-- **QC is a checkpoint, not a location.** It was one of the plant units in the earlier PR 67 brief, but it is not one of your four. Quality check becomes a pass/fail step on the production job (by a manager or achari) before the piece goes to the Shop. If you do want QC as its own place, it is one more row.
+- **QC is a checkpoint, not a location** (confirmed). It happens in the Manufacturing Unit, as the last step before a piece goes to the Shop. A production job cannot be transferred to the Shop until a manager or achari records **QC passed**. A failed piece goes back to the unit that needs to fix it, with a reason, and the failure is counted for reporting. Nothing about this needs a fifth location.
 - **The `plant_units` table from PR 67 becomes the `locations` table** (add a `kind` of plant or shop, and a `has_till` flag). The owner creates the four. The Shop gets a GPS circle too, so sales staff attendance can be checked the same way.
 - **Only the Shop has a till.** Online payments go to Razorpay, not a till. Petty cash for the plants can be added later as its own account.
 - Online orders reserve stock **at the Shop**, or become a production job if made to order.
@@ -44,6 +44,23 @@ You want the *current* budget of **Machines** and of **raw-item inventory**. Fin
 | **Raw items** | Raw-material purchases received | Stock on hand × weighted average cost, per unit |
 
 Each category shows **budget, spent so far, remaining, and current value**, with an alert at 80% and 100%. Going over budget **warns, it does not block** a purchase, so the workshop never stalls on a screen. The owner sets budgets; managers read. Tools and other categories can be added as lines later. Because every spend carries a `location_id`, the same numbers can be cut per unit later without changing the model.
+
+### Raw material sources (timber depot and reclaimed wood)
+Raw wood comes from two places, and they behave differently:
+
+| | **Fresh timber** (depot) | **Reclaimed wood** (demolished buildings) |
+|---|---|---|
+| How acquired | Bought on a purchase order from a supplier | Bought or collected from a demolition site, often with no supplier invoice |
+| Identity | Species, grade, size; interchangeable by quantity (cft) | Each piece or small lot is **unique**: species is sometimes uncertain, with its own dimensions, condition and history |
+| Provenance | Supplier and invoice | Site or building, date, who it came from, photos |
+| Prep | Normal | May need de-nailing, pest or moisture treatment before use; record it |
+| Cost | Invoice price | What was paid, or a **recorded estimate** if it was free. How to value free wood is a question for your CA |
+
+Design consequences:
+- Stock has two modes: **quantity items** (fresh timber, adhesive: a balance in the ledger) and **lots** (reclaimed wood: each lot has its own id, photos, dimensions, condition and cost). Both use the same append-only ledger.
+- A goods receipt names the **receiving location** and the **source** (`purchased` or `reclaimed`). Reclaimed receipts do not need a supplier or invoice, but do need a provenance note.
+- **Budget:** raw-item "spent" counts only **cash actually paid**. Free reclaimed wood adds stock value but no spend, so the budget is not distorted. Stock value uses the recorded cost, which can be a stated estimate.
+- Production jobs consume from specific lots, so a finished piece can say "made from reclaimed teak from the 1950s house at X", which is a good product story for the storefront later.
 
 ### Licence and GST
 - **Trade licence not yet issued** → Razorpay cannot go live (it needs business KYC). We build and test in Razorpay **test mode**, and staff record UPI payments by hand until then. The switch is replacing the keys.
@@ -292,7 +309,7 @@ Customer      Storefront      Order          Stock        Payments       Finance
 - `stock_movements(id, item_id, location_id, qty_delta, reason, ref_type, ref_id, unit_cost, at, by)`. **Append-only.** The balance per `(item, location)` is a projection kept in a table and rebuilt from the ledger on demand.
 - `reservations(id, item_id, location_id, qty, order_id, expires_at, state)`.
 - Transfers between locations are two movements linked by a `transfer_id`, with an *in transit* state.
-- Valuation: weighted average cost, stored per movement so Finance can compute COGS.
+- Valuation: weighted average cost, stored per movement so Finance can compute COGS. Reclaimed wood is a **lot** with its own cost, source and provenance (§0), and is consumed lot by lot.
 
 **Assets (machines and tools)**
 - `machines(tag, plant_unit_id, purchase_date, cost, useful_life, method, status)`, `maintenance_plans(machine_id, every_days | every_hours)`, `maintenance_log`, `downtime_log`.
@@ -309,6 +326,7 @@ Customer      Storefront      Order          Stock        Payments       Finance
   3. It downloads inputs by signed URL, runs the model, uploads `.glb` plus a preview, and reports `media.asset_generated` with quality metrics.
   4. For jobs with no product attached, `media3d` stores an embedding and proposes **candidate products** (nearest by image/text embedding).
   5. **A manager confirms the link.** The system never auto-publishes. On confirm, `product_assets` is written and `catalog.product_published` triggers storefront revalidation.
+- **The AI machine is your own computer, and it will often be switched off.** Jobs therefore wait in a queue with the status *waiting for worker*; the worker sends a heartbeat when it is up, and the UI shows whether it is online. Nothing else depends on it, and a job that was claimed but never finished is re-queued after a timeout. If you later move to a GPU server, only the worker's location changes.
 - Assets are immutable and versioned; "replace model" creates a new version, and the old one stays for rollback.
 
 ### 6.6 Finance
@@ -324,6 +342,8 @@ Customer      Storefront      Order          Stock        Payments       Finance
 Consumes all events into ClickHouse tables (`fact_order_line`, `fact_stock_movement`, `fact_attendance`, `fact_journal_line`) with dbt models for dashboards: revenue by channel and location, margin by product, stock cover, unit throughput, wage cost per unit, QC first-pass yield, budget versus actual. It is read-only and can be wrong or down without affecting any business flow.
 
 ### 6.8 Notification
+**Email first** (decided). Launch with email only through a transactional provider (Amazon SES, Brevo or Resend, whichever is cheapest for your volume; most have a free tier, so check current limits). SMS and WhatsApp come later as extra channels behind the same interface, so adding them is a new adapter and a template, not a redesign. Customer sign-in starts as **email verification** (a one-time link or code), with phone OTP added when SMS is switched on.
+
 Subscribes to events, renders a template per channel and locale, respects customer and staff preferences, dedupes on `(event_id, recipient, channel)`, retries with backoff, and moves permanently failing messages to a dead-letter topic. Channels sit behind one interface (email, SMS, WhatsApp, push). It holds no business rules: "tell the customer their order is ready" is a template bound to `order.ready`.
 
 ---
@@ -477,17 +497,16 @@ The build order for the two of us is in §0. The rules for each step:
 4. **Data migration.** Moving live money data is the riskiest step; shadow mode is mandatory.
 5. **Keycloak and Redpanda are new skills.** Plan time for learning, or pick the lighter options.
 
-**Answered (2026-11-01):** budget about ₹5,000 a month · team of two · 4 locations (3 production units + 1 shop) · Razorpay · Machines and raw-item budgets · trade licence and GST both still to come.
+**Answered (2026-11-01):** budget about ₹5,000 a month · team of two · 4 locations (3 production units + 1 shop) · Razorpay · Machines and raw-item budgets · trade licence and GST both still to come · QC is a checkpoint in the Manufacturing Unit before the Shop · raw material is fresh timber from a depot or reclaimed wood from demolished buildings · AI runs on your own machine · email notifications first, SMS and WhatsApp later.
 
-**Still open** (none blocks the first build step)
-1. **QC:** a checkpoint on the job (my plan), or its own location?
-2. **Where does raw material arrive?** Into which unit, or a store? (I assume the Manufacturing and Machinery units.)
-3. **Online orders:** packed and delivered from the Shop, and local delivery only? Any returns and refund policy?
-4. **Budget period:** monthly or yearly for Machines and raw items, and who approves going over?
-5. **AI model:** inputs (photos, video, scans), output size, run time, and which GPU machine?
-6. **Data protection:** legal review for customer accounts under the DPDP Act?
-7. **Hosting:** preferred provider, and must data stay in India?
-8. **WhatsApp:** order updates over WhatsApp Business (per-message fees, needs approval) or SMS and email first?
+**Still open** (none blocks the first build step; defaults in brackets)
+1. **Budget period and approval** (monthly; going over needs the owner's approval).
+2. **AI model inputs and GPU** (decide when you pick the model; the design already copes with the machine being off).
+3. **Which unit receives raw material** (chosen on each goods receipt, no default).
+4. **How to value free reclaimed wood** (ask your CA; until then a recorded estimate).
+5. **Online orders and delivery:** packed from the Shop, local delivery only? Any returns and refund policy? (Shop; local only; no returns policy yet.)
+6. **Data protection:** legal review for customer accounts under the DPDP Act? (Ask before launching accounts.)
+7. **Hosting:** preferred provider, and must data stay in India? (A Mumbai or Bangalore VM.)
 
 ## 15. What I'd revisit as it grows
 - Split `erp-core` and `commerce` further once separate teams or release cadences exist.
