@@ -29,6 +29,14 @@ class Settings:
     ]
     # Phones reporting a GPS fix vaguer than this (metres) cannot mark attendance.
     GPS_MAX_ACCURACY_M: float = float(os.getenv("GPS_MAX_ACCURACY_M", "100"))
+    # --- Email (sign-in codes and, later, order updates) ----------------------
+    # Any SMTP server works (Amazon SES, Brevo, Resend...). Empty SMTP_HOST in
+    # production makes "send me a code" answer 503 instead of dropping the email.
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 
