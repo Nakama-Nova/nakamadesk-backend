@@ -25,6 +25,7 @@ from app.api import (
     items,
     lab,
     letters,
+    machines,
     masters,
     media,
     notifications,
@@ -41,6 +42,7 @@ from app.api import (
     scans,
     stock_locations,
     sync,
+    tools,
     uploads,
     wages,
 )
@@ -84,6 +86,8 @@ app.include_router(attendance.router)
 app.include_router(plant_units.router)
 app.include_router(stock_locations.router)
 app.include_router(account.router)
+app.include_router(machines.router)
+app.include_router(tools.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)
 app.include_router(payroll.router)

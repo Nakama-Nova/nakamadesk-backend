@@ -54,6 +54,8 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Plant units | list: any signed-in user; create, update: owner only |
 | Stock by location (`/stock/levels`, `/stock/unassigned`, `GET /stock/transfers`) | owner, manager, sales |
 | Stock transfers (`POST /stock/transfers`) | owner, manager |
+| Machines (`/machines/*`) | owner, manager |
+| Tools: add, change, issue, return, history | owner, manager; list and view: also achari; `GET /tools/mine`: any signed-in staff |
 | Customer account (`/account/*`: profile, addresses, checkout, own orders) | website shoppers only (their own token); staff tokens are refused |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
 | Orders | create, list, get: owner, manager, sales; status change: owner, manager |
@@ -117,6 +119,23 @@ There is no online payment yet (no Razorpay account). The flow is: the shopper p
 - `GET /public/payment-info` says how to pay: cash or UPI, the shop's UPI id and name, a phone number and the steps in words. Set `PAY_UPI_ID`, `PAY_UPI_NAME` and `PAY_PHONE` (see `deploy/compose/.env.example`).
 - `upi_link` on every order view (`/public/orders/{n}`, `/account/orders`): once staff have **confirmed** the order and money is still due, a `upi://pay` link that opens a UPI app with the shop's id and the order number as the note, so staff can match the payment. It has no amount (the advance is agreed by phone) and is empty when no UPI id is set, before confirmation, when nothing is due, and on cancelled orders.
 - **Stock holds** (`stock_reservations`): confirming an order (`PATCH /orders/{id}/status` to `confirmed`) holds its in-stock pieces until the order is billed, delivered or cancelled. `items.current_stock` does not move until billing; a hold only lowers what can be sold to someone else. Online checkout, counter sales and other orders' holds all see "on the shelf minus held". If the shelf has fewer than the order needs, the hold takes what is there and confirmation still succeeds. Made-to-order pieces are never held. Billing an order uses its own hold, then releases it.
+
+## 4e. Machines and tools
+
+Two registers, kept apart from stock (a machine or a chisel is not something we count in and out like wood).
+
+**Machines** (`/machines`, owner and manager). Each has a `tag` (the sticker), a location, purchase date and cost, `useful_life_years`, `salvage_value` and an optional `maintenance_every_days`. Machines are retired (`PUT` with `status: "retired"`), never deleted.
+- **Worth now** is straight-line depreciation by whole months down to the salvage value: `(cost - salvage) / life_years / 12 x whole months since purchase`. The response carries `accumulated_depreciation` and `book_value`. With no useful life set a machine is not written off (worth = cost); with no cost both are empty.
+- **Service due**: the last `scheduled` maintenance (or the purchase date) plus the interval. `GET /machines/due?within_days=14` lists what is overdue or due soon. A `repair` does not reset it.
+- **Maintenance** (`POST/GET /machines/{id}/maintenance`): `scheduled` or `repair`, the date it was done (not in the future), the cost and who did it. `maintenance_spent` on the machine is the running total. Records are never edited.
+- **Downtime** (`POST /machines/{id}/downtime`, `.../downtime/end`): marks the machine `down` until ended; `GET .../downtime` is the log. A machine that is down cannot be retired until its downtime is ended; a retired one takes no maintenance or downtime.
+
+**Tools** (`/tools`). Durable tools handed to a person and handed back; consumables such as adhesive stay in stock. A tool is `available`, `issued`, `broken`, `lost` or `retired`.
+- `POST /tools/{id}/issue` hands it to an active person (409 if it is already out, naming who has it, or if it is broken, lost or retired). `POST /tools/{id}/return` takes it back as `ok`, `damaged` (becomes `broken`, condition `damaged`) or `lost`. Every issue is kept: `GET /tools/{id}/history`.
+- A broken or lost tool becomes available again by `PUT` with `status: "available"` (repaired or found). A tool that is out cannot be changed until it is returned.
+- `GET /tools/mine`: the tools you hold now (any signed-in staff).
+
+Cost feeds the Machines budget (next PR): the purchase cost on the purchase date and maintenance cost on the day it was done.
 
 ## 5. Running it locally
 
