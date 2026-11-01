@@ -39,6 +39,13 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
     # Where a shopper's reply goes, if different from the sender (e.g. info@).
     EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
+    # --- Razorpay (online payment) --------------------------------------------
+    # Test keys start rzp_test_. Empty = online payment answers 503 "not set up yet".
+    RAZORPAY_KEY_ID: str = os.getenv("RAZORPAY_KEY_ID", "")
+    RAZORPAY_KEY_SECRET: str = os.getenv("RAZORPAY_KEY_SECRET", "")
+    RAZORPAY_WEBHOOK_SECRET: str = os.getenv("RAZORPAY_WEBHOOK_SECRET", "")
+    # How long stock stays set aside for a shopper who has started paying.
+    RESERVATION_MINUTES: int = int(os.getenv("RESERVATION_MINUTES", "30"))
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 

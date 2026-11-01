@@ -31,6 +31,7 @@ from app.schemas.order import (
     OrderUpdate,
     PaymentCreate,
 )
+from app.services import reservation_service
 from app.services.order_invoice_service import payment_status as invoice_status
 
 logger = logging.getLogger(__name__)
@@ -291,6 +292,8 @@ def update_order_status(
             )
 
         order.status = update_data.status
+        if update_data.status == "cancelled":
+            reservation_service.release(uow.session, order.id)
         if update_data.notes:
             order.notes = update_data.notes
         if update_data.status == "delivered":

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from app.core.ratelimit import public_rate_limit
 from app.db.deps import get_uow
 from app.repositories.base import AbstractUnitOfWork
+from app.schemas.payment import GuestPaymentConfirm, GuestPayRequest, PaymentStart
 from app.schemas.public import (
     CheckoutRequest,
     DeliveryCheck,
@@ -19,7 +20,7 @@ from app.schemas.public import (
     PublicOrder,
     PublicProduct,
 )
-from app.services import public_service
+from app.services import payment_service, public_service
 
 router = APIRouter(prefix="/public", tags=["Public website"])
 
@@ -89,3 +90,40 @@ def track_order(
 ):
     """Order status. Needs the order number AND the phone it was placed with."""
     return public_service.track(uow, order_number, phone)
+
+
+@router.post(
+    "/orders/{order_number}/pay",
+    response_model=PaymentStart,
+    dependencies=[Depends(public_rate_limit("guest-pay"))],
+)
+def pay_order(
+    order_number: str,
+    body: GuestPayRequest,
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Start paying an order with Razorpay. Needs the order number AND its phone."""
+    order = public_service.order_for_phone(uow, order_number, body.phone)
+    return payment_service.start(uow.session, order.id, body.amount)
+
+
+@router.post(
+    "/orders/{order_number}/pay/verify",
+    response_model=PublicOrder,
+    dependencies=[Depends(public_rate_limit("guest-pay-verify"))],
+)
+def confirm_payment(
+    order_number: str,
+    body: GuestPaymentConfirm,
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Tell the server what Razorpay Checkout returned; the signature is verified."""
+    order = public_service.order_for_phone(uow, order_number, body.phone)
+    payment_service.verify_from_browser(
+        uow.session,
+        order,
+        body.razorpay_order_id,
+        body.razorpay_payment_id,
+        body.razorpay_signature,
+    )
+    return public_service.track(uow, order_number, body.phone)

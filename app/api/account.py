@@ -26,9 +26,11 @@ from app.schemas.account import (
     TokenOut,
     VerifyRequest,
 )
+from app.schemas.payment import PaymentConfirm, PaymentStart, PayRequest
 from app.schemas.public import PublicOrder
 from app.services import account_shop_service as shop
 from app.services import customer_account_service as service
+from app.services import payment_service
 
 router = APIRouter(prefix="/account", tags=["Customer account"])
 
@@ -199,4 +201,51 @@ def my_order(
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """One of your orders. 404 for any order that is not yours."""
+    return shop.get_order(uow, account, order_number)
+
+
+# -------------------------------------------------------------------- online payment
+@router.post(
+    "/orders/{order_number}/pay",
+    response_model=PaymentStart,
+    dependencies=[Depends(public_rate_limit("account-pay"))],
+)
+def pay_my_order(
+    order_number: str,
+    body: PayRequest,
+    account: CustomerAccount = Depends(get_current_customer),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Start paying one of your orders with Razorpay: the whole balance, or less (an
+    advance). Sets the order's in-stock pieces aside for 30 minutes and returns what
+    the storefront needs to open Razorpay Checkout.
+    """
+    order = shop.own_order(uow, account, order_number)
+    return payment_service.start(uow.session, order.id, body.amount)
+
+
+@router.post(
+    "/orders/{order_number}/pay/verify",
+    response_model=PublicOrder,
+    dependencies=[Depends(public_rate_limit("account-pay-verify"))],
+)
+def confirm_my_payment(
+    order_number: str,
+    body: PaymentConfirm,
+    account: CustomerAccount = Depends(get_current_customer),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Tell the server what Checkout returned. The signature is verified; the order then
+    shows the payment. (Razorpay's webhook records it too; doing both is safe.)
+    """
+    order = shop.own_order(uow, account, order_number)
+    payment_service.verify_from_browser(
+        uow.session,
+        order,
+        body.razorpay_order_id,
+        body.razorpay_payment_id,
+        body.razorpay_signature,
+    )
     return shop.get_order(uow, account, order_number)

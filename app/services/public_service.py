@@ -32,7 +32,7 @@ from app.schemas.public import (
     PublicOrderLine,
     PublicProduct,
 )
-from app.services import media_service, pricing
+from app.services import media_service, pricing, reservation_service
 from app.services.order_service import _generate_order_number
 
 
@@ -217,7 +217,10 @@ def checkout(
         item = by_slug.get(slug)
         if item is None:
             raise HTTPException(status_code=400, detail=f"'{slug}' is not available")
-        if not item.made_to_order and (item.current_stock or 0) < qty:
+        if (
+            not item.made_to_order
+            and reservation_service.available(uow.session, item) < qty
+        ):
             raise HTTPException(
                 status_code=400, detail=f"Not enough stock for {item.name}"
             )
@@ -295,7 +298,7 @@ def enquiry(
     return to_public_order(_new_order_with_retry(uow, build))
 
 
-def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder:
+def order_for_phone(uow: AbstractUnitOfWork, order_number: str, phone: str) -> Order:
     """404 for an unknown number AND for a wrong phone, so numbers can't be probed."""
     not_found = HTTPException(status_code=404, detail="Order not found")
     try:
@@ -316,7 +319,11 @@ def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder
         raise not_found from None
     if owner != wanted:
         raise not_found
-    return to_public_order(order)
+    return order
+
+
+def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder:
+    return to_public_order(order_for_phone(uow, order_number, phone))
 
 
 def to_public_order(order: Order) -> PublicOrder:
