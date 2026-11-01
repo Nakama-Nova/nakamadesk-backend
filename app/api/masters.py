@@ -67,6 +67,7 @@ class MovementOut(BaseModel):
     notes: Optional[str]
     item_id: Optional[UUID]
     raw_material_id: Optional[UUID]
+    location_id: Optional[UUID] = None
     name: Optional[str]  # the item or material this moved
     by: Optional[str]  # username
 
@@ -241,6 +242,7 @@ def movements(
             notes=r.notes,
             item_id=r.item_id,
             raw_material_id=r.raw_material_id,
+            location_id=r.location_id,
             name=item_names.get(r.item_id) or material_names.get(r.raw_material_id),
             by=users.get(r.created_by),
         )

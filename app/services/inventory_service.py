@@ -29,7 +29,7 @@ from app.models.raw_material import RawMaterial
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemUpdate
 from app.schemas.stock import StockUpdate
-from app.services import pricing, sku_service
+from app.services import pricing, sku_service, stock_location_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +48,11 @@ def add_raw_material_stock(
     reference_id: UUID,
     created_by: Optional[UUID] = None,
     notes: Optional[str] = None,
+    location_id: Optional[UUID] = None,
 ) -> RawMaterial:
     """
     Increase raw material stock and log the movement.
+    location_id: the unit that received it (empty = not placed yet).
 
     Called by: purchase_service.confirm_purchase()
 
@@ -100,8 +102,12 @@ def add_raw_material_stock(
         unit_cost=unit_cost,
         notes=notes or f"Stock receipt via {reference_type}",
         created_by=created_by,
+        location_id=location_id,
     )
     uow.session.add(movement)
+    stock_location_service.apply(
+        uow.session, location_id, quantity, raw_material_id=material_id
+    )
 
     logger.info(
         "raw_in | material=%s | %.4f (was %.4f → now %.4f) | ref=%s:%s",
@@ -264,6 +270,7 @@ def remove_finished_goods(
     sale_id: UUID,
     created_by: Optional[UUID] = None,
     allow_negative: bool = False,
+    location_id: Optional[UUID] = None,
 ) -> Item:
     """
     Deduct finished goods stock (sales path) and log the movement.
@@ -319,8 +326,11 @@ def remove_finished_goods(
         unit_cost=item.selling_price,
         notes="Deducted for sale",
         created_by=created_by,
+        location_id=location_id,
     )
     uow.session.add(movement)
+    # may go below zero at this location: sold before it was transferred there
+    stock_location_service.apply(uow.session, location_id, -quantity, item_id=item_id)
 
     logger.info(
         "finished_out | item=%s | %d units (was %d → now %d) | sale=%s",
@@ -534,6 +544,9 @@ def update_item_stock(
         if not item:
             raise HTTPException(status_code=404, detail="Item not found")
 
+        if stock_update.location_id is not None:
+            stock_location_service.get_location(uow.session, stock_update.location_id)
+
         stock_before = item.current_stock or 0
         new_stock = stock_before + stock_update.quantity
         if new_stock < 0:
@@ -549,8 +562,15 @@ def update_item_stock(
             unit_cost=item.selling_price,
             notes=f"Manual adjustment: {stock_update.notes or 'No reason provided'}",
             created_by=created_by,
+            location_id=stock_update.location_id,
         )
         uow.session.add(movement)
+        stock_location_service.apply(
+            uow.session,
+            stock_update.location_id,
+            stock_update.quantity,
+            item_id=item_id,
+        )
         uow.commit()
 
     uow.refresh(item)
@@ -570,9 +590,10 @@ def record_raw_material_adjustment(
     quantity_change: Decimal,
     created_by: Optional[UUID] = None,
     notes: Optional[str] = None,
+    location_id: Optional[UUID] = None,
 ) -> RawMaterial:
     """
-    Record a manual adjustment for a raw material.
+    Record a manual adjustment for a raw material (at a location, if given).
 
     Args:
         uow: Unit of Work.
@@ -584,6 +605,9 @@ def record_raw_material_adjustment(
     Returns:
         RawMaterial: Updated material.
     """
+    if location_id is not None:
+        stock_location_service.get_location(uow.session, location_id)
+
     # Use pessimistic lock for raw materials
     material = (
         uow.session.query(RawMaterial)
@@ -609,8 +633,12 @@ def record_raw_material_adjustment(
         unit_cost=material.current_price,
         notes=notes or "Manual adjustment",
         created_by=created_by,
+        location_id=location_id,
     )
     uow.session.add(movement)
+    stock_location_service.apply(
+        uow.session, location_id, quantity_change, raw_material_id=material_id
+    )
 
     logger.info(
         "adjustment | material=%s | %+.4f (was %.4f → now %.4f)",

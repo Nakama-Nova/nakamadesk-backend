@@ -153,6 +153,7 @@ class StockAdjust(BaseModel):
         description="Positive adds stock, negative removes"
     )
     notes: Optional[str] = Field(default=None, max_length=300)
+    location_id: Optional[UUID] = None  # the unit the change applies to
 
 
 @router.post("/{id}/adjust", response_model=RawMaterialResponse)
@@ -167,7 +168,12 @@ def adjust_raw_material_stock(
         raise HTTPException(status_code=400, detail="Enter a quantity other than zero")
     with uow:
         material = inventory_service.record_raw_material_adjustment(
-            uow, id, body.quantity_change, current_user.id, body.notes
+            uow,
+            id,
+            body.quantity_change,
+            current_user.id,
+            body.notes,
+            location_id=body.location_id,
         )
         uow.commit()
     uow.refresh(material)

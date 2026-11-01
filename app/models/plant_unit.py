@@ -24,6 +24,10 @@ class PlantUnit(Base):
     Attendance marked from a phone is matched to the unit whose circle contains
     the reported GPS position. Units are switched off (is_active), not deleted,
     because past attendance rows point at them.
+
+    This table is also the list of business locations: stock levels, stock movements
+    and sales point at it. The Shop is a row with kind="shop". It is not renamed to
+    "locations" yet because the previous release still uses this name.
     """
 
     __tablename__ = "plant_units"
@@ -31,6 +35,7 @@ class PlantUnit(Base):
         CheckConstraint("latitude BETWEEN -90 AND 90", name="ck_plant_units_lat"),
         CheckConstraint("longitude BETWEEN -180 AND 180", name="ck_plant_units_lon"),
         CheckConstraint("radius_m > 0", name="ck_plant_units_radius"),
+        CheckConstraint("kind IN ('plant', 'shop')", name="ck_plant_units_kind"),
     )
 
     id = Column(
@@ -46,6 +51,11 @@ class PlantUnit(Base):
     radius_m = Column(Float, nullable=False)
     is_active = Column(
         Boolean, nullable=False, default=True, server_default=text("true")
+    )
+    # plant: where things are made. shop: where finished goods are sold.
+    kind = Column(String, nullable=False, default="plant", server_default="plant")
+    has_till = Column(
+        Boolean, nullable=False, default=False, server_default=text("false")
     )
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

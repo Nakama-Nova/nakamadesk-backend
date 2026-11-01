@@ -98,7 +98,7 @@ Each step ships on its own and leaves the system working.
 | Step | What | Size |
 |---|---|---|
 | 1 | Docker images and compose on the VM; move the API off Vercel; backups to R2 with a restore test; import-linter rules for context boundaries; outbox table | M |
-| 2 | Turn `plant_units` into `locations` (the 3 units + the Shop); `location_id` on stock, sales and attendance; stock transfers between units; Shop till | M |
+| 2 | Turn `plant_units` into `locations` (the 3 units + the Shop); `location_id` on stock, sales and attendance; stock transfers between units; Shop till | M. **Built** (see ONBOARDING 4b): shop kind and till flag, stock levels, transfers, location on sales, purchases and adjustments. Left for later: till sessions and cash counts, an in-transit state, placing production output, and the rename of the table |
 | 3 | Customer accounts, catalog read API, storefront on the new APIs, Razorpay checkout in test mode, reservations | L |
 | 4 | `finance` container: ledger and posting rules in **shadow mode** for a month, reconciled to the paisa, then cut over | L |
 | 5 | Machines and tools registers; Machines and Raw-items budgets in Finance | M |

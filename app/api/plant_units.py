@@ -43,7 +43,7 @@ def create_plant_unit(
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Owner only."""
-    return _save(uow, PlantUnit(**body.model_dump()))
+    return _save(uow, PlantUnit(**body.model_dump(exclude_none=True)))
 
 
 @router.put("/{unit_id}", response_model=PlantUnitOut)
@@ -57,6 +57,9 @@ def update_plant_unit(
     row = uow.session.get(PlantUnit, unit_id)
     if not row:
         raise HTTPException(status_code=404, detail="Plant unit not found")
-    for k, v in body.model_dump().items():
+    for k, v in body.model_dump(exclude={"kind", "has_till"}).items():
         setattr(row, k, v)
+    for k in ("kind", "has_till"):
+        if getattr(body, k) is not None:
+            setattr(row, k, getattr(body, k))
     return _save(uow, row)

@@ -13,7 +13,7 @@ from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sale import SaleCreate
-from app.services import inventory_service
+from app.services import inventory_service, stock_location_service
 from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
 
@@ -74,6 +74,14 @@ def build_sale(
             logger.info(f"Duplicate sale found for client_id {sale_data.client_id}")
             return existing_sale, False
 
+    # Where it is sold: the location named, else the one Shop (else not placed).
+    if sale_data.location_id is not None:
+        location_id = stock_location_service.get_location(
+            uow.session, sale_data.location_id
+        ).id
+    else:
+        location_id = stock_location_service.default_shop_id(uow.session)
+
     # 3. Create Sale object (Wait to link items until they are validated)
     new_sale = Sale(
         id=sale_id or uuid.uuid4(),
@@ -81,6 +89,7 @@ def build_sale(
         customer_id=sale_data.customer_id,
         user_id=current_user_id,
         client_id=sale_data.client_id,
+        location_id=location_id,
         order_type=sale_data.order_type,
         discount=to_decimal(sale_data.discount),
         payment_method=sale_data.payment_method,
@@ -104,6 +113,7 @@ def build_sale(
             sale_id=new_sale.id,
             created_by=current_user_id,
             allow_negative=allow_negative_stock,
+            location_id=location_id,
         )
 
         # Calculations using the fetched item

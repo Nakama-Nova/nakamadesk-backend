@@ -52,6 +52,8 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | BOM | create and delete: owner, achari; read: owner, manager, achari |
 | Attendance | create, check-in, check-out, list all: owner, manager, sales; `POST /mark-present` (GPS): owner, manager; `GET /my`: any; `PATCH`: owner, manager |
 | Plant units | list: any signed-in user; create, update: owner only |
+| Stock by location (`/stock/levels`, `/stock/unassigned`, `GET /stock/transfers`) | owner, manager, sales |
+| Stock transfers (`POST /stock/transfers`) | owner, manager |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
 | Orders | create, list, get: owner, manager, sales; status change: owner, manager |
 | Production jobs | create, start, complete: owner, manager; list and get: owner, manager, achari |
@@ -80,6 +82,17 @@ A manager marks someone present with `POST /attendance/mark-present` `{user_id, 
 - **Who**: owner and manager only. SALES keeps the older attendance routes but cannot mark by GPS (the shop is not a plant unit). A manager cannot mark themselves; the owner can.
 - The usual rules still apply: one attendance row a day per person, `client_id` makes a retry return the same row, and half-day pays half.
 - **Offline**: an attendance sync operation that carries `latitude`, `longitude` and `accuracy_m` is checked by the same code. The row is stored against the person marked (`user_id`), recorded by the pusher, with the same wage rule and a pending wage entry. A bad position fails that one operation. Later sync updates cannot change the position, unit, wage or pay status. Attendance sync without a position behaves as before.
+
+## 4b. Locations and stock by location
+
+The business has four places: the Manufacturing Unit, the Machinery Unit, the Painting Unit and the Open Shop. They are rows in `plant_units` (the table keeps that name for now): `kind` is `plant` or `shop`, and `has_till` marks where cash is taken. The owner creates them through `/plant-units/`.
+
+- **Totals did not change.** `items.current_stock` and `raw_materials.stock` are still the total across the business, and everything that reads them (reports, the public catalog, low-stock alerts) works as before.
+- **`stock_levels`** says where part of that total is. Stock that has not been placed is **unassigned**: total minus the levels. Nothing was moved when this shipped, so all existing stock starts unassigned. Place it with a transfer from "unassigned" (`from_location_id` null) to a unit.
+- **Transfers** (`POST /stock/transfers`) move stock between two places, or in and out of unassigned. They write two ledger rows that share a `transfer_id` (`transfer_out`, `transfer_in`) and leave the total alone. A transfer is the only operation that refuses to take more than is there; items move in whole numbers, raw materials in fractions. They happen instantly; there is no in-transit state yet.
+- **Sales** are recorded at the location named in `location_id`, or at **the Shop when there is exactly one active shop**, else not placed. This also covers sales that arrive over sync. A sale may take a location's level below zero (sold before it was transferred there) so the counter never stops; a transfer puts it right.
+- **Purchases and adjustments** can name where the goods arrived or where the count applies: `PATCH /purchases/{id}/confirm?location_id=`, `location_id` on `PATCH /items/{id}/stock` and on `POST /raw-materials/{id}/adjust`. Left out, the change is unassigned, as before.
+- **Not done yet:** production consumption and output are not placed at a unit (they stay unassigned until production routing is built), there is no till session or cash count for the Shop, and the table is not renamed to `locations`.
 
 ## 5. Running it locally
 
