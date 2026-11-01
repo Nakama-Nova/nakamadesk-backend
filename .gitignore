@@ -21,3 +21,6 @@ media/
 
 .vercel
 .env*
+
+full_source_dump.txt
+alembic/versions/*.ini

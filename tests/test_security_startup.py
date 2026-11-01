@@ -44,9 +44,40 @@ def test_empty_secret_key_rejected_outside_dev_test():
 
 def test_real_secret_key_allowed_outside_dev_test():
     result = _import_security_in_subprocess(
-        {"ENV": "production", "SECRET_KEY": "a-real-production-secret"}
+        {"ENV": "production", "SECRET_KEY": "a-real-production-secret-0123456789"}
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_short_secret_key_rejected_outside_dev_test():
+    result = _import_security_in_subprocess(
+        {"ENV": "production", "SECRET_KEY": "too-short"}
+    )
+    assert result.returncode != 0
+    assert "SECRET_KEY" in result.stderr
+
+
+def test_vercel_counts_as_production_even_with_env_left_at_dev():
+    # ENV defaults to "dev": forgetting it on Vercel must not allow the public dev key
+    result = _import_security_in_subprocess(
+        {"ENV": "dev", "VERCEL": "1"}, unset=("SECRET_KEY",)
+    )
+    assert result.returncode != 0
+    assert "SECRET_KEY" in result.stderr
+
+
+def test_algorithm_env_var_is_ignored():
+    env = os.environ.copy()
+    env.update({"ENV": "dev", "ALGORITHM": "none"})
+    result = subprocess.run(
+        [sys.executable, "-c", "import app.core.security as s; print(s.ALGORITHM)"],
+        cwd=str(REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "HS256"
 
 
 def test_default_secret_key_allowed_in_dev():

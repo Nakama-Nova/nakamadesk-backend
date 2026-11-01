@@ -42,10 +42,18 @@ from app.api import (
     wages,
 )
 from app.core.config import settings
-from app.core.middleware import TimingMiddleware
+from app.core.middleware import SecurityHeadersMiddleware, TimingMiddleware
 
-app = FastAPI(title="NakamaDesk API", version="0.1.0")
+# The API docs and schema list every route: keep them for development only.
+app = FastAPI(
+    title="NakamaDesk API",
+    version="0.1.0",
+    docs_url=None if settings.IS_PROD else "/docs",
+    redoc_url=None,
+    openapi_url=None if settings.IS_PROD else "/openapi.json",
+)
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TimingMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # the 3D viewer scripts are large
 

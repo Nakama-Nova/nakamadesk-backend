@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Numeric, String, text
+from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
@@ -36,4 +36,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     base_daily_wage = Column(Numeric(10, 2), default=0.0)
     overtime_rate_per_hour = Column(Numeric(10, 2), nullable=True)
+    # Bumped on password change/reset, role change and switch-off; a token carries the
+    # number it was issued under, so bumping it ends every session of this user at once.
+    token_version = Column(Integer, nullable=False, default=0, server_default=text("0"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

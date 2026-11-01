@@ -17,6 +17,7 @@ from fastapi import HTTPException, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core import ratelimit
 from app.models.login_attempt import LoginAttempt
 
 WINDOW_MINUTES = 15
@@ -26,10 +27,8 @@ MAX_PER_USER = 30
 
 
 def client_ip(request: Request) -> str:
-    """The caller's address. Behind Vercel/a proxy it is the first X-Forwarded-For hop."""
-    forwarded = request.headers.get("x-forwarded-for", "")
-    first = forwarded.split(",")[0].strip()
-    return first or (request.client.host if request.client else "unknown")
+    """The caller's address (see app.core.ratelimit.client_ip for what is trusted)."""
+    return ratelimit.client_ip(request)
 
 
 def _since() -> datetime:

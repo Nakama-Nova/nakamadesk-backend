@@ -15,7 +15,7 @@ shop runs on its own server (see ONBOARDING.md). Everything here can be deleted.
 - Backend: https://vriksha-beta-api.vercel.app (Vercel project `vriksha-beta-api`, team `nakama23`). Health: `/health/`.
 - Website: https://vriksha-beta-site.vercel.app (project `vriksha-beta-site`).
 - Both were first deployed by direct upload with the Vercel CLI. The backend now deploys by itself from GitHub Actions after CI passes on `main` (see **Continuous deployment** below); by hand it is still `vercel deploy --prod --scope nakama23` from the repo folder. `.vercelignore` keeps `.env`, tests and `pyproject.toml` out of the upload (`pyproject.toml` makes Vercel ignore `requirements.txt`).
-- Set on the backend: `ENV`, `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MEDIA_DIR`, `INVOICES_DIR`, `S3_*`, `DATABASE_URL`, `SECRET_KEY` (generated, hidden), `CORS_ORIGINS`. **Optional, for app updates:** `GITHUB_RELEASES_TOKEN` (see `docs/ONBOARDING.md`, Desktop app updates). Environment changes only apply after a redeploy.
+- Set on the backend: `ENV`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MEDIA_DIR`, `INVOICES_DIR`, `S3_*`, `DATABASE_URL`, `SECRET_KEY` (generated, hidden), `CORS_ORIGINS`. **Optional, for app updates:** `GITHUB_RELEASES_TOKEN` (see `docs/ONBOARDING.md`, Desktop app updates). Environment changes only apply after a redeploy.
 
 ## Backend environment variables (Vercel, Production and Preview)
 
@@ -23,8 +23,8 @@ shop runs on its own server (see ONBOARDING.md). Everything here can be deleted.
 |---|---|
 | `DATABASE_URL` | Supabase **Transaction pooler** string (port 6543): `postgresql://postgres.gzycuxlmjuipfylqmqiz:<DB PASSWORD>@<pooler host>:6543/postgres`. Copy it from Supabase, Connect. The app uses no connection pool of its own on Vercel (`app/db/session.py`). |
 | `ENV` | `beta` |
-| `SECRET_KEY` | a long random string (the app refuses to start with the dev default) |
-| `ALGORITHM` / `ACCESS_TOKEN_EXPIRE_MINUTES` | `HS256` / `30` |
+| `SECRET_KEY` | a random string of 32+ characters (the app refuses to start with the dev default or a shorter one) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` (the signing algorithm is fixed to HS256 in code) |
 | `CORS_ORIGINS` | the beta website address, e.g. `https://vriksha-beta.vercel.app` |
 | `MEDIA_DIR`, `INVOICES_DIR` | `/tmp/media`, `/tmp/invoices` (Vercel's disk is read-only except `/tmp`) |
 | `S3_BUCKET` | the private bucket name, e.g. `vriksha-private` |

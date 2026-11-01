@@ -2,6 +2,8 @@
 
 import uuid
 
+import pytest
+
 from app.models.login_attempt import LoginAttempt
 from app.services import login_guard
 
@@ -60,6 +62,12 @@ def test_a_normal_discount_still_works_up_to_the_full_bill(client, people):
 
 
 # ------------------------------------------------------------------ sign-in guessing
+@pytest.fixture(autouse=True)
+def _proxy_headers_trusted(monkeypatch):
+    # these tests pick the caller's address with X-Forwarded-For, as a trusted proxy would
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")
+
+
 def wrong(client, username, ip="10.0.0.1"):
     return client.post(
         "/auth/login",

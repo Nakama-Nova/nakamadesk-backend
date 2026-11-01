@@ -1,4 +1,5 @@
 import io
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -50,7 +51,9 @@ def render_invoice_pdf(sale: Sale) -> bytes:
     )
 
     customer_name = sale.customer.name if sale.customer else "Walk-in Customer"
-    elements.append(Paragraph(f"<b>Customer:</b> {customer_name}", info_style))
+    # Paragraph parses markup and the name can come from the public checkout:
+    # escape it so "<img src=http://...>" is text, not a request from this server.
+    elements.append(Paragraph(f"<b>Customer:</b> {escape(customer_name)}", info_style))
     elements.append(Spacer(1, 20))
 
     # --- Table Data ---

@@ -128,6 +128,10 @@ class ConflictResolver(ABC):
 
 
 class LWWResolver(ConflictResolver):
+    def __init__(self, server_only: Tuple[str, ...] = ()):
+        # columns a client may never change through sync (the server decides them)
+        self.server_only = frozenset(server_only)
+
     def resolve(self, db_obj: Any, op: SyncOperation) -> bool:
         # Client timestamp (SyncOperation and Pydantic handle TZ if provided)
         # Ensure it's treated as UTC (Issue #9)
@@ -152,7 +156,11 @@ class LWWResolver(ConflictResolver):
         # customer_name/phone, which are not attributes to overwrite.
         columns = {c.name for c in db_obj.__table__.columns}
         for key, value in payload_data.items():
-            if key in ["id", "user_id", "recorded_by"] or key not in columns:
+            if (
+                key in ["id", "user_id", "recorded_by"]
+                or key in self.server_only
+                or key not in columns
+            ):
                 continue
             setattr(db_obj, key, value)
         return True
@@ -193,6 +201,8 @@ class StockDeltaResolver(ConflictResolver):
 
 
 CONFLICT_RESOLVER_REGISTRY = {
+    # wage and pay status are never taken from a client update (REST /wages pays them)
+    "attendance": LWWResolver(server_only=("daily_wage", "payment_status")),
     "item": StockDeltaResolver(),
     "raw_material": StockDeltaResolver(),
 }
@@ -517,6 +527,24 @@ class ItemSyncHandler(GenericSyncHandler):
 class AttendanceSyncHandler(GenericSyncHandler):
     def __init__(self):
         super().__init__(Attendance, "attendance")
+
+    def apply_create(
+        self,
+        uow: AbstractUnitOfWork,
+        payload: Any,
+        current_user: User,
+        op: Optional["SyncOperation"] = None,
+    ) -> Tuple[Optional[UUID], Optional[str]]:
+        """Like the REST route, the wage comes from the server, not the client."""
+        data = dict(
+            payload.model_dump(exclude_unset=True)
+            if hasattr(payload, "model_dump")
+            else payload
+        )
+        data["payment_status"] = "pending"
+        if _role_of(current_user) not in _COST_VIEWERS:
+            data["daily_wage"] = current_user.base_daily_wage or Decimal("0")
+        return super().apply_create(uow, data, current_user, op)
 
 
 class RawMaterialSyncHandler(GenericSyncHandler):

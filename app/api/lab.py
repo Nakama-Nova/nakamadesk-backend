@@ -19,6 +19,7 @@ from app.core.security import create_scoped_token, verify_token
 from app.db.deps import (
     LAB_COOKIE,
     LAB_EDIT_ROLES,
+    check_token_version,
     get_lab_editor,
     get_lab_user,
     get_uow,
@@ -289,7 +290,12 @@ def make_link(
     else:
         _furniture(uow, body.item_id)
     token = create_scoped_token(
-        str(user.id), "lab-link", LINK_MINUTES, item=str(body.item_id), mode=body.mode
+        str(user.id),
+        "lab-link",
+        LINK_MINUTES,
+        item=str(body.item_id),
+        mode=body.mode,
+        tv=user.token_version or 0,
     )
     path = f"/lab/open?t={token}"
     return {
@@ -307,11 +313,14 @@ def open_link(t: str, request: Request, uow: AbstractUnitOfWork = Depends(get_uo
     user = uow.users.get_by_id(payload["sub"])
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="This link is not valid")
+    check_token_version(payload, user)
     mode = "edit" if payload.get("mode") == "edit" else "view"
     resp = RedirectResponse(f"/lab/{mode}/{payload['item']}", status_code=303)
     resp.set_cookie(
         LAB_COOKIE,
-        create_scoped_token(str(user.id), "lab", SESSION_MINUTES),
+        create_scoped_token(
+            str(user.id), "lab", SESSION_MINUTES, tv=user.token_version or 0
+        ),
         max_age=SESSION_MINUTES * 60,
         httponly=True,
         samesite="lax",
