@@ -153,7 +153,7 @@ Open in Android Studio (JDK 17). Package `com.nakamafurnibiz`, compileSdk and ta
 
 - Track work in GitHub Issues per repo. Small, focused commits; one concern per commit.
 - When you change a model, add an Alembic migration and make sure `alembic upgrade head` works on an empty DB.
-- Take things out in two deploys: first ship code that stops using the table or column, then drop it in a later migration. Old code still running during a deploy would otherwise query a column that is gone. Brands followed this: the code and API are gone, but the `brands` table and `items.brand_id` column are still in the database until that follow-up migration.
+- Take things out in two deploys: first ship code that stops using the table or column, then drop it in a later migration. Old code still running during a deploy would otherwise query a column that is gone. Brands followed this: PR 67 removed the code and API, and migration `e3f4a5b6c7d8` then dropped the `brands` table and `items.brand_id`.
 - Anything that touches money, stock, or sync needs a test. Sync changes need an idempotency check (replay the same batch twice).
 - Keep routers thin; put rules in services; use the `UnitOfWork`, not raw sessions, in services.
 - Don't commit `.env`, the SQLite DB, or secrets.
