@@ -1,0 +1,22 @@
+# Local development on top of docker-compose.yml. From this folder:
+#   docker compose --env-file dev.env -f docker-compose.yml -f docker-compose.dev.yml up --build
+# See docs/LOCAL_DEV.md.
+services:
+  api:
+    # Reloads when you save a file under app/. One worker is enough on a laptop.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/srv/app"]
+    environment:
+      ENV: dev # API docs at /docs, and the dev-only relaxed secret check
+    volumes:
+      - ../../app:/srv/app:ro
+    ports: ["8000:8000"]
+
+  db:
+    # 5433 on the host, because 5432 is usually taken by a Postgres already installed.
+    ports: ["5433:5432"]
+
+  # Not needed on a laptop (no domain, no R2); `--profile prod-like` brings them back.
+  caddy:
+    profiles: [prod-like]
+  backup:
+    profiles: [prod-like]
