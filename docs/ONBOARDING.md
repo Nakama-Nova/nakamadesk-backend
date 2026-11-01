@@ -108,7 +108,15 @@ Shoppers sign in on vrikshastudios.com with a one-time code sent to their email.
 - **Orders as a signed-in shopper:** `POST /account/checkout` takes the items plus a saved `address_id` or a one-off `address` (exactly one). Name and phone default from the address, then the account; the account's email is used. It runs the **same code as guest checkout** (`/public/checkout`): prices come from the server, stock and the pincode list are checked, the order is a draft and nothing is charged. The only difference is that the order records the account (`orders.account_id`). `POST /account/enquiry` does the same for a custom-piece request. `GET /account/orders` (newest first, paged) and `GET /account/orders/{number}` show only orders tied to the account, using the same cost-free `PublicOrder` shape.
 - Guest checkout and `GET /public/orders/{number}?phone=` are unchanged. A guest order is **not** pulled into an account because the phone matches, since the phone is not verified.
 - Deleting the account removes the saved addresses and personal data; orders stay as business records (the workshop still has to deliver them) with the customer details they already hold.
-- **Not done yet:** linking an account to the phone-keyed `customers` row and merging guest orders needs a verified phone (SMS comes later). Razorpay checkout in test mode and stock reservations are the next part of step 3.
+- **Not done yet:** linking an account to the phone-keyed `customers` row and merging guest orders needs a verified phone (SMS comes later).
+
+## 4d. Paying by cash or UPI (no payment gateway) and stock holds
+
+There is no online payment yet (no Razorpay account). The flow is: the shopper places an order (draft, nothing charged) -> staff **call to confirm it** and agree the advance -> the shopper pays **cash at the shop or by UPI** -> staff record it with `POST /orders/{id}/payments` (`method` `cash` or `upi`, with the UPI reference). A Razorpay version was built and tested in test mode and is parked on the branch `feature/razorpay-checkout`; it can be picked up once an account exists.
+
+- `GET /public/payment-info` says how to pay: cash or UPI, the shop's UPI id and name, a phone number and the steps in words. Set `PAY_UPI_ID`, `PAY_UPI_NAME` and `PAY_PHONE` (see `deploy/compose/.env.example`).
+- `upi_link` on every order view (`/public/orders/{n}`, `/account/orders`): once staff have **confirmed** the order and money is still due, a `upi://pay` link that opens a UPI app with the shop's id and the order number as the note, so staff can match the payment. It has no amount (the advance is agreed by phone) and is empty when no UPI id is set, before confirmation, when nothing is due, and on cancelled orders.
+- **Stock holds** (`stock_reservations`): confirming an order (`PATCH /orders/{id}/status` to `confirmed`) holds its in-stock pieces until the order is billed, delivered or cancelled. `items.current_stock` does not move until billing; a hold only lowers what can be sold to someone else. Online checkout, counter sales and other orders' holds all see "on the shelf minus held". If the shelf has fewer than the order needs, the hold takes what is there and confirmation still succeeds. Made-to-order pieces are never held. Billing an order uses its own hold, then releases it.
 
 ## 5. Running it locally
 

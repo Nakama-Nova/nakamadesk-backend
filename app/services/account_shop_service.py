@@ -190,9 +190,10 @@ def list_orders(
     return [public_service.to_public_order(o) for o in rows]
 
 
-def get_order(
+def own_order(
     uow: AbstractUnitOfWork, account: CustomerAccount, order_number: str
-) -> PublicOrder:
+) -> Order:
+    """The account's own order, or 404 (also for an order that is someone else's)."""
     order = (
         uow.session.query(Order)
         .options(joinedload(Order.items))
@@ -204,4 +205,10 @@ def get_order(
     )
     if order is None:
         raise HTTPException(status_code=404, detail="Order not found")
-    return public_service.to_public_order(order)
+    return order
+
+
+def get_order(
+    uow: AbstractUnitOfWork, account: CustomerAccount, order_number: str
+) -> PublicOrder:
+    return public_service.to_public_order(own_order(uow, account, order_number))

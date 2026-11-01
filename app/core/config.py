@@ -39,6 +39,12 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
     # Where a shopper's reply goes, if different from the sender (e.g. info@).
     EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
+    # --- Paying by cash or UPI (no payment gateway) --------------------------
+    # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
+    # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.
+    PAY_UPI_ID: str = os.getenv("PAY_UPI_ID", "")
+    PAY_UPI_NAME: str = os.getenv("PAY_UPI_NAME") or "Vriksha Studios"
+    PAY_PHONE: str = os.getenv("PAY_PHONE", "")  # the number shoppers are told to call
     # Max checkout/enquiry/track calls per IP per minute (in-process limiter).
     PUBLIC_RATE_LIMIT: int = int(os.getenv("PUBLIC_RATE_LIMIT", "20"))
 

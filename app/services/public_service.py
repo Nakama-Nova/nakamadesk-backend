@@ -10,6 +10,7 @@ with its order number AND the phone number it was placed with.
 import re
 from decimal import Decimal
 from typing import Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -27,12 +28,13 @@ from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import (
     CheckoutRequest,
     EnquiryRequest,
+    PaymentInfo,
     PublicImage,
     PublicOrder,
     PublicOrderLine,
     PublicProduct,
 )
-from app.services import media_service, pricing
+from app.services import media_service, pricing, reservation_service
 from app.services.order_service import _generate_order_number
 
 
@@ -217,7 +219,10 @@ def checkout(
         item = by_slug.get(slug)
         if item is None:
             raise HTTPException(status_code=400, detail=f"'{slug}' is not available")
-        if not item.made_to_order and (item.current_stock or 0) < qty:
+        if (
+            not item.made_to_order
+            and reservation_service.available(uow.session, item) < qty
+        ):
             raise HTTPException(
                 status_code=400, detail=f"Not enough stock for {item.name}"
             )
@@ -295,7 +300,7 @@ def enquiry(
     return to_public_order(_new_order_with_retry(uow, build))
 
 
-def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder:
+def order_for_phone(uow: AbstractUnitOfWork, order_number: str, phone: str) -> Order:
     """404 for an unknown number AND for a wrong phone, so numbers can't be probed."""
     not_found = HTTPException(status_code=404, detail="Order not found")
     try:
@@ -316,7 +321,38 @@ def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder
         raise not_found from None
     if owner != wanted:
         raise not_found
-    return to_public_order(order)
+    return order
+
+
+def track(uow: AbstractUnitOfWork, order_number: str, phone: str) -> PublicOrder:
+    return to_public_order(order_for_phone(uow, order_number, phone))
+
+
+PAY_STATUSES = ("confirmed", "in_production", "ready")
+
+
+def upi_link(order_number: str) -> Optional[str]:
+    """upi://pay link for the shop's UPI id, tagged with the order number."""
+    if not settings.PAY_UPI_ID:
+        return None
+    return (
+        f"upi://pay?pa={quote(settings.PAY_UPI_ID, safe='@')}"
+        f"&pn={quote(settings.PAY_UPI_NAME)}"
+        f"&tn={quote(order_number)}&cu=INR"
+    )
+
+
+def payment_info() -> PaymentInfo:
+    return PaymentInfo(
+        accepts=["cash", "upi"],
+        upi_id=settings.PAY_UPI_ID or None,
+        payee_name=settings.PAY_UPI_NAME if settings.PAY_UPI_ID else None,
+        phone=settings.PAY_PHONE or None,
+        steps=(
+            "Place your order. We will call to confirm it and agree the advance. "
+            "Then pay by cash at the shop or by UPI, quoting your order number."
+        ),
+    )
 
 
 def to_public_order(order: Order) -> PublicOrder:
@@ -324,6 +360,7 @@ def to_public_order(order: Order) -> PublicOrder:
     final = order.final_amount or zero
     base = final if final > 0 else (order.estimated_amount or zero)
     advance = order.advance_paid or zero
+    due = max(zero, base - advance)
     return PublicOrder(
         order_number=order.order_number,
         status=order.status,
@@ -332,7 +369,12 @@ def to_public_order(order: Order) -> PublicOrder:
         expected_delivery=order.expected_delivery,
         total=base,
         advance_paid=advance,
-        balance_due=max(zero, base - advance),
+        balance_due=due,
+        upi_link=(
+            upi_link(order.order_number)
+            if order.status in PAY_STATUSES and due > 0
+            else None
+        ),
         items=[
             PublicOrderLine(
                 name=i.item_name or (i.item.name if i.item else "Item"),

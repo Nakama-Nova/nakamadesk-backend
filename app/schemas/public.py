@@ -73,7 +73,22 @@ class PublicOrder(BaseModel):
     total: Decimal
     advance_paid: Decimal
     balance_due: Decimal
+    # Once staff have confirmed the order and money is still due: a link that opens a
+    # UPI app with the shop's id and this order number filled in. The amount is left
+    # for the shopper to type (the advance is agreed by phone). Empty when no UPI id
+    # is set up.
+    upi_link: Optional[str] = None
     items: List[PublicOrderLine]
+
+
+class PaymentInfo(BaseModel):
+    """How to pay. There is no online gateway: staff confirm by phone first."""
+
+    accepts: List[str]
+    upi_id: Optional[str] = None
+    payee_name: Optional[str] = None
+    phone: Optional[str] = None
+    steps: str
 
 
 class DeliveryCheck(BaseModel):

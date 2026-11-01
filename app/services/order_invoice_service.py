@@ -20,7 +20,7 @@ from app.models.order import Order
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.repositories.base import AbstractUnitOfWork
-from app.services import inventory_service, pricing
+from app.services import inventory_service, pricing, reservation_service
 from app.services.invoice_service import generate_invoice_number
 
 logger = logging.getLogger(__name__)
@@ -90,6 +90,7 @@ def invoice_order(
                     sale_id=sale_id,
                     created_by=user_id,
                     allow_negative=allow_negative_stock,
+                    billing_order_id=order.id,
                 )
                 lines.append(
                     (item, None, line.quantity, gross, Decimal(item.gst_percent or 0))
@@ -152,6 +153,7 @@ def invoice_order(
         sale.items = sale_items
         uow.sales.add(sale)
         order.sale_id = sale_id
+        reservation_service.release(uow.session, order.id)  # stock has left the shelf
         uow.commit()
     logger.info("Order %s billed as %s", order.order_number, sale.invoice_number)
     return uow.sales.get_by_id_eager(sale_id), True
