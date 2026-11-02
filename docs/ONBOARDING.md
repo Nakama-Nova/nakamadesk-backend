@@ -168,8 +168,15 @@ A double-entry book in its own package, `app/finance/`, with its own tables (`fi
   - Order advance (money received before the bill): Dr cash or bank, Cr customer advances. Order billed: Dr customer advances (what was received before the bill, up to the bill) and customers owe us (the rest), Cr Sales. Payment after billing: Dr cash or bank, Cr customers owe us.
   - Entries are dated the day the record says (the sale's date; the payment's `paid_on`), which is also how the profit report counts them.
   - **Things it cannot know** are listed by `GET /finance/exceptions` (a dry run): `partial_sale_amount_unknown` (a part-paid counter sale does not say how much was paid), `payment_method_unclear`, `order_missing`, and `cannot_post` (the month is closed). A change to a record in a closed month is reversed today, and the new version is reported, not posted.
-- **Reconciliation** (`GET /finance/reconciliation?from=&to=`, owner and manager): for each month, the profit report's sales against the ledger's Sales account, and the order payments recorded against what the ledger took in from them, plus how many records are still to post or reverse. `agrees` is true only when every difference is zero and nothing is waiting. This is the check for the shadow month.
-- Not built yet: purchases, expenses, wages and machines (step D), profit and loss, balance sheet, an accountant role, depreciation, GST.
+- **Reconciliation** (`GET /finance/reconciliation?from=&to=`, owner and manager): for each month, the profit report's sales, purchases, wages and expenses against the ledger's, and the order payments recorded against what the ledger took in from them, plus how many records are still to post or reverse. `agrees` is true only when every difference is zero and nothing is waiting. This is the check for the shadow month.
+- **Costs (same sync):**
+  - Purchase confirmed: Dr raw material bought, Cr we owe suppliers, on the purchase date. A cancelled purchase is reversed.
+  - Purchase marked paid: Dr we owe suppliers, Cr unmatched payments (the app records no supplier payment date or method), flagged `supplier_payment_unrecorded`. A part-paid purchase stays owed and is flagged `partial_purchase_amount_unknown`.
+  - Expense: Dr the category's account (repairs and maintenance, other costs, or unsorted), Cr cash or bank/UPI by the method. A voided expense is reversed.
+  - Pay-out to staff: Dr wages (gross), Cr cash or bank/UPI (net paid) and staff advances (taken back). Old-style `/wages/pay` payments: Dr wages, Cr cash. A pay-out that pays more than was earned is reported (`payout_does_not_add_up`), not posted.
+  - Staff advance given: Dr staff advances, Cr cash. Advance paid back on its own: the reverse. Money taken back inside a pay-out is already in that pay-out.
+  - Machine bought, machine repair or service: against unmatched payments, flagged `machine_payment_unrecorded`; they are not part of the profit report, so the reconciliation leaves them out.
+- Not built yet: profit and loss, balance sheet, an accountant role, depreciation, GST.
 
 ## 5. Running it locally
 
