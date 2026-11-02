@@ -56,6 +56,7 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Stock transfers (`POST /stock/transfers`) | owner, manager |
 | Machines (`/machines/*`) | owner, manager |
 | Budgets: view (`GET /budgets/*`) | owner, manager; set or delete (`PUT`, `DELETE`): owner only |
+| Finance ledger: view (`GET /finance/*`) | owner, manager; post, reverse, close, change accounts: owner only |
 | Tools: add, change, issue, return, history | owner, manager; list and view: also achari; `GET /tools/mine`: any signed-in staff |
 | Customer account (`/account/*`: profile, addresses, checkout, own orders) | website shoppers only (their own token); staff tokens are refused |
 | Wages | `GET /pending`: own wages, or all for owner and manager; `POST /pay`: owner, manager |
@@ -150,6 +151,18 @@ The owner sets how much to spend on **Machines** and on **raw materials**, for a
 - **Current value:** machines still in use after depreciation; raw materials at stock on hand x current price (not a weighted average cost yet).
 - **State:** `no_budget`, `ok`, `warning` (80% or more used), `over` (all used). A zero budget is `over` as soon as anything is spent. Percentages round half up.
 - **Going over only warns.** Nothing blocks a purchase or a repair. "The owner approves going over" currently means the owner raises the budget. A request-and-approve step, per-location budgets and alerts in the notification feed are not built.
+
+## 4g. Finance ledger (core)
+
+A double-entry book in its own package, `app/finance/`, with its own tables (`finance_*`). The plan, the chart of accounts and the rules for posting your sales, purchases and wages are in [FINANCE_LEDGER_DESIGN.md](FINANCE_LEDGER_DESIGN.md); **only the core is built so far**. Nothing is posted automatically yet: the sales, purchase, expense and wage records do not feed the ledger until the next steps (C and D).
+
+- **The database enforces the rules**, not only the app (`app/finance/ddl.py`, installed by the migration and by test setup): an entry has at least two lines and its debits equal its credits (checked at commit); entries and lines can **never be updated, deleted or truncated**; nothing can be posted on or before the closing date; a business record is posted once per version; a reversal points at the entry it reverses, once.
+- **Accounts** (`/finance/accounts`): the starting chart is seeded by the migration (19 accounts, still awaiting the CA's approval). The owner can add accounts, rename them and switch them off; never delete. Every change is audit-logged.
+- **Manual entries** (`POST /finance/journal`, owner): a date (not in the future), a reason of at least 3 characters, and balanced lines of whole paise. Each line is a debit or a credit to an account code, optionally with a location. Use it for opening balances, money the owner puts in or takes out, and corrections.
+- **Reversal** (`POST /finance/entries/{id}/reverse`, owner, with a reason): posts the mirror image, dated today unless a date is given, and never inside a closed month. The original stays as it was; an entry is reversed once and a reversal is not itself reversed.
+- **Reports** (owner, manager): `GET /finance/trial-balance?as_of=` (debits equal credits, `balanced` says so), `GET /finance/ledger/{code}?from=&to=` (an opening balance and a running balance), `GET /finance/entries` and `/entries/{id}`. A balance is shown in the account's normal direction (positive when it grows its usual way).
+- **Closing** (`PUT /finance/closing`, owner, with a reason): closes the books through a date, or opens them again. Every change is audit-logged with who and why.
+- Not built yet: posting from your records (shadow mode), profit and loss, balance sheet, an accountant role, depreciation, GST.
 
 ## 5. Running it locally
 
