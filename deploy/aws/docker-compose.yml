@@ -27,11 +27,15 @@ services:
     env_file: .env
     environment:
       TRUST_PROXY_HEADERS: "1" # Caddy overwrites X-Forwarded-For
+    # One worker fits the 1 GB t3.micro (the Dockerfile default is 2). Raise API_WORKERS and
+    # API_MEM in /opt/nakama/app.env when the instance is made bigger.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--workers", "${API_WORKERS:-1}", "--proxy-headers", "--forwarded-allow-ips", "*"]
     depends_on:
       migrate: { condition: service_completed_successfully }
     volumes:
       - /srv/nakama/media:/data/media
-    mem_limit: 900m
+    mem_limit: ${API_MEM:-500m}
     logging: *logging
 
   # Runs once per deploy before the API restarts. Migrations must stay additive (docs/ONBOARDING.md).
