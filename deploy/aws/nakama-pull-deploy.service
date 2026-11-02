@@ -1,0 +1,9 @@
+[Unit]
+Description=Deploy the production branch when it changes
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nakama-pull-deploy
+TimeoutStartSec=1200

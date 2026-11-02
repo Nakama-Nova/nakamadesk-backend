@@ -1,0 +1,9 @@
+[Unit]
+Description=Check the production branch every minute
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+
+[Install]
+WantedBy=timers.target
