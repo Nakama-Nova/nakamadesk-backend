@@ -36,13 +36,14 @@ class Location:
     plant_unit_id: Optional[UUID]
     status: str  # ON_SITE or OFF_SITE
 
-    def as_columns(self) -> dict:
+    def as_columns(self, prefix: str = "") -> dict:
+        """The attendance columns for this fix; prefix="check_out_" for the check-out."""
         return {
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "accuracy_m": self.accuracy_m,
-            "plant_unit_id": self.plant_unit_id,
-            "location_status": self.status,
+            f"{prefix}latitude": self.latitude,
+            f"{prefix}longitude": self.longitude,
+            f"{prefix}accuracy_m": self.accuracy_m,
+            f"{prefix}plant_unit_id": self.plant_unit_id,
+            f"{prefix}location_status": self.status,
         }
 
 

@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
@@ -39,4 +48,12 @@ class User(Base):
     # Bumped on password change/reset, role change and switch-off; a token carries the
     # number it was issued under, so bumping it ends every session of this user at once.
     token_version = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    # Who this person reports to (set by the owner; see team_service). Empty = top of the
+    # chart. Switching the boss off or deleting them leaves their people unassigned.
+    reports_to_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

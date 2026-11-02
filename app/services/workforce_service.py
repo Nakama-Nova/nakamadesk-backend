@@ -9,7 +9,7 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
-from app.schemas.plant_unit import GeoAttendanceIn
+from app.schemas.plant_unit import GeoAttendanceIn, GeoPointIn
 from app.schemas.wage import WagePaymentRequest
 from app.services import plant_unit_service
 
@@ -40,51 +40,65 @@ def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
         return Decimal("0.00")
 
 
-def check_in(uow: AbstractUnitOfWork, user_id: UUID, recorder_id: UUID) -> Attendance:
+def check_in(
+    uow: AbstractUnitOfWork,
+    user_id: UUID,
+    recorder_id: UUID,
+    location: Optional[plant_unit_service.Location] = None,
+) -> Attendance:
     """
     Record the start of a workday for a user.
+
+    One record a day: a second check-in after a check-out (or after a manager has marked
+    the person) would count the day's wage twice, so it is refused.
 
     Args:
         uow (AbstractUnitOfWork): Unit of Work.
         user_id (UUID): ID of the user checking in.
         recorder_id (UUID): ID of the user performing the recording.
+        location (Location): The checked GPS fix to store, when there is one.
 
     Returns:
         Attendance: The newly created attendance record.
 
     Raises:
-        HTTPException: If the user is already checked in or not found.
+        HTTPException: If the user already has a record today, or is not found.
     """
     from fastapi import HTTPException
 
-    # Check for existing open attendance today
     now = datetime.now(timezone.utc)
     today = now.date()
 
     with uow:
+        # the lock makes two quick taps on the phone one check-in, not two
+        user = (
+            uow.session.query(User).filter(User.id == user_id).with_for_update().first()
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
         existing = (
             uow.attendance.session.query(Attendance)
-            .filter(
-                Attendance.user_id == user_id,
-                Attendance.date == today,
-                Attendance.check_out.is_(None),
-            )
+            .filter(Attendance.user_id == user_id, Attendance.date == today)
             .first()
         )
         if existing:
-            raise HTTPException(status_code=400, detail="User already checked in today")
-
-        user = uow.users.get_by_id(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "User already checked in today"
+                    if existing.check_in and not existing.check_out
+                    else "Attendance is already recorded for today"
+                ),
+            )
 
         db_attendance = Attendance(
             user_id=user_id,
             date=today,
             status="absent",  # Initially absent until check-out
             check_in=now,
-            daily_wage=user.base_daily_wage,
+            daily_wage=user.base_daily_wage or Decimal("0"),
             recorded_by=recorder_id,
+            **(location.as_columns() if location else {}),
         )
         uow.attendance.add(db_attendance)
         uow.commit()
@@ -93,7 +107,10 @@ def check_in(uow: AbstractUnitOfWork, user_id: UUID, recorder_id: UUID) -> Atten
 
 
 def check_out(
-    uow: AbstractUnitOfWork, attendance_id: UUID, recorder_id: UUID
+    uow: AbstractUnitOfWork,
+    attendance_id: UUID,
+    recorder_id: UUID,
+    location: Optional[plant_unit_service.Location] = None,
 ) -> Attendance:
     """
     Record the completion of a workday and calculate wages.
@@ -120,9 +137,19 @@ def check_out(
             raise HTTPException(status_code=404, detail="Attendance record not found")
         if db_attendance.check_out:
             raise HTTPException(status_code=400, detail="User already checked out")
+        if (
+            db_attendance.check_in is None
+        ):  # a row marked by a manager has no start time
+            raise HTTPException(
+                status_code=400,
+                detail="This record has no check-in time; correct it with PATCH /attendance/{id}",
+            )
 
         now = datetime.now(timezone.utc)
         db_attendance.check_out = now
+        if location:
+            for key, value in location.as_columns("check_out_").items():
+                setattr(db_attendance, key, value)
 
         # Calculate hours
         # In SQLA, if columns are naive, we make them aware for comparison if needed
@@ -158,6 +185,65 @@ def check_out(
         uow.commit()
     uow.refresh(db_attendance)
     return db_attendance
+
+
+def _locate(uow: AbstractUnitOfWork, point: GeoPointIn):
+    from fastapi import HTTPException
+
+    try:
+        return plant_unit_service.locate(
+            uow.session, point.latitude, point.longitude, point.accuracy_m
+        )
+    except plant_unit_service.GeoError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None
+
+
+def check_in_self(uow: AbstractUnitOfWork, user: User, point: GeoPointIn) -> Attendance:
+    """
+    A person checks themselves in from their own phone.
+
+    The server checks the position and picks the plant unit (a client sends a position,
+    never a unit). A position inside no unit is still recorded, as off_site, so the
+    person's manager can see it; it is not refused, because the work is not always at
+    the workshop (a temple, a delivery). The wage is the person's own base_daily_wage.
+    """
+    return check_in(uow, user.id, user.id, _locate(uow, point))
+
+
+def check_out_self(
+    uow: AbstractUnitOfWork, user: User, point: GeoPointIn
+) -> Attendance:
+    """A person ends their own day: closes today's open check-in, with the position."""
+    from fastapi import HTTPException
+
+    location = _locate(uow, point)
+    today = datetime.now(timezone.utc).date()
+    open_row = (
+        uow.attendance.session.query(Attendance)
+        .filter(
+            Attendance.user_id == user.id,
+            Attendance.date == today,
+            Attendance.check_in.isnot(None),
+            Attendance.check_out.is_(None),
+        )
+        .first()
+    )
+    if not open_row:
+        raise HTTPException(status_code=400, detail="You have not checked in today")
+    return check_out(uow, open_row.id, user.id, location)
+
+
+def todays_record(uow: AbstractUnitOfWork, user_id: UUID) -> Optional[Attendance]:
+    """The person's attendance row for today (UTC), if there is one."""
+    return (
+        uow.attendance.session.query(Attendance)
+        .filter(
+            Attendance.user_id == user_id,
+            Attendance.date == datetime.now(timezone.utc).date(),
+        )
+        .order_by(Attendance.created_at.desc())
+        .first()
+    )
 
 
 def mark_attendance(

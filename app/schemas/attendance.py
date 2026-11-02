@@ -67,6 +67,11 @@ class AttendanceResponse(AttendanceBase):
     longitude: Optional[float] = None
     accuracy_m: Optional[float] = None
     location_status: Optional[str] = None  # on_site, off_site; empty = no GPS
+    check_out_plant_unit_id: Optional[UUID] = None
+    check_out_latitude: Optional[float] = None
+    check_out_longitude: Optional[float] = None
+    check_out_accuracy_m: Optional[float] = None
+    check_out_location_status: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 

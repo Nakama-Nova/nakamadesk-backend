@@ -32,6 +32,7 @@ class UserCreate(UserBase):
     password: Optional[str] = Field(default=None, min_length=8, max_length=72)
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
     overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)
+    reports_to_id: Optional[UUID] = None  # their manager
 
 
 class UserUpdate(BaseModel):
@@ -44,6 +45,8 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
     overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)
+    # Send a manager's id to set it, null to clear it, leave it out to keep it.
+    reports_to_id: Optional[UUID] = None
 
 
 class PasswordReset(BaseModel):
@@ -72,5 +75,6 @@ class UserResponse(UserBase):
     created_at: datetime
     base_daily_wage: Optional[Decimal] = None
     overtime_rate_per_hour: Optional[Decimal] = None
+    reports_to_id: Optional[UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
