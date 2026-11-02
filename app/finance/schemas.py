@@ -174,6 +174,16 @@ class ReconciliationMonth(BaseModel):
     order_payments: Decimal  # recorded on orders
     ledger_order_payments: Decimal
     payments_difference: Decimal
+    # purchases, wages and expenses: the profit report against the ledger
+    report_purchases: Decimal = Decimal("0.00")
+    ledger_purchases: Decimal = Decimal("0.00")
+    purchases_difference: Decimal = Decimal("0.00")
+    report_wages: Decimal = Decimal("0.00")
+    ledger_wages: Decimal = Decimal("0.00")
+    wages_difference: Decimal = Decimal("0.00")
+    report_expenses: Decimal = Decimal("0.00")
+    ledger_expenses: Decimal = Decimal("0.00")
+    expenses_difference: Decimal = Decimal("0.00")
 
 
 class Reconciliation(BaseModel):

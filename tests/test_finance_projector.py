@@ -381,7 +381,11 @@ def test_changing_a_sale_in_a_closed_month_reverses_today_and_does_not_repost(db
     sale.total_amount = D("150")
     db.commit()
     result = run(db, 16)
-    assert result.reversed == 1 and [p.code for p in result.problems] == ["cannot_post"]
+    # (the budget tests leave machine repairs in this same year, so look at sales only)
+    assert result.reversed == 1
+    assert [p.code for p in result.problems if p.source_type == "sale"] == [
+        "cannot_post"
+    ]
     reversal = [e for e in entries_of(db, "sale", sale.id) if e.kind == "reversal"][0]
     assert reversal.entry_date == date.today()  # the closed month was left alone
 
