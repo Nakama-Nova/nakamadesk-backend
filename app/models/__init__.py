@@ -1,3 +1,9 @@
+from app.finance.models import (  # noqa: F401
+    FinanceAccount,
+    FinanceEntry,
+    FinanceLine,
+    FinanceSettings,
+)
 from app.models.attendance import Attendance  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 from app.models.bom import BillOfMaterials  # noqa: F401

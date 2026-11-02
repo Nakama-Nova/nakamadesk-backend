@@ -49,6 +49,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.middleware import SecurityHeadersMiddleware, TimingMiddleware
+from app.finance import api as finance_api
 
 # The API docs and schema list every route: keep them for development only.
 app = FastAPI(
@@ -89,6 +90,7 @@ app.include_router(stock_locations.router)
 app.include_router(account.router)
 app.include_router(machines.router)
 app.include_router(budgets.router)
+app.include_router(finance_api.router)
 app.include_router(tools.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)
