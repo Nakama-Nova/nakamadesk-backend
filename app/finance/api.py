@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.deps import check_role, get_db
-from app.finance import service
+from app.finance import projector, reconcile, service
 from app.finance.schemas import (
     AccountIn,
     AccountOut,
@@ -16,7 +16,11 @@ from app.finance.schemas import (
     EntryOut,
     JournalIn,
     Ledger,
+    ProblemOut,
+    Reconciliation,
     ReverseIn,
+    SyncIn,
+    SyncOut,
     TrialBalance,
 )
 from app.models.enums import UserRole
@@ -145,3 +149,63 @@ def set_closing(
 ):
     """Owner only. Close the books through a date, or open them again. Always audited."""
     return service.set_closing(db, body, current_user.id)
+
+
+@router.post("/sync", response_model=SyncOut)
+def sync(
+    body: SyncIn,
+    current_user: User = Depends(check_role(WRITE)),
+    db: Session = Depends(get_db),
+):
+    """
+    Owner only. Write the ledger from the sales and order payments recorded in the app.
+    Safe to repeat: each record is posted once per version, and a changed record is
+    reversed and posted again. Leave the dates out to cover everything.
+    """
+    result = projector.project(db, current_user.id, body.date_from, body.date_to)
+    return _sync_out(result)
+
+
+def _sync_out(result) -> SyncOut:
+    return SyncOut(
+        posted=result.posted,
+        reversed=result.reversed,
+        unchanged=result.unchanged,
+        nothing_to_post=result.nothing_to_post,
+        problems=[
+            ProblemOut(
+                source_type=p.source_type,
+                source_id=p.source_id,
+                code=p.code,
+                detail=p.detail,
+            )
+            for p in result.problems
+        ],
+    )
+
+
+@router.get("/reconciliation", response_model=Reconciliation)
+def reconciliation(
+    date_from: Optional[date] = Query(None, alias="from"),
+    date_to: Optional[date] = Query(None, alias="to"),
+    _: User = Depends(check_role(READ)),
+    db: Session = Depends(get_db),
+):
+    """
+    The ledger against the profit report, month by month: sales, and the money customers
+    paid on orders. `agrees` is true only when every difference is zero and nothing is
+    waiting to be posted.
+    """
+    return reconcile.reconcile(db, date_from, date_to)
+
+
+@router.get("/exceptions", response_model=List[ProblemOut])
+def exceptions(
+    date_from: Optional[date] = Query(None, alias="from"),
+    date_to: Optional[date] = Query(None, alias="to"),
+    _: User = Depends(check_role(READ)),
+    db: Session = Depends(get_db),
+):
+    """Records the ledger cannot post cleanly, and why (a dry run; nothing is written)."""
+    result = projector.project(db, date_from=date_from, date_to=date_to, dry_run=True)
+    return _sync_out(result).problems

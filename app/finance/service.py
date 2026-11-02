@@ -344,6 +344,10 @@ def reverse(
         created_by=user_id,
         reverses_id=entry_id,
         lines=mirrored,
+        # a reversal belongs to the same business record, so reports by source see both
+        source_type=original.source_type,
+        source_id=original.source_id,
+        source_fingerprint=original.source_fingerprint,
     )
     return to_out(session, reversal)
 
