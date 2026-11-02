@@ -406,10 +406,23 @@ def test_the_email_goes_out_from_notifications_with_replies_to_info(monkeypatch)
     assert msg["To"] == "shopper@example.com"
 
 
-def test_a_daily_ceiling_on_all_sign_in_emails(client, outbox, monkeypatch):
-    from app.core.config import settings
+def test_a_daily_ceiling_on_all_sign_in_emails(client, db, outbox, monkeypatch):
+    from datetime import datetime, timedelta, timezone
 
-    monkeypatch.setattr(settings, "CODE_EMAILS_DAILY_LIMIT", 2)
+    from sqlalchemy import func
+
+    from app.core.config import settings
+    from app.models.customer_account import LoginCode
+
+    # The test database is shared and the ceiling counts every code sent today, so
+    # allow two more than what earlier tests already sent.
+    day_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+    already = (
+        db.query(func.count(LoginCode.id))
+        .filter(LoginCode.created_at > day_ago)
+        .scalar()
+    )
+    monkeypatch.setattr(settings, "CODE_EMAILS_DAILY_LIMIT", already + 2)
     for _ in range(3):
         assert ask(client, new_email()).status_code == 202  # same reply every time
     assert len(outbox) == 2

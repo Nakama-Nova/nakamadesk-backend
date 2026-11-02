@@ -6,9 +6,10 @@ much as the happy path. No real SMS is sent: the sender is replaced, or boto3 is
 
 import re
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import func
 
 from app.core import ratelimit
 from app.core.config import settings
@@ -345,7 +346,15 @@ def test_other_countries_can_be_allowed_by_setting(monkeypatch):
 def test_a_daily_ceiling_on_all_texts_stops_a_swarm_of_new_accounts(
     client, db, texts, monkeypatch
 ):
-    monkeypatch.setattr(settings, "SMS_DAILY_LIMIT", 2)
+    # The test database is shared and the ceiling counts every code sent today, so
+    # allow two more than what earlier tests already sent.
+    day_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)
+    already = (
+        db.query(func.count(PhoneCode.id))
+        .filter(PhoneCode.created_at > day_ago)
+        .scalar()
+    )
+    monkeypatch.setattr(settings, "SMS_DAILY_LIMIT", already + 2)
     first = [ask(client, new_account(db), new_phone()).status_code for _ in range(2)]
     assert first == [202, 202]
     # a different account asking for a different number is still refused
