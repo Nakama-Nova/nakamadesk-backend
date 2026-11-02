@@ -2,6 +2,7 @@
 Admin commands that must work before anyone can log in.
 
     python -m app.cli create-owner
+    python -m app.cli finance-sync      write the ledger from sales and order payments
 """
 
 import getpass
@@ -33,7 +34,24 @@ def create_owner() -> int:
     return 0
 
 
+def finance_sync() -> int:
+    from app.finance import projector
+
+    db = SessionLocal()
+    try:
+        r = projector.project(db)
+    finally:
+        db.close()
+    print(
+        f"posted {r.posted}, reversed {r.reversed}, unchanged {r.unchanged}, "
+        f"nothing to post {r.nothing_to_post}, problems {len(r.problems)}"
+    )
+    return 0
+
+
 if __name__ == "__main__":
+    if sys.argv[1:] == ["finance-sync"]:
+        sys.exit(finance_sync())
     if sys.argv[1:] == ["create-owner"]:
         sys.exit(create_owner())
     print(__doc__)

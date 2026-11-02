@@ -133,7 +133,7 @@ These are facts about today's app, not guesses. Each becomes an **exception** on
 |---|---|---|
 | A | **This document**, reviewed by you and your CA | done when you approve |
 | B | **Ledger core**: accounts, entries, lines, the database rules, reversal, month closing, trial balance, manual journal. No posting from your records yet | M |
-| C | **Sales and customer money**: counter sales, order advances, billed orders, payments on orders, and the reconciliation against the sales part of the profit report | M |
+| C | **Sales and customer money**: counter sales, order advances, billed orders, payments on orders, and the reconciliation against the sales part of the profit report | M. **Built** (ONBOARDING 4g) |
 | D | **Costs**: purchases, expenses, wages, staff advances, machines; the full profit reconciliation and the exceptions list | M to L |
 | E | **Reports**: profit and loss, balance sheet, accountant role | M |
 | F | Small fixes the gaps need: sale collections, supplier payments, cost on sale lines | S each |

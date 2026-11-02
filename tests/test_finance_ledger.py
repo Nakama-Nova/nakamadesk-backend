@@ -646,7 +646,6 @@ def test_the_entry_list_filters_by_date_kind_and_source(client_as):
     reversals = owner.get("/finance/entries?kind=reversal").json()
     assert all(e["kind"] == "reversal" for e in reversals) and reversals
     assert owner.get("/finance/entries?kind=nope").status_code == 422
-    assert owner.get("/finance/entries?source_type=sale").json() == [] or True
 
 
 # ======================================================================== closing

@@ -140,3 +140,48 @@ class ClosingIn(BaseModel):
     # kept in the audit trail along with who changed it.
     closed_through: Optional[date] = None
     reason: str = Field(min_length=3, max_length=300)
+
+
+# ---------------------------------------------------------------- projector and checks
+class SyncIn(BaseModel):
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+
+
+class ProblemOut(BaseModel):
+    source_type: str
+    source_id: str
+    code: str
+    detail: str
+
+
+class SyncOut(BaseModel):
+    posted: int  # new entries written (including re-posts of changed records)
+    reversed: int  # old entries reversed (changed or no longer counted records)
+    unchanged: int
+    nothing_to_post: int
+    problems: List[ProblemOut]
+
+
+ReconProblem = ProblemOut
+
+
+class ReconciliationMonth(BaseModel):
+    month: str  # YYYY-MM
+    report_sales: Decimal  # from the profit report
+    ledger_sales: Decimal
+    sales_difference: Decimal  # ledger minus report
+    order_payments: Decimal  # recorded on orders
+    ledger_order_payments: Decimal
+    payments_difference: Decimal
+
+
+class Reconciliation(BaseModel):
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    months: List[ReconciliationMonth]
+    to_post: int  # records the ledger does not have yet
+    to_reverse: int  # entries that no longer match their record
+    problems: List[ReconProblem]
+    # every month agrees to the paisa and nothing is waiting to be posted
+    agrees: bool
