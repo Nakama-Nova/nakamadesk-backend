@@ -6,18 +6,21 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.core.ratelimit import public_rate_limit
 from app.core.security import create_access_token
 from app.db.deps import check_role, get_current_user, get_db
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import (
+    ForgotPassword,
     PasswordChange,
     PasswordReset,
+    SetPasswordWithCode,
     UserCreate,
     UserResponse,
     UserUpdate,
 )
-from app.services import auth_service, login_guard
+from app.services import auth_service, login_guard, staff_code_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,10 @@ def register(
     """
     Create a new staff account.
 
+    Leave `password` out and the person is emailed a code to set their own, so the
+    owner never knows it (503 if email is not set up: the account is still created and
+    "send-invite" can be used once it is).
+
     RBAC: OWNER only. The very first owner is created from the command line
     (`python -m app.cli create-owner`), since nobody can be logged in yet.
 
@@ -44,7 +51,10 @@ def register(
     Returns:
         UserResponse: The newly created user.
     """
-    return auth_service.register_user(db, user, actor_id=current_user.id)
+    created = auth_service.register_user(db, user, actor_id=current_user.id)
+    if user.password is None:
+        staff_code_service.issue(db, created, "invite")
+    return created
 
 
 @router.post("/login")
@@ -195,3 +205,39 @@ def change_my_password(
         "access_token": token,
         "token_type": "bearer",
     }
+
+
+@router.post(
+    "/password/forgot",
+    dependencies=[Depends(public_rate_limit("password-forgot"))],
+)
+def forgot_password(body: ForgotPassword, db: Session = Depends(get_db)):
+    """Email a reset code. The reply is the same whether or not the address has an account."""
+    staff_code_service.forgot(db, body.email)
+    return {"message": "If that email belongs to an account, a code is on its way."}
+
+
+@router.post(
+    "/password/set",
+    dependencies=[Depends(public_rate_limit("password-set"))],
+)
+def set_password_with_code(body: SetPasswordWithCode, db: Session = Depends(get_db)):
+    """Choose a new password with the emailed code (an invite or a reset)."""
+    staff_code_service.set_password_with_code(
+        db, body.email, body.code, body.new_password
+    )
+    return {"message": "Password set. You can sign in now."}
+
+
+@router.post("/users/{user_id}/send-invite")
+def send_invite(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+):
+    """Email this person a fresh code to set their password (a lost or expired invite). OWNER only."""
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=404, detail="User not found")
+    staff_code_service.issue(db, user, "invite")
+    return {"message": f"A code was sent to {user.email}"}

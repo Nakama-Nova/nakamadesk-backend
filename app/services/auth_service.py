@@ -1,3 +1,4 @@
+import secrets
 from typing import List
 
 from fastapi import HTTPException
@@ -69,7 +70,9 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=400, detail="Email already in use")
 
-    hashed_pw = hash_password(user.password)
+    # No password given: a random one nobody knows, until the person sets their own
+    # from the emailed code (staff_code_service).
+    hashed_pw = hash_password(user.password or secrets.token_urlsafe(32))
 
     new_user = User(
         username=user.username,
