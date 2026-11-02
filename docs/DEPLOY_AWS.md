@@ -18,11 +18,22 @@ aws cloudformation wait stack-create-complete --stack-name nakama
 ```
 Point a DNS A record at the `ApiEip` address (stack outputs show it), then deploy. Without a domain the stack's `ApiUrl` (an `sslip.io` name) works.
 
-## Ship a version
+## Branches and releases
+Features branch off and merge into `main` through pull requests; CI runs there. **`production` is the release branch.** Promote a tested `main` commit to it and the server deploys it within a minute:
+
 ```bash
-SITE_ADDRESS=api2.example.com AWS_PROFILE=default deploy/aws/deploy.sh   # SITE_ADDRESS is optional
+git push origin main:production      # fast-forward; only the owner can push it
 ```
-It packs the working tree, uploads it to the bucket, and runs `docker compose up -d --build` on the instance through SSM: build, `alembic upgrade head`, restart, then a health check. The last 3 releases stay in `/opt/nakama/releases`. **Roll back** by checking out the previous commit and running the script again. Migrations must stay additive (see ONBOARDING).
+How it works: the instance runs a systemd timer (`nakama-pull-deploy`) that asks GitHub for the head of `production`. If it changed and `test` and `docker` are green on that exact commit, it fetches it, builds it, runs `alembic upgrade head`, restarts, and waits for the API to be healthy. If the new API never becomes healthy it goes back to the previous release. A commit whose CI failed is skipped until a new commit arrives. No AWS keys live in GitHub, and nothing in GitHub can reach the server: the server asks GitHub (the repo is public, so no credentials are needed). The free plan's policy blocks GitHub-to-AWS OIDC, which is why it is built this way.
+
+Watch it: `aws ssm start-session --target <instance-id>`, then `journalctl -u nakama-pull-deploy -n 50`.
+**Roll back:** push a revert commit to `main`, let CI pass, promote it. Migrations must stay additive (see ONBOARDING), so older code keeps working on a newer schema.
+
+### Manual deploy (escape hatch, or before `production` exists)
+```bash
+SITE_ADDRESS=api.example.com,api2.example.com AWS_PROFILE=default deploy/aws/deploy.sh   # overrides are optional and remembered
+```
+Packs your working tree (uncommitted files too), uploads it to the bucket and runs the same `release.sh` on the instance through SSM. It does not touch the `production` branch, and the timer only acts when that branch moves, so a manual deploy is not overwritten until the next promotion. The last 3 releases stay in `/opt/nakama/releases`.
 
 ## First owner account
 Interactive, so run it in an SSM session:

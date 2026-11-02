@@ -36,23 +36,8 @@ if [ -n "$CORS" ]; then set_kv CORS_ORIGINS "$CORS"; fi
 . /opt/nakama/aws.env
 D=/opt/nakama/releases/$TAG
 mkdir -p \$D && aws s3 cp s3://\$S3_BUCKET/deploy/$TAG.tgz - --region \$AWS_REGION | tar -xz -C \$D
-DBPW=\$(aws secretsmanager get-secret-value --region \$AWS_REGION --secret-id \$DB_SECRET_ID --query SecretString --output text)
-SK=\$(aws secretsmanager get-secret-value --region \$AWS_REGION --secret-id \$APP_SECRET_ID --query SecretString --output text)
-cd \$D/deploy/aws
-umask 077
-cat > .env <<ENVEOF
-ENV=production
-DATABASE_URL=postgresql://nakama:\$DBPW@\$DB_HOST:5432/nakama?sslmode=require
-SECRET_KEY=\$SK
-S3_BUCKET=\$S3_BUCKET
-S3_REGION=\$AWS_REGION
-CORS_ORIGINS=\$CORS_ORIGINS
-SITE_ADDRESS="\${SITE_ADDRESS//,/, }"
-ENVEOF
-API_TAG=$TAG docker compose up -d --build
-ln -sfn \$D /opt/nakama/current
-ls -1dt /opt/nakama/releases/* | tail -n +4 | xargs -r rm -rf
-docker image prune -f >/dev/null
+bash \$D/deploy/aws/release.sh \$D $TAG
+echo "HOST=\${SITE_ADDRESS%%,*}"  # the first hostname answers the health check below
 EOF
 
 # SSM runs commands with sh (dash on Ubuntu); hand the script to bash.
@@ -64,8 +49,12 @@ CMD_ID=$(aws ssm send-command --instance-ids "$INSTANCE" --document-name AWS-Run
   --query Command.CommandId --output text)
 echo "Deploying $TAG (SSM command $CMD_ID)..."
 aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE" || true
-aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE" \
-  --query '[Status,StandardErrorContent]' --output text | tail -n 30
+RESULT=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE" \
+  --query '[Status,StandardOutputContent,StandardErrorContent]' --output text)
+printf '%s\n' "$RESULT" | tail -n 30
+case "$RESULT" in Success*) ;; *) echo "Release failed on the instance (rolled back if there was a previous one)" >&2; exit 1 ;; esac
+HOST=$(printf '%s\n' "$RESULT" | sed -n 's/^HOST=//p' | tail -n 1)
+[ -n "$HOST" ] && URL="https://$HOST"
 
 for i in 1 2 3 4 5 6 7 8 9 10; do
   if curl -fsS "$URL/health/" | grep -q '"ok"'; then echo "Up: $URL/health/"; exit 0; fi

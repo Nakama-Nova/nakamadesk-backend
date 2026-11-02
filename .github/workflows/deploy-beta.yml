@@ -12,11 +12,11 @@ name: Deploy beta
 #   VERCEL_PROJECT_ID   the id of the project vriksha-beta-api
 #   MIGRATION_DATABASE_URL   (optional) Supabase session-pooler address, port 5432.
 #                       When set, `alembic upgrade head` runs before each deploy.
+#
+# No longer automatic: the API runs on AWS (docs/DEPLOY_AWS.md) and deploys from the
+# `production` branch. This stays as a manual fallback for the old Vercel API; delete it
+# when that project is removed.
 on:
-  workflow_run:
-    workflows: ["Backend CI"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 # One deploy at a time; a newer push waits instead of cancelling a deploy halfway.

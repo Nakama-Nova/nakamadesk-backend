@@ -2,7 +2,8 @@ name: Backend CI
 
 on:
   push:
-    branches: [ main, 'feature/*', 'refactor/*' ]
+    # production: the server deploys a commit only after test + docker pass on it
+    branches: [ main, production, 'feature/*', 'refactor/*' ]
   pull_request:
     branches: [ main ]
 
