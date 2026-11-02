@@ -176,7 +176,11 @@ A double-entry book in its own package, `app/finance/`, with its own tables (`fi
   - Pay-out to staff: Dr wages (gross), Cr cash or bank/UPI (net paid) and staff advances (taken back). Old-style `/wages/pay` payments: Dr wages, Cr cash. A pay-out that pays more than was earned is reported (`payout_does_not_add_up`), not posted.
   - Staff advance given: Dr staff advances, Cr cash. Advance paid back on its own: the reverse. Money taken back inside a pay-out is already in that pay-out.
   - Machine bought, machine repair or service: against unmatched payments, flagged `machine_payment_unrecorded`; they are not part of the profit report, so the reconciliation leaves them out.
-- Not built yet: profit and loss, balance sheet, an accountant role, depreciation, GST.
+- **Reports and the accountant role:**
+  - `GET /finance/profit-and-loss?from=&to=` (owner, manager, accountant): income and expenses by account over a period, and the net profit. It matches the existing profit report to the paisa once everything is posted (tax is not income).
+  - `GET /finance/balance-sheet?as_of=` (owner, accountant): what the business has, owes and is worth on a day. The profit made so far is its own line (the books are never closed into equity), so assets always equal liabilities plus equity.
+  - The new **`accountant`** role is for your CA: it can read every finance route and report and change nothing (no sync, journal, accounts or closing). Create the user with role `accountant`. Until the shadow month is signed off these are previews; the existing reports stay official.
+- Not built yet: depreciation, GST, the small data fixes (sale collections, supplier payments, cost on sale lines).
 
 ## 5. Running it locally
 

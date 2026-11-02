@@ -195,3 +195,33 @@ class Reconciliation(BaseModel):
     problems: List[ReconProblem]
     # every month agrees to the paisa and nothing is waiting to be posted
     agrees: bool
+
+
+class ReportRow(BaseModel):
+    code: str
+    name: str
+    amount: Decimal  # counted in the section's own direction
+
+
+class ProfitAndLoss(BaseModel):
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    income: List[ReportRow]
+    expenses: List[ReportRow]
+    total_income: Decimal
+    total_expenses: Decimal
+    net_profit: Decimal  # income minus expenses
+
+
+class BalanceSheet(BaseModel):
+    as_of: date
+    assets: List[ReportRow]
+    liabilities: List[ReportRow]
+    equity: List[ReportRow]
+    profit_so_far: (
+        Decimal  # all income minus all expenses up to the day, not yet in equity
+    )
+    total_assets: Decimal
+    total_liabilities: Decimal
+    total_equity: Decimal  # includes profit so far
+    balanced: bool  # assets = liabilities + equity (always, if the books balance)
