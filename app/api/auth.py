@@ -6,11 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.core.ratelimit import public_rate_limit
 from app.core.security import create_access_token
 from app.db.deps import check_role, get_current_user, get_db
 from app.models.enums import UserRole
 from app.models.user import User
-from app.core.ratelimit import public_rate_limit
 from app.schemas.user import (
     ForgotPassword,
     PasswordChange,

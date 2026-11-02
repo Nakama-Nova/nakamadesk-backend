@@ -16,7 +16,9 @@ def mailbox(monkeypatch):
     ratelimit.reset()
     sent = []
     monkeypatch.setattr(
-        email_service, "send", lambda to, subject, body: sent.append((to, subject, body))
+        email_service,
+        "send",
+        lambda to, subject, body: sent.append((to, subject, body)),
     )
     return sent
 
@@ -49,7 +51,11 @@ def test_an_invited_person_sets_their_own_password(auth_client, mailbox):
 
     set_it = auth_client.post(
         "/auth/password/set",
-        json={"email": body["email"], "code": code_in(mailbox[0]), "new_password": "my-own-pass1"},
+        json={
+            "email": body["email"],
+            "code": code_in(mailbox[0]),
+            "new_password": "my-own-pass1",
+        },
     )
     assert set_it.status_code == 200
     assert sign_in(auth_client, body["username"], "my-own-pass1").status_code == 200
@@ -83,26 +89,41 @@ def test_a_code_works_once_and_ends_the_old_sessions(client, auth_client, db, ma
     payload = {"email": body["email"], "code": first, "new_password": "first-pass-1"}
     assert client.post("/auth/password/set", json=payload).status_code == 200
     before = db.query(User).filter(User.email == body["email"]).first().token_version
-    again = client.post("/auth/password/set", json={**payload, "new_password": "second-pass1"})
+    again = client.post(
+        "/auth/password/set", json={**payload, "new_password": "second-pass1"}
+    )
     assert again.status_code == 400  # used
     assert sign_in(client, body["username"], "second-pass1").status_code == 401
 
     mailbox.clear()
     client.post("/auth/password/forgot", json={"email": body["email"]})
-    ok = {"email": body["email"], "code": code_in(mailbox[0]), "new_password": "third-pass-1"}
+    ok = {
+        "email": body["email"],
+        "code": code_in(mailbox[0]),
+        "new_password": "third-pass-1",
+    }
     assert client.post("/auth/password/set", json=ok).status_code == 200
     db.expire_all()
-    assert db.query(User).filter(User.email == body["email"]).first().token_version > before
+    assert (
+        db.query(User).filter(User.email == body["email"]).first().token_version
+        > before
+    )
 
 
-def test_a_wrong_code_is_refused_and_five_wrong_tries_lock_it(client, auth_client, mailbox):
+def test_a_wrong_code_is_refused_and_five_wrong_tries_lock_it(
+    client, auth_client, mailbox
+):
     _, body = new_staff(auth_client)
     real = code_in(mailbox[0])
     wrong = "ZZZZZZZZ" if real != "ZZZZZZZZ" else "YYYYYYYY"
     for _ in range(staff_code_service.MAX_ATTEMPTS):
         r = client.post(
             "/auth/password/set",
-            json={"email": body["email"], "code": wrong, "new_password": "whatever-123"},
+            json={
+                "email": body["email"],
+                "code": wrong,
+                "new_password": "whatever-123",
+            },
         )
         assert r.status_code == 400
     locked = client.post(
@@ -117,7 +138,11 @@ def test_a_code_for_one_person_does_not_open_another(client, auth_client, mailbo
     _, b = new_staff(auth_client)
     res = client.post(
         "/auth/password/set",
-        json={"email": b["email"], "code": code_in(mailbox[0]), "new_password": "whatever-123"},
+        json={
+            "email": b["email"],
+            "code": code_in(mailbox[0]),
+            "new_password": "whatever-123",
+        },
     )
     assert res.status_code == 400
 
@@ -130,7 +155,11 @@ def test_an_expired_code_is_refused(client, auth_client, db, mailbox):
     db.commit()
     res = client.post(
         "/auth/password/set",
-        json={"email": body["email"], "code": code_in(mailbox[0]), "new_password": "whatever-123"},
+        json={
+            "email": body["email"],
+            "code": code_in(mailbox[0]),
+            "new_password": "whatever-123",
+        },
     )
     assert res.status_code == 400
 
@@ -143,7 +172,9 @@ def test_at_most_three_codes_an_hour_per_person(auth_client, mailbox):
     assert auth_client.post(f"/auth/users/{user_id}/send-invite").status_code == 429
 
 
-def test_the_owner_still_gets_the_account_when_email_is_not_set_up(auth_client, db, monkeypatch):
+def test_the_owner_still_gets_the_account_when_email_is_not_set_up(
+    auth_client, db, monkeypatch
+):
     def refuse(*a, **k):
         raise email_service.EmailNotConfigured("no smtp")
 
@@ -163,4 +194,6 @@ def test_only_the_owner_can_send_an_invite(manager_client, db, mailbox):
     )
     db.add(someone)
     db.commit()
-    assert manager_client.post(f"/auth/users/{someone.id}/send-invite").status_code == 403
+    assert (
+        manager_client.post(f"/auth/users/{someone.id}/send-invite").status_code == 403
+    )

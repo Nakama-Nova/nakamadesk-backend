@@ -29,7 +29,9 @@ from app.services import auth_service, email_service
 
 logger = logging.getLogger(__name__)
 
-ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L: easy to read out and retype
+ALPHABET = (
+    "ABCDEFGHJKMNPQRSTUVWXYZ23456789"  # no 0/O, 1/I/L: easy to read out and retype
+)
 CODE_LENGTH = 8
 RESET_MINUTES = 60
 INVITE_HOURS = 72
@@ -109,7 +111,9 @@ def issue(db: Session, user: User, purpose: str) -> None:
         valid = f"{INVITE_HOURS} hours"
     else:
         subject = f"Your {STORE_NAME} password code"
-        intro = f"Hello {name},\n\nSomeone asked to reset the password for {user.username}."
+        intro = (
+            f"Hello {name},\n\nSomeone asked to reset the password for {user.username}."
+        )
         valid = f"{RESET_MINUTES} minutes"
     body = (
         f"{intro}\n\nYour code is {code}\n\n"
