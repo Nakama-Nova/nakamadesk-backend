@@ -12,6 +12,15 @@ flock 9 # one deploy at a time, whichever path started it
 . /opt/nakama/aws.env
 PREV=$(readlink /opt/nakama/current || true)
 
+# A small instance needs swap, so a build or a spike slows things down instead of getting the
+# API killed. Created once; every release checks it is still there.
+if ! swapon --show | grep -q .; then
+  [ -f /swapfile ] || { fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null; }
+  swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+echo 'vm.swappiness=20' > /etc/sysctl.d/99-nakama.conf && sysctl -q -p /etc/sysctl.d/99-nakama.conf
+
 DBPW=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$DB_SECRET_ID" --query SecretString --output text)
 SK=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$APP_SECRET_ID" --query SecretString --output text)
 

@@ -61,6 +61,32 @@ The API sends texts through Amazon SNS with the instance's AWS role (no keys). *
 
 Until all of that is done the routes answer 503 ("Phone verification is not set up yet") and nothing is sent. The API's behaviour and limits are in ONBOARDING 4c.
 
+## Cost and size
+Rough monthly cost at Sydney list prices (check the AWS pricing pages): server `t3.small` about $19 or `t3.micro` about $10, database `db.t3.micro` about $20, disks about $6, the public IP about $3.70, secrets and the alarm about $1. That is about $50 a month on `t3.small`, about $40 on `t3.micro`. The AWS cost report lags a day; the credit balance is `aws freetier get-account-plan-state`.
+
+**`t3.micro` (1 GB)** runs the API with **1 worker** (`API_WORKERS`, default 1) and a **2 GB swap file** that every release creates if missing (`release.sh`). That is enough for a few users; builds are slow but finish. If memory gets tight (`free -m` in a Session Manager shell, or the API restarting), move up to `t3.small` and raise `API_WORKERS=2` and `API_MEM=900m` in `/opt/nakama/app.env`.
+
+**Changing the size of a live stack restarts the server (a few minutes).** Always use a change set, and read it before running it:
+```bash
+aws cloudformation create-change-set --stack-name nakama --change-set-name resize --use-previous-template \
+  --parameters ParameterKey=InstanceType,ParameterValue=t3.small \
+    ParameterKey=VpcId,UsePreviousValue=true ParameterKey=InstanceSubnetId,UsePreviousValue=true \
+    ParameterKey=DbSubnetIds,UsePreviousValue=true ParameterKey=DbInstanceClass,UsePreviousValue=true \
+    ParameterKey=UbuntuAmi,UsePreviousValue=true ParameterKey=CorsOrigins,UsePreviousValue=true
+aws cloudformation describe-change-set --stack-name nakama --change-set-name resize --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]'
+```
+**Run it only if `ApiInstance` shows `Replacement: False`.** The Ubuntu image id is looked up again on every update; when Canonical publishes a new image the server would be **replaced**, which loses the media folder and the server's disk. If it says `True`, delete the change set and resize the instance directly instead (`aws ec2 stop-instances`, `modify-instance-attribute --instance-type`, `start-instances`).
+
+**Night stop** (a separate stack, so it can be paused or removed): the server and database are stopped from 00:00 to about 04:50 IST and nothing is lost, but the API and shop data are unreachable in that window and the desktop app shows "server not answering". It saves about $6 a month; the IP and disks cost the same stopped. Needs the ids from the `nakama` outputs:
+```bash
+INSTANCE=$(aws cloudformation describe-stacks --stack-name nakama --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" --output text)
+DB=$(aws cloudformation describe-stacks --stack-name nakama --query "Stacks[0].Outputs[?OutputKey=='DbEndpoint'].OutputValue" --output text | cut -d. -f1)
+aws cloudformation create-stack --stack-name nakama-schedule --capabilities CAPABILITY_IAM \
+  --template-body file://deploy/aws/schedule.yaml \
+  --parameters ParameterKey=InstanceId,ParameterValue=$INSTANCE ParameterKey=DbInstanceId,ParameterValue=$DB
+```
+Pause it with `State=DISABLED` (`update-stack --use-previous-template`), or run 24 hours again with `delete-stack --stack-name nakama-schedule`. If the server is ever found stopped in the daytime, start it: `aws ec2 start-instances --instance-ids $INSTANCE` (and `aws rds start-db-instance --db-instance-identifier $DB` first if the database is also stopped; it takes a few minutes).
+
 ## First owner account
 Interactive, so run it in an SSM session:
 ```bash
