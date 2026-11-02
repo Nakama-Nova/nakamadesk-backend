@@ -39,6 +39,27 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
     # Where a shopper's reply goes, if different from the sender (e.g. info@).
     EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
+    # --- SMS (one-time codes to a shopper's phone) ------------------------------
+    # SMS_PROVIDER=sns sends through Amazon SNS with the server's AWS role. Empty: in
+    # development the message is only logged; in production the routes answer 503.
+    SMS_PROVIDER: str = os.getenv("SMS_PROVIDER", "")
+    SMS_AWS_REGION: str = os.getenv("SMS_AWS_REGION", "ap-southeast-2")
+    # India (TRAI DLT): a registered header and the id of an approved template. The
+    # text sent must match that template, so SMS_OTP_TEMPLATE is set to the same words.
+    SMS_SENDER_ID: str = os.getenv("SMS_SENDER_ID", "")
+    SMS_DLT_ENTITY_ID: str = os.getenv("SMS_DLT_ENTITY_ID", "")
+    SMS_DLT_TEMPLATE_ID: str = os.getenv("SMS_DLT_TEMPLATE_ID", "")
+    SMS_OTP_TEMPLATE: str = os.getenv("SMS_OTP_TEMPLATE") or (
+        "Your Vriksha Studios verification code is {code}. "
+        "It is valid for 10 minutes. Do not share it with anyone."
+    )
+    # Only numbers starting with one of these get a code. Stops anyone using the form to
+    # make the shop pay for texts to expensive foreign numbers.
+    SMS_ALLOWED_PREFIXES: list = [
+        v.strip()
+        for v in os.getenv("SMS_ALLOWED_PREFIXES", "+91").split(",")
+        if v.strip()
+    ]
     # --- Paying by cash or UPI (no payment gateway) --------------------------
     # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
     # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.
