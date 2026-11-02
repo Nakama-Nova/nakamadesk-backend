@@ -24,10 +24,12 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """
-    Schema for creating a new user with a password.
+    Schema for creating a new user. Leave `password` out and the person is emailed a code
+    to choose their own (the owner never types or sees one); the command line, which has
+    nobody to email, still passes one.
     """
 
-    password: str = Field(min_length=8, max_length=72)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=72)
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
     overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)
 
@@ -46,6 +48,15 @@ class UserUpdate(BaseModel):
 
 class PasswordReset(BaseModel):
     new_password: str = Field(min_length=8, max_length=72)
+
+
+class ForgotPassword(BaseModel):
+    email: EmailStr
+
+
+class SetPasswordWithCode(PasswordReset):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=16)
 
 
 class PasswordChange(PasswordReset):
