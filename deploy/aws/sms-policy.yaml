@@ -1,0 +1,33 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Lets the NakamaDesk API instance send SMS through Amazon SNS (phone verification
+  codes). A separate stack on purpose: the main stack is untouched, and deleting this
+  one takes the permission away. Needs the Paid plan (the free plan blocks SMS).
+  See docs/DEPLOY_AWS.md, "SMS".
+
+Parameters:
+  RoleName:
+    Type: String
+    Description: >-
+      The instance role of the nakama stack:
+      aws cloudformation describe-stack-resource --stack-name nakama
+      --logical-resource-id InstanceRole --query StackResourceDetail.PhysicalResourceId
+
+Resources:
+  SendSms:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: nakama-send-sms
+      Roles: [!Ref RoleName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Publishing to a phone number has no resource ARN, so "*" is the only form.
+          # What can be spent is capped by the account's SNS MonthlySpendLimit instead.
+          - Effect: Allow
+            Action: ["sns:Publish"]
+            Resource: "*"
+          # Only send to phone numbers, never to topics in this account.
+          - Effect: Deny
+            Action: ["sns:Publish"]
+            Resource: !Sub "arn:aws:sns:*:${AWS::AccountId}:*"

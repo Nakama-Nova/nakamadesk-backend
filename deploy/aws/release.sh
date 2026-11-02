@@ -26,6 +26,9 @@ S3_REGION=$AWS_REGION
 CORS_ORIGINS=$CORS_ORIGINS
 SITE_ADDRESS="${SITE_ADDRESS//,/, }"
 EOF
+# Non-secret app settings (SMS_PROVIDER, SMS_DLT_*, ...): one KEY=value per line, edited by
+# hand on the instance. Secrets stay in Secrets Manager.
+if [ -f /opt/nakama/app.env ]; then cat /opt/nakama/app.env >> .env; fi
 
 API_TAG=$TAG docker compose up -d --build
 

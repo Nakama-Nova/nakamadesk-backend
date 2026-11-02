@@ -35,6 +35,32 @@ SITE_ADDRESS=api.example.com,api2.example.com AWS_PROFILE=default deploy/aws/dep
 ```
 Packs your working tree (uncommitted files too), uploads it to the bucket and runs the same `release.sh` on the instance through SSM. It does not touch the `production` branch, and the timer only acts when that branch moves, so a manual deploy is not overwritten until the next promotion. The last 3 releases stay in `/opt/nakama/releases`.
 
+## SMS (phone verification codes)
+The API sends texts through Amazon SNS with the instance's AWS role (no keys). **The free plan blocks it**: an AWS policy denies the SMS service, so this needs the Paid plan (AWS Settings, by the project owner). Then, in order:
+
+1. **Let the role publish.** In a stack of its own, so the main stack is untouched:
+   ```bash
+   ROLE=$(aws cloudformation describe-stack-resource --stack-name nakama --logical-resource-id InstanceRole --query StackResourceDetail.PhysicalResourceId --output text)
+   aws cloudformation create-stack --stack-name nakama-sms --capabilities CAPABILITY_IAM \
+     --template-body file://deploy/aws/sms-policy.yaml --parameters ParameterKey=RoleName,ParameterValue=$ROLE
+   ```
+2. **Cap the spend** (account-wide; the policy cannot do this): `aws sns set-sms-attributes --attributes MonthlySpendLimit=5,DefaultSMSType=Transactional`. The default limit is small and raising it needs a support request.
+3. **Leave the SMS sandbox.** New accounts may text only phone numbers they verified in the console, until production access is granted (End User Messaging console).
+4. **India (TRAI DLT):** register the entity, a sender header and an OTP template with a carrier's DLT portal. Carriers drop unregistered texts to Indian numbers; this is not an AWS rule.
+5. **Tell the app** (non-secret settings, one `KEY=value` per line, in a Session Manager shell; the next release picks them up):
+   ```bash
+   sudo tee -a /opt/nakama/app.env <<'EOF'
+   SMS_PROVIDER=sns
+   SMS_SENDER_ID=<registered header>
+   SMS_DLT_ENTITY_ID=<entity id>
+   SMS_DLT_TEMPLATE_ID=<template id>
+   SMS_OTP_TEMPLATE=<the approved text, with {code} where the code goes>
+   EOF
+   ```
+   Then promote any commit (or run `deploy/aws/deploy.sh`) so the container restarts with them.
+
+Until all of that is done the routes answer 503 ("Phone verification is not set up yet") and nothing is sent. The API's behaviour and limits are in ONBOARDING 4c.
+
 ## First owner account
 Interactive, so run it in an SSM session:
 ```bash

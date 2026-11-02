@@ -23,14 +23,26 @@ from app.schemas.account import (
     AddressOut,
     CodeRequest,
     CodeSent,
+    PhoneCodeRequest,
+    PhoneCodeSent,
+    PhoneVerifyRequest,
     TokenOut,
     VerifyRequest,
 )
 from app.schemas.public import PublicOrder
 from app.services import account_shop_service as shop
 from app.services import customer_account_service as service
+from app.services import phone_verification_service as phone_service
+from app.services import sms_service
 
 router = APIRouter(prefix="/account", tags=["Customer account"])
+
+
+def _same_number(typed: str, stored: str) -> bool:
+    try:
+        return sms_service.normalize_phone(typed) == stored
+    except ValueError:
+        return False
 
 
 @router.post(
@@ -76,13 +88,52 @@ def update_me(
     account: CustomerAccount = Depends(get_current_customer),
     db: Session = Depends(get_db),
 ):
-    """Change your name, phone (kept as typed, not verified) or marketing consent."""
-    for key, value in body.model_dump(exclude_unset=True).items():
+    """
+    Change your name, phone or marketing consent. A phone typed here is kept as typed and
+    is not verified; use /account/phone/request-code to verify it by SMS.
+    """
+    data = body.model_dump(exclude_unset=True)
+    if data.get("phone") is not None:
+        if account.phone_verified_at and _same_number(data["phone"], account.phone):
+            data.pop("phone")  # the number that is already verified: leave it as it is
+        else:
+            account.phone_verified_at = None  # a different number is not verified
+    for key, value in data.items():
         if value is not None:
             setattr(account, key, value)
     db.commit()
     db.refresh(account)
     return account
+
+
+@router.post(
+    "/phone/request-code",
+    response_model=PhoneCodeSent,
+    status_code=202,
+    dependencies=[Depends(public_rate_limit("account-phone-code"))],
+)
+def request_phone_code(
+    body: PhoneCodeRequest,
+    account: CustomerAccount = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    """Text a 6-digit code to a mobile number, to prove it is yours. Indian numbers only."""
+    phone_service.request_code(db, account, body.phone)
+    return PhoneCodeSent()
+
+
+@router.post(
+    "/phone/verify",
+    response_model=AccountOut,
+    dependencies=[Depends(public_rate_limit("account-phone-verify"))],
+)
+def verify_phone(
+    body: PhoneVerifyRequest,
+    account: CustomerAccount = Depends(get_current_customer),
+    db: Session = Depends(get_db),
+):
+    """Type the code you were texted. The number becomes your verified phone."""
+    return phone_service.verify_code(db, account, body.phone, body.code)
 
 
 @router.post("/logout-all", status_code=204)

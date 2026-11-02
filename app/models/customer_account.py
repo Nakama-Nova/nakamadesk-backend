@@ -42,7 +42,9 @@ class CustomerAccount(Base):
     email = Column(String, unique=True, nullable=False)  # lower case
     email_verified_at = Column(DateTime, nullable=True)
     name = Column(String, nullable=True)
-    phone = Column(String, nullable=True)  # as typed, NOT verified
+    phone = Column(String, nullable=True)  # as typed, unless phone_verified_at is set
+    # Set when the shopper typed the code we texted to `phone` (then `phone` is +91...).
+    phone_verified_at = Column(DateTime, nullable=True)
     customer_id = Column(UUID(as_uuid=True), ForeignKey("customers.id"), nullable=True)
     terms_accepted_at = Column(DateTime, nullable=True)
     marketing_consent = Column(
@@ -84,6 +86,36 @@ class CustomerAddress(Base):
     is_default = Column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
+    created_at = Column(DateTime, nullable=False, default=_now)
+
+
+class PhoneCode(Base):
+    """
+    A one-time code texted to a signed-in shopper to prove a phone number is theirs. Same
+    rules as LoginCode: only a keyed hash is stored; it works once, for a few minutes,
+    after a few wrong tries at most.
+    """
+
+    __tablename__ = "phone_codes"
+    __table_args__ = (Index("ix_phone_codes_phone_created", "phone", "created_at"),)
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    account_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("customer_accounts.id"),
+        nullable=False,
+        index=True,
+    )
+    phone = Column(String, nullable=False)  # international form, +91...
+    code_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    attempts = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    used_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_now)
 
 

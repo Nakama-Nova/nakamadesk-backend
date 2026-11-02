@@ -14,6 +14,7 @@ from app.models.customer_account import (  # noqa: F401
     CustomerAccount,
     CustomerAddress,
     LoginCode,
+    PhoneCode,
 )
 from app.models.daily_wage import DailyWage  # noqa: F401
 from app.models.design import Design, DesignProduct  # noqa: F401

@@ -41,9 +41,23 @@ class AccountOut(BaseModel):
     email: str
     name: Optional[str] = None
     phone: Optional[str] = None
+    phone_verified_at: Optional[datetime] = None  # set once the SMS code was typed
     marketing_consent: bool = False
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class PhoneCodeRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=20)
+
+
+class PhoneCodeSent(BaseModel):
+    message: str = "A code is on its way by SMS."
+
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str = Field(min_length=7, max_length=20)
+    code: str = Field(pattern=r"^\d{6}$")
 
 
 class AccountUpdate(BaseModel):
