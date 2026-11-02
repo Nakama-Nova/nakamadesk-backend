@@ -6,17 +6,19 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.deps import check_role, get_db
-from app.finance import projector, reconcile, service
+from app.finance import projector, reconcile, reports, service
 from app.finance.schemas import (
     AccountIn,
     AccountOut,
     AccountUpdate,
+    BalanceSheet,
     Closing,
     ClosingIn,
     EntryOut,
     JournalIn,
     Ledger,
     ProblemOut,
+    ProfitAndLoss,
     Reconciliation,
     ReverseIn,
     SyncIn,
@@ -28,7 +30,9 @@ from app.models.user import User
 
 router = APIRouter(prefix="/finance", tags=["Finance ledger"])
 
-READ = [UserRole.OWNER, UserRole.MANAGER]
+# The accountant (your CA) can read the books and the reports but never change anything.
+READ = [UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT]
+BALANCE_SHEET = [UserRole.OWNER, UserRole.ACCOUNTANT]
 WRITE = [UserRole.OWNER]
 
 
@@ -71,6 +75,27 @@ def trial_balance(
 ):
     """Every account's totals and balance up to `as_of` (today by default)."""
     return service.trial_balance(db, as_of)
+
+
+@router.get("/profit-and-loss", response_model=ProfitAndLoss)
+def profit_and_loss(
+    date_from: Optional[date] = Query(None, alias="from"),
+    date_to: Optional[date] = Query(None, alias="to"),
+    _: User = Depends(check_role(READ)),
+    db: Session = Depends(get_db),
+):
+    """Income minus expenses over a period, from the ledger. Leave the dates out for all time."""
+    return reports.profit_and_loss(db, date_from, date_to)
+
+
+@router.get("/balance-sheet", response_model=BalanceSheet)
+def balance_sheet(
+    as_of: Optional[date] = None,
+    _: User = Depends(check_role(BALANCE_SHEET)),
+    db: Session = Depends(get_db),
+):
+    """What the business has, owes and is worth on a day (today by default). Owner and accountant."""
+    return reports.balance_sheet(db, as_of)
 
 
 @router.get("/ledger/{code}", response_model=Ledger)

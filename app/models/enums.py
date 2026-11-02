@@ -14,3 +14,6 @@ class UserRole(str, Enum):
     ACHARI = "achari"
     WORKER = "worker"
     ARTISAN = "artisan"  # carvers who restore temple pieces (see Restoration)
+    ACCOUNTANT = (
+        "accountant"  # the CA: reads the finance ledger and reports, changes nothing
+    )

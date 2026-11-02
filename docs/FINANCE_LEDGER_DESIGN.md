@@ -88,17 +88,17 @@ Every line can carry the **location** (the Shop, a plant unit) so profit and spe
 
 | Route | Who | What |
 |---|---|---|
-| `GET /finance/trial-balance?as_of=` | owner, manager | Every account's balance; debits equal credits |
-| `GET /finance/ledger/{account}?from=&to=` | owner, manager | One account's entries with a running balance |
-| `GET /finance/profit-and-loss?from=&to=` | owner, manager | Income minus expenses |
-| `GET /finance/balance-sheet?as_of=` | owner | Assets, liabilities, equity |
-| `GET /finance/reconciliation?from=&to=` | owner, manager | The ledger against the existing reports, line by line, with differences |
-| `GET /finance/exceptions` | owner, manager | Records the ledger could not post cleanly (section 7) |
+| `GET /finance/trial-balance?as_of=` | owner, manager, accountant | Every account's balance; debits equal credits |
+| `GET /finance/ledger/{account}?from=&to=` | owner, manager, accountant | One account's entries with a running balance |
+| `GET /finance/profit-and-loss?from=&to=` | owner, manager, accountant | Income minus expenses |
+| `GET /finance/balance-sheet?as_of=` | owner, accountant | Assets, liabilities, equity |
+| `GET /finance/reconciliation?from=&to=` | owner, manager, accountant | The ledger against the existing reports, line by line, with differences |
+| `GET /finance/exceptions` | owner, manager, accountant | Records the ledger could not post cleanly (section 7) |
 | `POST /finance/journal` | owner | A manual, balanced entry with a required reason (opening balances, owner's drawings, corrections) |
 | `POST /finance/entries/{id}/reverse` | owner | Reverse an entry, with a reason |
 | `POST /finance/sync` | owner | Run the projector now |
 
-A read-only **accountant** role for your CA is a small addition and I recommend it.
+The read-only **accountant** role for your CA (built) can use every `GET` route above and nothing else.
 
 ## 7. What your current data cannot tell the ledger (gaps I found)
 
@@ -135,7 +135,7 @@ These are facts about today's app, not guesses. Each becomes an **exception** on
 | B | **Ledger core**: accounts, entries, lines, the database rules, reversal, month closing, trial balance, manual journal. No posting from your records yet | M |
 | C | **Sales and customer money**: counter sales, order advances, billed orders, payments on orders, and the reconciliation against the sales part of the profit report | M. **Built** (ONBOARDING 4g) |
 | D | **Costs**: purchases, expenses, wages, staff advances, machines; the full profit reconciliation and the exceptions list | M to L. **Built** (ONBOARDING 4g) |
-| E | **Reports**: profit and loss, balance sheet, accountant role | M |
+| E | **Reports**: profit and loss, balance sheet, accountant role | M. **Built** (ONBOARDING 4g) |
 | F | Small fixes the gaps need: sale collections, supplier payments, cost on sale lines | S each |
 | Then | One month in shadow mode, review, go-live decision | a month |
 

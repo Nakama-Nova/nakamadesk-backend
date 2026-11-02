@@ -31,7 +31,7 @@ class User(Base):
     phone = Column(String, nullable=True)
     role = Column(
         String, nullable=False, default=UserRole.WORKER
-    )  # owner, manager, sales, achari, worker
+    )  # owner, manager, sales, achari, worker, artisan, accountant
     status = Column(String, default="active")  # active, inactive, suspended
     is_active = Column(Boolean, default=True)
     base_daily_wage = Column(Numeric(10, 2), default=0.0)
