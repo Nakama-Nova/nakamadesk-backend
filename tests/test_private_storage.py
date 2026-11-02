@@ -280,3 +280,16 @@ def test_private_kind_table_is_sane():
     assert media_service.can_be_public("glb")
     for kind in ("stl", "obj", "ply", "nc", "source_scan", "part_model"):
         assert not media_service.can_be_public(kind)
+
+
+@pytest.mark.parametrize("role", ["sales", "achari", "worker"])
+def test_only_owner_and_manager_can_ask_for_an_upload_url(client_as, role):
+    client, _ = client_as(role)
+    body = {
+        "item_id": str(uuid.uuid4()),
+        "kind": "image",
+        "filename": "a.jpg",
+        "content_type": "image/jpeg",
+        "size": 100,
+    }
+    assert client.post("/uploads/presign", json=body).status_code == 403

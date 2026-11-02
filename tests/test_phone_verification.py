@@ -340,3 +340,14 @@ def test_numbers_are_put_in_international_form(typed, expected):
 def test_other_countries_can_be_allowed_by_setting(monkeypatch):
     monkeypatch.setattr(settings, "SMS_ALLOWED_PREFIXES", ["+91", "+44"])
     assert sms_service.normalize_phone("+44 7911 123456") == "+447911123456"
+
+
+def test_a_daily_ceiling_on_all_texts_stops_a_swarm_of_new_accounts(
+    client, db, texts, monkeypatch
+):
+    monkeypatch.setattr(settings, "SMS_DAILY_LIMIT", 2)
+    first = [ask(client, new_account(db), new_phone()).status_code for _ in range(2)]
+    assert first == [202, 202]
+    # a different account asking for a different number is still refused
+    assert ask(client, new_account(db), new_phone()).status_code == 429
+    assert len(texts) == 2

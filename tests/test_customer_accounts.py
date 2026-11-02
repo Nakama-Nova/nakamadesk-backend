@@ -404,3 +404,12 @@ def test_the_email_goes_out_from_notifications_with_replies_to_info(monkeypatch)
     assert msg["From"] == "Vriksha Studios <notifications@vrikshastudios.com>"
     assert msg["Reply-To"] == "info@vrikshastudios.com"
     assert msg["To"] == "shopper@example.com"
+
+
+def test_a_daily_ceiling_on_all_sign_in_emails(client, outbox, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "CODE_EMAILS_DAILY_LIMIT", 2)
+    for _ in range(3):
+        assert ask(client, new_email()).status_code == 202  # same reply every time
+    assert len(outbox) == 2

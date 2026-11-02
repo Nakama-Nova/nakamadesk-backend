@@ -53,7 +53,7 @@ class RegisterRequest(BaseModel):
 )
 def presign(
     req: PresignRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
