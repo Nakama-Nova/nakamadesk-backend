@@ -60,6 +60,11 @@ class Settings:
         for v in os.getenv("SMS_ALLOWED_PREFIXES", "+91").split(",")
         if v.strip()
     ]
+    # Hard daily ceilings on codes sent to anyone (every account and number together). The
+    # per-IP limit is per server instance and the per-account limits are beaten by making
+    # new accounts, so these are what actually stop someone running up the SMS/email bill.
+    SMS_DAILY_LIMIT: int = int(os.getenv("SMS_DAILY_LIMIT", "300"))
+    CODE_EMAILS_DAILY_LIMIT: int = int(os.getenv("CODE_EMAILS_DAILY_LIMIT", "1000"))
     # --- Paying by cash or UPI (no payment gateway) --------------------------
     # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
     # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.

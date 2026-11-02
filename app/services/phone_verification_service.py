@@ -5,8 +5,8 @@ Same rules as the emailed sign-in code: only a keyed hash is stored, a code live
 CODE_MINUTES, allows MAX_ATTEMPTS wrong tries, works once, and a new code replaces the old.
 
 Every text costs money and can be abused ("SMS pumping"), so asking for a code is
-limited three ways: per IP (on the route), MAX_CODES_PER_HOUR per account, and
-MAX_CODES_PER_PHONE_PER_DAY per number whoever asks. Only numbers starting with one of
+limited four ways: per IP (on the route), MAX_CODES_PER_HOUR per account,
+MAX_CODES_PER_PHONE_PER_DAY per number whoever asks, and SMS_DAILY_LIMIT in total. Only numbers starting with one of
 SMS_ALLOWED_PREFIXES (+91 by default) get a code at all.
 """
 
@@ -74,7 +74,16 @@ def request_code(db: Session, account: CustomerAccount, raw_phone: str) -> None:
         )
         .scalar()
     )
-    if per_account >= MAX_CODES_PER_HOUR or per_phone >= MAX_CODES_PER_PHONE_PER_DAY:
+    sent_today = (
+        db.query(func.count(PhoneCode.id))
+        .filter(PhoneCode.created_at > now - timedelta(days=1))
+        .scalar()
+    )
+    if (
+        per_account >= MAX_CODES_PER_HOUR
+        or per_phone >= MAX_CODES_PER_PHONE_PER_DAY
+        or sent_today >= settings.SMS_DAILY_LIMIT
+    ):
         db.commit()
         logger.warning("phone code limit reached")
         raise HTTPException(

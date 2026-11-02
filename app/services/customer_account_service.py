@@ -21,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import security
+from app.core.config import settings
 from app.models.customer_account import CustomerAccount, CustomerAddress, LoginCode
 from app.services import email_service
 
@@ -60,7 +61,12 @@ def request_code(db: Session, email: str) -> None:
         )
         .scalar()
     )
-    if recent >= MAX_CODES_PER_HOUR:
+    sent_today = (
+        db.query(func.count(LoginCode.id))
+        .filter(LoginCode.created_at > now - timedelta(days=1))
+        .scalar()
+    )
+    if recent >= MAX_CODES_PER_HOUR or sent_today >= settings.CODE_EMAILS_DAILY_LIMIT:
         db.commit()
         logger.warning("sign-in code limit reached for one address")
         return
