@@ -10,7 +10,7 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
 from app.schemas.stock import StockUpdate
-from app.services import inventory_service
+from app.services import inventory_service, reservation_service
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
@@ -88,6 +88,22 @@ def get_items(
         _for(current_user, i)
         for i in inventory_service.get_items(uow, limit, offset, item_type)
     ]
+
+
+@router.get("/held")
+def held_stock(
+    current_user: User = Depends(check_role(READERS)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Units set aside for confirmed orders, per item: {item_id: units}. A held unit is still on
+    the shelf but cannot be sold to anyone else, so what can be sold is the stock minus this.
+    Items with nothing held are left out.
+
+    RBAC: every staff role that can read stock.
+    """
+    with uow:
+        return reservation_service.held_by_item(uow.session)
 
 
 @router.get("/{item_id}", response_model=ItemResponse)

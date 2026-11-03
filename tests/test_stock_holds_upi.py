@@ -317,3 +317,30 @@ def test_a_signed_in_shopper_sees_the_link_on_their_own_order(client, client_as,
     set_status(owner, db, number, "confirmed")
     mine = client.get(f"/account/orders/{number}", headers=h).json()
     assert mine["upi_link"].startswith("upi://pay?")
+
+
+def test_held_stock_lists_what_is_set_aside_per_item(client, client_as, db):
+    item = make_item(db, stock=5)
+    other = make_item(db, stock=5)
+    number = guest_order(client, item, qty=2)
+    owner, _ = client_as("owner")
+    assert (
+        str(item.id) not in owner.get("/items/held").json()
+    )  # not confirmed: nothing held
+
+    set_status(owner, db, number, "confirmed")
+    held = owner.get("/items/held")
+    assert held.status_code == 200
+    assert held.json()[str(item.id)] == 2 and str(other.id) not in held.json()
+
+    set_status(owner, db, number, "cancelled")  # a cancelled order lets the stock go
+    assert str(item.id) not in owner.get("/items/held").json()
+
+
+def test_every_staff_role_can_read_held_stock(client_as):
+    sales, _ = client_as("sales")
+    assert sales.get("/items/held").status_code == 200
+
+
+def test_held_stock_needs_a_sign_in(client):
+    assert client.get("/items/held").status_code == 401

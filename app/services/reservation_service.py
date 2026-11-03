@@ -38,6 +38,17 @@ def reserved_qty(
     return int(q.scalar() or 0)
 
 
+def held_by_item(session: Session) -> dict:
+    """Units held for orders right now, per item: {item_id: units}. Items with no hold are left out."""
+    rows = (
+        session.query(StockReservation.item_id, func.sum(StockReservation.quantity))
+        .filter(StockReservation.released_at.is_(None))
+        .group_by(StockReservation.item_id)
+        .all()
+    )
+    return {str(item_id): int(total) for item_id, total in rows if total}
+
+
 def available(
     session: Session, item: Item, exclude_order_id: Optional[UUID] = None
 ) -> int:
