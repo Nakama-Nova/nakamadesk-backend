@@ -43,6 +43,8 @@ class SalePayload(BaseModel):
     total_amount: Decimal
     payment_method: str
     invoice_number: Optional[str] = None
+    # The place it was sold from. Left out, the one shop is used (as for a live sale).
+    location_id: Optional[UUID] = None
 
 
 class ItemPayload(BaseModel):

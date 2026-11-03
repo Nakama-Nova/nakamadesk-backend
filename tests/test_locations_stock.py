@@ -486,3 +486,32 @@ def test_the_movement_list_shows_where_it_happened(client_as, db):
         ("transfer_out", None),
         ("transfer_in", str(mfg.id)),
     }
+
+
+def test_an_offline_sale_keeps_the_place_it_was_sold_from(auth_client, db):
+    """A bill saved on the desktop while offline and pushed later is sold from the place it
+    named, not from the default shop."""
+    from datetime import datetime, timezone
+
+    shop = make_location(db, "Shop", kind="shop")
+    stall = make_location(db, "Stall", kind="plant")
+    item = make_item(db, stock=10)
+    op = {
+        "id": str(uuid.uuid4()),
+        "entity": "sale",
+        "action": "create",
+        "payload": {
+            "customer_name": "Walk-in",
+            "customer_phone": "9000000042",
+            "items": [{"product_id": str(item.id), "quantity": 2, "price": 100}],
+            "total_amount": 200,
+            "payment_method": "cash",
+            "location_id": str(stall.id),
+        },
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    resp = auth_client.post("/sync/push", json={"operations": [op]})
+    assert resp.status_code == 200 and not resp.json()["failed"], resp.text
+    sale_id = resp.json()["success"][0]["record_id"]
+    assert auth_client.get(f"/sales/{sale_id}").json()["location_id"] == str(stall.id)
+    assert str(shop.id) != str(stall.id)

@@ -500,6 +500,7 @@ class SaleSyncHandler(GenericSyncHandler):
                 for line in data.get("items", [])
             ],
             payment_method=data.get("payment_method"),
+            location_id=data.get("location_id"),
         )
         sale_id = data.get("id")
         existing = uow.sales.get_by_id(sale_id) if sale_id else None
