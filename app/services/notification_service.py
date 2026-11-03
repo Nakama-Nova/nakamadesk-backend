@@ -10,14 +10,18 @@ Who is told what:
                   finished or failed 3D scans (a manager not for restoration scans)
   sales           new website orders
   artisan         finished or failed 3D scans (their own work)
+  anyone with people reporting to them (the owner: everyone)
+                  a person checked in or out away from every plant unit
 Everyone else gets nothing.
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
+from app.models.attendance import Attendance
 from app.models.enums import UserRole
 from app.models.inventory_movement import InventoryMovement
 from app.models.item import Item
@@ -26,6 +30,7 @@ from app.models.order_payment import OrderPayment
 from app.models.restoration import RestorationProject
 from app.models.scan_job import ScanJob
 from app.models.user import User
+from app.services import plant_unit_service, team_service
 
 MAX_LOOKBACK = timedelta(days=3)  # a phone switched off for a week is not flooded
 MONEY_ROLES = (UserRole.OWNER, UserRole.MANAGER)
@@ -189,8 +194,66 @@ def feed(db: Session, user: User, since: datetime, limit: int = 50) -> List[Dict
                 )
             )
 
+    events += _off_site_events(db, user, since, limit)
+
     events.sort(key=lambda e: e["created_at"])
     return events[-limit:]
+
+
+def _off_site_events(
+    db: Session, user: User, since: datetime, limit: int
+) -> List[Dict]:
+    """A person under me checked in or out away from every plant unit."""
+    team = team_service.report_ids(db, user)
+    if not team:
+        return []
+    names = {
+        u.id: u.full_name or u.username
+        for u in db.query(User).filter(User.id.in_(team))
+    }
+    out: List[Dict] = []
+    s = _naive(since)
+    rows = (
+        db.query(Attendance)
+        .filter(
+            Attendance.user_id.in_(team),
+            or_(
+                and_(
+                    Attendance.check_in > s,
+                    Attendance.location_status == plant_unit_service.OFF_SITE,
+                    # a manager-marked row carries the manager's position, not theirs
+                    Attendance.recorded_by == Attendance.user_id,
+                ),
+                and_(
+                    Attendance.check_out > s,
+                    Attendance.check_out_location_status == plant_unit_service.OFF_SITE,
+                ),
+            ),
+        )
+        .limit(limit)
+        .all()
+    )
+    for a in rows:
+        who = names.get(a.user_id, "Someone")
+        for when, at, status in (
+            ("in", a.check_in, a.location_status),
+            ("out", a.check_out, a.check_out_location_status),
+        ):
+            if at and at > s and status == plant_unit_service.OFF_SITE:
+                if when == "in" and a.recorded_by != a.user_id:
+                    continue
+                out.append(
+                    _event(
+                        f"attendance:{a.id}:{when}",
+                        "attendance_off_site",
+                        f"{who} checked {when} away from the workshop",
+                        "Their phone was outside every plant unit",
+                        at,
+                        "attendance",
+                        a.user_id,
+                    )
+                )
+    return out
 
 
 def _scan_name(db: Session, scan: ScanJob) -> str:

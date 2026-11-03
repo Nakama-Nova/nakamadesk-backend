@@ -14,7 +14,7 @@ from app.schemas.attendance import (
     AttendanceResponse,
     AttendanceUpdate,
 )
-from app.schemas.plant_unit import GeoAttendanceIn
+from app.schemas.plant_unit import GeoAttendanceIn, GeoPointIn
 from app.services import workforce_service
 
 router = APIRouter(prefix="/attendance", tags=["Workforce"])
@@ -62,6 +62,41 @@ def mark_present_at_location(
     GPS_MAX_ACCURACY_M (100 m by default) is rejected with 422.
     """
     return workforce_service.mark_present_at_location(uow, body, current_user)
+
+
+@router.post("/me/check-in", response_model=AttendanceResponse)
+def check_in_me(
+    body: GeoPointIn,
+    current_user: User = Depends(get_current_user),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Check yourself in from your own phone, with its GPS position.
+
+    Any signed-in person. The server picks the plant unit from the position. Away from
+    every unit is recorded as location_status="off_site" (your manager sees it), not
+    refused. One record a day; accuracy_m above GPS_MAX_ACCURACY_M gives 422.
+    """
+    return workforce_service.check_in_self(uow, current_user, body)
+
+
+@router.post("/me/check-out", response_model=AttendanceResponse)
+def check_out_me(
+    body: GeoPointIn,
+    current_user: User = Depends(get_current_user),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """End your day: closes today's check-in and works out the hours and wage."""
+    return workforce_service.check_out_self(uow, current_user, body)
+
+
+@router.get("/me/today", response_model=Optional[AttendanceResponse])
+def my_day(
+    current_user: User = Depends(get_current_user),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Today's record for me, or null: tells the phone which button to show."""
+    return workforce_service.todays_record(uow, current_user.id)
 
 
 @router.post("/check-in", response_model=AttendanceResponse)

@@ -51,6 +51,8 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 | Raw materials | create and list: owner, manager; delete: owner only |
 | BOM | create and delete: owner, achari; read: owner, manager, achari |
 | Attendance | create, check-in, check-out, list all: owner, manager, sales; `POST /mark-present` (GPS): owner, manager; `GET /my`: any; `PATCH`: owner, manager |
+| Check yourself in and out (`/attendance/me/check-in`, `/me/check-out`, `GET /me/today`) | any signed-in user |
+| Team (`GET /team/tree`, `/team/me`, `/team/attendance`) | any signed-in user (attendance: only the people under you; the owner sees all); set who reports to whom: owner, via `PATCH /auth/users/{id}` |
 | Plant units | list: any signed-in user; create, update: owner only |
 | Stock by location (`/stock/levels`, `/stock/unassigned`, `GET /stock/transfers`) | owner, manager, sales |
 | Stock transfers (`POST /stock/transfers`) | owner, manager |
@@ -87,6 +89,23 @@ A manager marks someone present with `POST /attendance/mark-present` `{user_id, 
 - **Who**: owner and manager only. SALES keeps the older attendance routes but cannot mark by GPS (the shop is not a plant unit). A manager cannot mark themselves; the owner can.
 - The usual rules still apply: one attendance row a day per person, `client_id` makes a retry return the same row, and half-day pays half.
 - **Offline**: an attendance sync operation that carries `latitude`, `longitude` and `accuracy_m` is checked by the same code. The row is stored against the person marked (`user_id`), recorded by the pusher, with the same wage rule and a pending wage entry. A bad position fails that one operation. Later sync updates cannot change the position, unit, wage or pay status. Attendance sync without a position behaves as before.
+
+## 4a-2. Checking yourself in and out, and who reports to whom
+
+**Self check-in.** Any signed-in person calls `POST /attendance/me/check-in` and `POST /attendance/me/check-out` with `{latitude, longitude, accuracy_m}` from their own phone. The position rules are exactly those of section 4a (range checks, the `GPS_MAX_ACCURACY_M` cap, the server picks the plant unit). The wage is the person's own `base_daily_wage`; the hours, half-day rule and pending wage entry are the ones of `/attendance/check-out`.
+
+- **Away from every unit is recorded, not refused** (`location_status` / `check_out_location_status` = `off_site`): the work is not always at the workshop (a temple, a delivery). The person's manager is told (below).
+- **One record a day.** A second check-in after a check-out, or on a day a manager already marked the person, is refused, because it would count the day's wage twice. The same rule now applies to the manager route `POST /attendance/check-in`.
+- **`GET /attendance/me/today`** returns today's row or `null`, so the app knows whether to show Check in or Check out. A check-out is only possible against today's own open check-in; a day left open overnight needs a manager's `PATCH /attendance/{id}`.
+- The check-out position is stored in `check_out_*` columns (`latitude`, `longitude`, `accuracy_m`, `plant_unit_id`, `location_status`). Sync cannot set them.
+- The server cannot tell a spoofed GPS position from a real one; `off_site` is a signal to review, not proof.
+
+**Who reports to whom.** `users.reports_to_id` holds one manager per person. The owner sets it with `PATCH /auth/users/{id}` `{"reports_to_id": "<uuid>"}` (`null` clears it, leaving it out keeps it) or at creation. It must be an active person, never the person themselves, never a loop (a manager's own manager chain cannot lead back to them), and an owner reports to no one. Promoting someone to owner clears their manager. Changes made with `PATCH` are in the audit log.
+
+- `GET /team/tree`: the active staff as a tree, owner first (a person whose manager is switched off shows at the top).
+- `GET /team/me`: my manager and the people who report straight to me.
+- `GET /team/attendance?on=YYYY-MM-DD`: where each person under me stands that day (`not_in`, `in`, `out`, `marked`) and whether their own check-in or check-out was `off_site`. "Under me" is at any depth; the owner sees every active person; someone nobody reports to gets an empty list. `/attendance/all` is unchanged.
+- **Notifications**: a manager (the owner, for everyone) gets an `attendance_off_site` notice when a person under them checks in or out away from every unit. A position a manager sent for someone else (`mark-present`) is the manager's own, so it never raises that notice about the person marked.
 
 ## 4b. Locations and stock by location
 

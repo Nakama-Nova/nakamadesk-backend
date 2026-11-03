@@ -203,7 +203,17 @@ class StockDeltaResolver(ConflictResolver):
 
 
 _GEO_INPUT = ("latitude", "longitude", "accuracy_m")  # what a client may send
-_ATTENDANCE_LOCATION = (*_GEO_INPUT, "plant_unit_id", "location_status")
+_ATTENDANCE_LOCATION = (
+    *_GEO_INPUT,
+    "plant_unit_id",
+    "location_status",
+    # the check-out position is only ever recorded by /attendance/me/check-out
+    "check_out_latitude",
+    "check_out_longitude",
+    "check_out_accuracy_m",
+    "check_out_plant_unit_id",
+    "check_out_location_status",
+)
 
 CONFLICT_RESOLVER_REGISTRY = {
     # wage, pay status and where it was marked are never taken from a client update

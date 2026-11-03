@@ -60,6 +60,15 @@ class Attendance(Base):
     longitude = Column(Float, nullable=True)
     accuracy_m = Column(Float, nullable=True)
     location_status = Column(String, nullable=True)
+    # The same five for the check-out. When a person checks themselves in and out, the
+    # position is their own phone's; when a manager marks someone, it is the manager's.
+    check_out_plant_unit_id = Column(
+        UUID(as_uuid=True), ForeignKey("plant_units.id"), nullable=True
+    )
+    check_out_latitude = Column(Float, nullable=True)
+    check_out_longitude = Column(Float, nullable=True)
+    check_out_accuracy_m = Column(Float, nullable=True)
+    check_out_location_status = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

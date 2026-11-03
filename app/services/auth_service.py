@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.services import audit
+from app.services import audit, team_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -70,6 +70,8 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=400, detail="Email already in use")
 
+    team_service.check_manager(db, None, user.role, user.reports_to_id)
+
     # No password given: a random one nobody knows, until the person sets their own
     # from the emailed code (staff_code_service).
     hashed_pw = hash_password(user.password or secrets.token_urlsafe(32))
@@ -85,6 +87,7 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
         is_active=user.is_active,
         base_daily_wage=user.base_daily_wage,
         overtime_rate_per_hour=user.overtime_rate_per_hour,
+        reports_to_id=user.reports_to_id,
     )
 
     db.add(new_user)
@@ -177,6 +180,11 @@ def update_user(db: Session, actor: User, user_id, data: UserUpdate) -> User:
     if "email" in changes and changes["email"] != user.email:
         if db.query(User).filter(User.email == changes["email"]).first():
             raise HTTPException(status_code=400, detail="Email already in use")
+    new_role = changes.get("role", user.role)
+    if "reports_to_id" in changes:
+        team_service.check_manager(db, user.id, new_role, changes["reports_to_id"])
+    elif new_role == UserRole.OWNER and user.reports_to_id:
+        changes["reports_to_id"] = None  # promoted to owner: now at the top
     old = {k: getattr(user, k) for k in changes}
     for key, value in changes.items():
         setattr(user, key, value)

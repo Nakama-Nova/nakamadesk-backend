@@ -41,6 +41,14 @@ class PlantUnitOut(PlantUnitIn):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GeoPointIn(BaseModel):
+    """Where a person's own phone says it is, when they check themselves in or out."""
+
+    latitude: Latitude
+    longitude: Longitude
+    accuracy_m: float = Field(ge=0, allow_inf_nan=False)
+
+
 class GeoAttendanceIn(BaseModel):
     """A manager marking one person present, with the manager's phone position."""
 
