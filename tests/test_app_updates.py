@@ -129,24 +129,67 @@ def test_no_release_or_no_installer_means_no_update(client, people, github):
     assert client.get("/app/updates/latest", headers=h).status_code == 404
 
 
-def test_not_set_up_and_source_problems_are_clear_not_crashes(
-    client, people, github, monkeypatch
-):
+def test_source_problems_are_clear_not_crashes(client, people, github, monkeypatch):
     h = people["owner"]["h"]
     release_service.reset()
     github["release"] = Resp(403)
     r = client.get("/app/updates/latest", headers=h)
     assert r.status_code == 502 and "token" in r.json()["detail"]
     release_service.reset()
-    monkeypatch.setattr(settings, "GITHUB_RELEASES_TOKEN", "")
+    github["release"] = Resp(500)
     r = client.get("/app/updates/latest", headers=h)
-    assert r.status_code == 503 and "not set up" in r.json()["detail"]
-    assert (
-        client.get(
-            "/app/updates/download/1.2.0", headers=h, follow_redirects=False
-        ).status_code
-        == 503
-    )
+    assert r.status_code == 502 and "error" in r.json()["detail"]
+
+
+def anonymous_github(github, monkeypatch, seen):
+    """No token: the repos are public, so GitHub must be asked without an Authorization header."""
+    monkeypatch.setattr(settings, "GITHUB_RELEASES_TOKEN", "")
+    release_service.reset()
+
+    def fake_get(url, headers=None, allow_redirects=True, timeout=None):
+        seen.append(headers)
+        if url.endswith("/releases/latest"):
+            return github["release"]
+        if url.endswith("/releases/assets/12"):
+            return Resp(text=f"{SUM}  {NAME}\n")
+        if url.endswith("/releases/assets/11"):
+            return github["download"]
+        return Resp(404)
+
+    monkeypatch.setattr(release_service.requests, "get", fake_get)
+
+
+def test_without_a_token_updates_work_by_asking_github_anonymously(
+    client, people, github, monkeypatch
+):
+    seen = []
+    anonymous_github(github, monkeypatch, seen)
+    h = people["worker"]["h"]
+    r = client.get("/app/updates/latest", headers=h)
+    assert r.status_code == 200 and r.json()["version"] == "1.2.0"
+    d = client.get("/app/updates/download/1.2.0", headers=h, follow_redirects=False)
+    assert d.status_code == 302 and d.headers["location"] == SIGNED
+    assert seen and all("Authorization" not in x for x in seen)
+
+
+def test_without_a_token_answers_are_kept_longer_to_stay_under_githubs_limit(
+    client, people, github, monkeypatch
+):
+    seen = []
+    anonymous_github(github, monkeypatch, seen)
+    assert release_service._cache_seconds() == release_service.ANONYMOUS_CACHE_SECONDS
+    monkeypatch.setattr(settings, "GITHUB_RELEASES_TOKEN", "ghp_test_token")
+    assert release_service._cache_seconds() == release_service.CACHE_SECONDS
+
+
+def test_without_a_token_a_refusal_does_not_blame_a_token(
+    client, people, github, monkeypatch
+):
+    anonymous_github(github, monkeypatch, [])
+    github["release"] = Resp(403)  # GitHub's rate limit for anonymous questions
+    r = client.get("/app/updates/latest", headers=people["owner"]["h"])
+    assert r.status_code == 502
+    assert "token" not in r.json()["detail"] and "try again" in r.json()["detail"]
 
 
 def test_a_bad_checksum_file_is_refused(client, people, github, monkeypatch):

@@ -39,6 +39,10 @@ class Settings:
     EMAIL_FROM: str = os.getenv("EMAIL_FROM") or "Vriksha Studios <no-reply@localhost>"
     # Where a shopper's reply goes, if different from the sender (e.g. info@).
     EMAIL_REPLY_TO: str = os.getenv("EMAIL_REPLY_TO", "")
+    # EMAIL_PROVIDER=ses sends through Amazon SES with the server's AWS role: no password to store,
+    # but the sender's domain must be verified in SES. Empty = SMTP (above) when SMTP_HOST is set.
+    EMAIL_PROVIDER: str = os.getenv("EMAIL_PROVIDER", "")
+    SES_REGION: str = os.getenv("SES_REGION", "ap-southeast-2")
     # --- SMS (one-time codes to a shopper's phone) ------------------------------
     # SMS_PROVIDER=sns sends through Amazon SNS with the server's AWS role. Empty: in
     # development the message is only logged; in production the routes answer 503.
@@ -84,9 +88,9 @@ class Settings:
     S3_SECRET_ACCESS_KEY: str = os.getenv("S3_SECRET_ACCESS_KEY", "")
 
     # --- Desktop app updates ------------------------------------------------
-    # The installers are GitHub Releases of a private repo. A fine-grained token
-    # with read-only "Contents" access to that one repo lets this server read
-    # them. Empty = updates are not set up (the endpoints answer 503).
+    # The installers are GitHub Releases. While the repos are public no token is needed
+    # (GitHub is asked anonymously, 60 questions an hour). A fine-grained token with
+    # read-only "Contents" access is only for a private repo or a higher limit.
     GITHUB_RELEASES_REPO: str = os.getenv(
         "GITHUB_RELEASES_REPO", "Nakama-Nova/nakama-desktop"
     )

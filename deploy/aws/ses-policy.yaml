@@ -1,0 +1,35 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Lets the NakamaDesk API instance send email through Amazon SES with its own AWS role, so there
+  is no mail password to store. A separate stack on purpose: the main stack is untouched, and
+  deleting this one takes the permission away. See docs/DEPLOY_AWS.md, "Email".
+
+Parameters:
+  RoleName:
+    Type: String
+    Description: >-
+      The instance role of the nakama stack:
+      aws cloudformation describe-stack-resource --stack-name nakama
+      --logical-resource-id InstanceRole --query StackResourceDetail.PhysicalResourceId
+  Domain:
+    Type: String
+    Default: vrikshastudios.com
+    Description: Mail may only be sent from addresses on this domain.
+
+Resources:
+  SendEmail:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: nakama-send-email
+      Roles: [!Ref RoleName]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          # Identities in this account only (the sender, and in the SES sandbox the verified
+          # recipients), and only from an address on our own domain.
+          - Effect: Allow
+            Action: ["ses:SendEmail"]
+            Resource: !Sub "arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/*"
+            Condition:
+              StringLike:
+                "ses:FromAddress": !Sub "*@${Domain}"

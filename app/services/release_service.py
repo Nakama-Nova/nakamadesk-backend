@@ -1,11 +1,15 @@
 """
 Where the desktop app and the phone app find their updates.
 
-The installers are published as GitHub Releases of a PRIVATE repository, so
-the app cannot read them itself. This server reads them with a read-only token
-(GITHUB_RELEASES_TOKEN) and passes them on only to signed-in staff: it tells the
-app what the newest version is, and sends it to a short-lived signed download
-address. The token never leaves the server.
+The installers are published as GitHub Releases. This server reads them and
+passes them on only to signed-in staff: it tells the app what the newest version
+is, and sends it to a short-lived download address.
+
+While the repositories are public no token is needed: GitHub is asked without
+one (60 questions an hour per server address; the answers are cached, below).
+Set GITHUB_RELEASES_TOKEN (read-only "Contents" access) if a repository is made
+private, or for a higher limit; it is then sent with every request and never
+leaves the server.
 """
 
 import re
@@ -22,6 +26,7 @@ INSTALLER = re.compile(r"^VrikshaStudiosDesk-Setup-[0-9A-Za-z.\-]+\.exe$")
 APK = re.compile(r"^VrikshaCapture-[0-9A-Za-z.\-]+\.apk$")
 VERSION = re.compile(r"^v?(\d+\.\d+\.\d+)$")
 CACHE_SECONDS = 300
+ANONYMOUS_CACHE_SECONDS = 900  # no token: GitHub allows only 60 questions an hour
 TIMEOUT = 10
 
 _cache: dict = {"at": 0.0, "value": None}
@@ -35,18 +40,14 @@ def reset() -> None:
 
 
 def _headers(accept: str = "application/vnd.github+json") -> dict:
-    return {
-        "Authorization": f"Bearer {settings.GITHUB_RELEASES_TOKEN}",
-        "Accept": accept,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = {"Accept": accept, "X-GitHub-Api-Version": "2022-11-28"}
+    if settings.GITHUB_RELEASES_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.GITHUB_RELEASES_TOKEN}"
+    return headers
 
 
-def _need_token() -> None:
-    if not settings.GITHUB_RELEASES_TOKEN:
-        raise HTTPException(
-            status_code=503, detail="Updates are not set up on this server yet"
-        )
+def _cache_seconds() -> int:
+    return CACHE_SECONDS if settings.GITHUB_RELEASES_TOKEN else ANONYMOUS_CACHE_SECONDS
 
 
 def _get(url: str, **kwargs):
@@ -83,9 +84,8 @@ def latest_mobile() -> Optional[dict]:
 
 
 def _latest(repo: str, file_name: re.Pattern, cache: dict) -> Optional[dict]:
-    _need_token()
     now = time.monotonic()
-    if cache["value"] is not None and now - cache["at"] < CACHE_SECONDS:
+    if cache["value"] is not None and now - cache["at"] < _cache_seconds():
         return cache["value"]
 
     resp = _get(f"{API}/repos/{repo}/releases/latest", headers=_headers())
@@ -93,7 +93,12 @@ def _latest(repo: str, file_name: re.Pattern, cache: dict) -> Optional[dict]:
         return None  # nothing published yet
     if resp.status_code in (401, 403):
         raise HTTPException(
-            status_code=502, detail="The update token was refused (it may have expired)"
+            status_code=502,
+            detail=(
+                "The update token was refused (it may have expired)"
+                if settings.GITHUB_RELEASES_TOKEN
+                else "GitHub is not answering update checks right now; try again in a few minutes"
+            ),
         )
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="The update source gave an error")
@@ -120,7 +125,6 @@ def _latest(repo: str, file_name: re.Pattern, cache: dict) -> Optional[dict]:
 
 def installer_address(asset_id: int, repo: Optional[str] = None) -> str:
     """A short-lived signed address for the installer (valid for minutes)."""
-    _need_token()
     resp = _get(
         f"{API}/repos/{repo or settings.GITHUB_RELEASES_REPO}/releases/assets/{asset_id}",
         headers=_headers("application/octet-stream"),
