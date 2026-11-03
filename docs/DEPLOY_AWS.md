@@ -61,8 +61,14 @@ The API sends texts through Amazon SNS with the instance's AWS role (no keys). *
 
 Until all of that is done the routes answer 503 ("Phone verification is not set up yet") and nothing is sent. The API's behaviour and limits are in ONBOARDING 4c.
 
+## Files (photos and 3D models)
+The server keeps **no files on its disk**. When `S3_BUCKET` is set (it is on AWS) every upload of a product photo or `.glb` goes to the bucket under `public/items/...` and `/media/public/...` serves it from there (long cache headers, so the CDN or browser asks once). Staff-only files (scans, STL/OBJ, G-code, part models) are uploaded straight to the bucket with short-lived signed URLs and are never served by `/media`. Only the `public/` prefix is ever served; anything else answers 404. With no bucket (development, tests) the app falls back to a local `media` folder. The only state on the server is the database volume.
+
+## Tested in CI
+The `aws-rollout` job in `.github/workflows/backend-ci.yml` runs `deploy/aws/ci/rollout-test.sh` on a clean Ubuntu runner with real Docker: the real `release.sh`, cutover, backup and restore-test scripts, with RDS faked by a plain Postgres and S3 by MinIO. It checks, in order: a release on "RDS"; a rehearsal that copies and compares every table without switching; the real cutover (every row copied, API on the local database); the data surviving `docker compose down` and up in its volume; a dump to S3 with old dumps pruned; the restore test; a photo served from S3 with nothing on the server's disk and private objects refused. If a change to `deploy/aws/` breaks any of that, this job fails.
+
 ## Database
-**Today (until the cutover): RDS.** After the cutover: a Postgres 16 container (`db` in `deploy/aws/docker-compose.yml`) with its files on the server's disk (`/srv/nakama/pgdata`). It saves about $23 a month (the whole RDS bill) and costs you the managed backups, so it comes with its own:
+**Today (until the cutover): RDS.** After the cutover: a separate Postgres 16 container (`db` in `deploy/aws/docker-compose.yml`) with its files in the Docker volume `nakama_pgdata` (on the server's disk; `docker compose down` keeps it, only `down -v` deletes it). It saves about $23 a month (the whole RDS bill) and costs you the managed backups, so it comes with its own:
 
 - **Backups:** `nakama-db-backup` (a systemd timer) dumps the database to `s3://<bucket>/db/` **every 6 hours** and deletes dumps older than 30 days. **Worst case you lose up to 6 hours of data.** Check it with `journalctl -u nakama-db-backup -n 20`; run one now with `sudo systemctl start nakama-db-backup`.
 - **Restore test:** `sudo /opt/nakama/current/deploy/aws/db-restore-test.sh` restores the newest dump into a scratch database, checks it has the same tables as the live one, prints the row counts and drops it. **Run it after the first backup, after any change to backups, and about once a month.** A backup you have not restored is a hope, not a backup.
@@ -92,7 +98,7 @@ aws cloudformation create-change-set --stack-name nakama --change-set-name resiz
     ParameterKey=UbuntuAmi,UsePreviousValue=true ParameterKey=CorsOrigins,UsePreviousValue=true
 aws cloudformation describe-change-set --stack-name nakama --change-set-name resize --query 'Changes[].ResourceChange.[LogicalResourceId,Action,Replacement]'
 ```
-**Run it only if `ApiInstance` shows `Replacement: False`.** The Ubuntu image id is looked up again on every update; when Canonical publishes a new image the server would be **replaced**, which loses the media folder, the database files and the server's disk. If it says `True`, delete the change set and resize the instance directly instead (`aws ec2 stop-instances`, `modify-instance-attribute --instance-type`, `start-instances`).
+**Run it only if `ApiInstance` shows `Replacement: False`.** The Ubuntu image id is looked up again on every update; when Canonical publishes a new image the server would be **replaced**, which loses the server's disk, and with it the database volume (photos are in S3 and are not affected). If it says `True`, delete the change set and resize the instance directly instead (`aws ec2 stop-instances`, `modify-instance-attribute --instance-type`, `start-instances`).
 
 **Night stop** (a separate stack, so it can be paused or removed): the server stops at 00:00 IST and starts at 04:55. Nothing is lost (Docker stops the containers, Postgres shuts down cleanly, the disk and IP stay), but the API and shop data are unreachable in that window and the desktop app shows "server not answering". It saves about $4 a month on the server; the IP and disk cost the same stopped. Use it only once the database is on the server (a database left on RDS is not stopped by it).
 ```bash
@@ -110,7 +116,7 @@ cd /opt/nakama/current/deploy/aws && docker compose exec api python -m app.cli c
 
 ## Backups
 - **Database:** RDS automated backups while it is on RDS (the free plan caps retention at 1 day); after the cutover, the 6-hourly S3 dumps described under "Database".
-- **Media:** `/srv/nakama/media` on the instance disk is copied to `s3://<bucket>/media-backup/` nightly (cron). Restore by syncing it back.
+- **Photos and 3D models:** kept in S3, not on the server (see "Files"). Nothing to back up on the server for them; the bucket is not deleted with the stack.
 - Test a restore before you rely on it.
 
 ## Not done yet

@@ -35,8 +35,8 @@ services:
               "--workers", "${API_WORKERS:-1}", "--proxy-headers", "--forwarded-allow-ips", "*"]
     depends_on:
       migrate: { condition: service_completed_successfully }
-    volumes:
-      - /srv/nakama/media:/data/media
+    # No volume: product photos and 3D models live in S3 (public/ prefix, served by /media), so
+    # this container keeps nothing on disk. The only state on the server is the database volume.
     mem_limit: ${API_MEM:-500m}
     logging: *logging
 
@@ -52,9 +52,10 @@ services:
     restart: "no"
     logging: *logging
 
-  # The database, once the cutover has been done. Its files live on the server's disk in
-  # /srv/nakama/pgdata and are dumped to S3 every 6 hours (db-backup.sh). Not started by a normal
-  # release until /opt/nakama/use-local-db exists.
+  # The database, once the cutover has been done: a separate Postgres container whose files live
+  # in the Docker volume `pgdata` (kept by `docker compose down`, deleted only by `down -v`) and
+  # are dumped to S3 every 6 hours (db-backup.sh). Not started by a normal release until
+  # /opt/nakama/use-local-db exists.
   db:
     image: postgres:16
     profiles: [localdb]
@@ -68,7 +69,7 @@ services:
               "-c", "max_connections=100", "-c", "log_min_duration_statement=500"]
     shm_size: 128m
     volumes:
-      - /srv/nakama/pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U nakama -d nakama"]
       interval: 5s
@@ -78,5 +79,6 @@ services:
     logging: *logging
 
 volumes:
+  pgdata:
   caddy_data:
   caddy_config:

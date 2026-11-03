@@ -30,7 +30,8 @@ dc() { docker compose --profile localdb "$@"; }
 
 # Exact row count of every table in the public schema, as "table count" lines.
 COUNTS="select table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', table_name), false, true, '')))[1]::text from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE' order by 1"
-rds()   { dc exec -T -e PGPASSWORD="$DBPW" -e PGSSLMODE=require db psql -h "$DB_HOST" -U nakama -d nakama -At -F' ' -c "$1"; }
+SSL=${RDS_SSLMODE:-require} # RDS_SSLMODE: only for CI, which fakes RDS with a plain Postgres
+rds()   { dc exec -T -e PGPASSWORD="$DBPW" -e PGSSLMODE="$SSL" db psql -h "$DB_HOST" -U nakama -d nakama -At -F' ' -c "$1"; }
 local_() { dc exec -T db psql -U nakama -d nakama -At -F' ' -c "$1"; }
 
 api_back_on_rds() { # called when something fails after the API was stopped
@@ -46,7 +47,6 @@ if [ "$REHEARSE" = 0 ]; then
 fi
 
 echo "2/5 starting the local database"
-mkdir -p /srv/nakama/pgdata
 dc up -d db
 for _ in $(seq 1 30); do
   [ "$(docker inspect -f '{{.State.Health.Status}}' nakama-db-1 2>/dev/null)" = healthy ] && break
@@ -58,7 +58,7 @@ done
 dc exec -T db psql -U nakama -d postgres -q -c "DROP DATABASE IF EXISTS nakama WITH (FORCE)" -c "CREATE DATABASE nakama"
 
 echo "3/5 copying RDS -> local"
-if ! dc exec -T -e PGPASSWORD="$DBPW" -e PGSSLMODE=require db pg_dump -h "$DB_HOST" -U nakama -d nakama -Fc --no-owner --no-acl \
+if ! dc exec -T -e PGPASSWORD="$DBPW" -e PGSSLMODE="$SSL" db pg_dump -h "$DB_HOST" -U nakama -d nakama -Fc --no-owner --no-acl \
      | dc exec -T db pg_restore -U nakama -d nakama --no-owner --exit-on-error; then
   echo "the copy failed" >&2; [ "$REHEARSE" = 1 ] || api_back_on_rds; exit 1
 fi
