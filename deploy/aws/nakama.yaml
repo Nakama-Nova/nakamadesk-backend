@@ -1,8 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  NakamaDesk API on AWS: one EC2 instance (Caddy + API in Docker) in front of a
-  private RDS Postgres, with an S3 bucket for the private object store.
-  See docs/DEPLOY_AWS.md.
+  NakamaDesk API on AWS: one EC2 instance running Caddy, the API and Postgres in Docker, with
+  an S3 bucket for photos, 3D models and database dumps. See docs/DEPLOY_AWS.md.
 
 Parameters:
   VpcId:
@@ -11,19 +10,13 @@ Parameters:
   InstanceSubnetId:
     Type: AWS::EC2::Subnet::Id
     Description: A public subnet for the API instance.
-  DbSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: At least two subnets in different Availability Zones for the database.
   InstanceType:
     Type: String
     Default: t3.small
     Description: >-
-      t3.small (2 GB) runs the API, Caddy and, after the cutover, the Postgres container. t3.micro
-      (1 GB) is too small for all three. Changing it on a live stack restarts the instance (a few
+      t3.small (2 GB) runs the API, Caddy and the Postgres container. t3.micro (1 GB) is too
+      small for all three. Changing it on a live stack restarts the instance (a few
       minutes): see docs/DEPLOY_AWS.md.
-  DbInstanceClass:
-    Type: String
-    Default: db.t3.micro
   UbuntuAmi:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
@@ -77,42 +70,10 @@ Resources:
         - { IpProtocol: tcp, FromPort: 80, ToPort: 80, CidrIp: 0.0.0.0/0, Description: HTTP (Lets Encrypt + redirect) }
         - { IpProtocol: tcp, FromPort: 443, ToPort: 443, CidrIp: 0.0.0.0/0, Description: HTTPS }
 
-  DbSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: NakamaDesk Postgres - reachable from the API instance only
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - { IpProtocol: tcp, FromPort: 5432, ToPort: 5432, SourceSecurityGroupId: !Ref ApiSecurityGroup, Description: API instance }
-
   # ---- database ----
-  DbSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: NakamaDesk database
-      SubnetIds: !Ref DbSubnetIds
-
-  Db:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot # a stack delete keeps a final snapshot
-    UpdateReplacePolicy: Snapshot
-    Properties:
-      Engine: postgres
-      EngineVersion: "16.15"
-      DBInstanceClass: !Ref DbInstanceClass
-      AllocatedStorage: "20"
-      StorageType: gp3
-      StorageEncrypted: true
-      DBName: nakama
-      MasterUsername: nakama
-      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DbPassword}:SecretString}}"
-      DBSubnetGroupName: !Ref DbSubnetGroup
-      VPCSecurityGroups: [!Ref DbSecurityGroup]
-      PubliclyAccessible: false
-      MultiAZ: false # ponytail: single AZ to keep cost down; set true when downtime matters
-      BackupRetentionPeriod: 1 # ponytail: free plan caps retention; raise to 7+ after upgrading
-      CopyTagsToSnapshot: true
-      AutoMinorVersionUpgrade: true
+  # There is no database resource: Postgres runs as the `db` container on the instance (data in
+  # a Docker volume, dumped to S3 every 6 hours). It used to be an RDS instance; see
+  # docs/DEPLOY_AWS.md, "Removing the old RDS".
 
   # ---- compute ----
   InstanceRole:
@@ -175,22 +136,17 @@ Resources:
             apt-get install -y docker.io docker-compose-v2
             snap install aws-cli --classic
             systemctl enable --now docker
-            mkdir -p /opt/nakama /srv/nakama/media
-            chown 10001:10001 /srv/nakama/media
+            mkdir -p /opt/nakama
+            # A new server runs its database in the container from the start (see release.sh).
+            touch /opt/nakama/use-local-db
             # Non-secret settings only. Secrets are read from Secrets Manager at deploy time.
             cat > /opt/nakama/aws.env <<'EOF'
             AWS_REGION=${AWS::Region}
             S3_BUCKET=${AppBucket}
-            DB_HOST=${Db.Endpoint.Address}
             DB_SECRET_ID=${DbPassword}
             APP_SECRET_ID=${AppSecretKey}
             SITE_ADDRESS=${Site}
             CORS_ORIGINS=${CorsOrigins}
-            EOF
-            # Media lives on this disk (the app serves /media from it); copy it to S3 nightly.
-            cat > /etc/cron.d/nakama-media-backup <<'EOF'
-            PATH=/usr/bin:/bin:/snap/bin
-            0 3 * * * root aws s3 sync /srv/nakama/media s3://${AppBucket}/media-backup/ --only-show-errors
             EOF
           - Site: !Join ["", [!Join ["-", !Split [".", !Ref ApiEip]], ".sslip.io"]]
 
@@ -222,5 +178,3 @@ Outputs:
     Value: !Ref ApiInstance
   Bucket:
     Value: !Ref AppBucket
-  DbEndpoint:
-    Value: !GetAtt Db.Endpoint.Address
