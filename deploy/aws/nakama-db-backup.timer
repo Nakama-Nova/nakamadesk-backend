@@ -1,0 +1,11 @@
+[Unit]
+Description=Dump the NakamaDesk database every 6 hours
+
+[Timer]
+# 00:17, 06:17, 12:17, 18:17 server time (UTC). Persistent: a run missed while the server was
+# stopped for the night happens when it starts again.
+OnCalendar=*-*-* 00/6:17:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

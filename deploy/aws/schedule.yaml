@@ -1,18 +1,15 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  Switches the NakamaDesk server and database off at night to save money: stopped from
-  00:00 to about 04:50 IST. Nothing is lost (disks, database and the IP stay); the API and
-  the storefront's shop data are unreachable in that window. A separate stack on purpose:
-  delete it to run 24 hours again, or set State to DISABLED to pause it.
-  See docs/DEPLOY_AWS.md, "Cost and size".
+  Switches the NakamaDesk server off at night to save money: stopped from 00:00 to about 05:00
+  IST. Nothing is lost (the disk, the database files and the IP stay), but the API and the shop
+  data are unreachable in that window. For the server with the database on its own disk; if the
+  database is still on RDS, stop it separately. A separate stack on purpose: delete it to run
+  24 hours again, or set State to DISABLED to pause it. See docs/DEPLOY_AWS.md, "Cost and size".
 
 Parameters:
   InstanceId:
     Type: String
     Description: The API server (stack output InstanceId of the nakama stack).
-  DbInstanceId:
-    Type: String
-    Description: The database identifier (the part of the stack output DbEndpoint before the first dot).
   State:
     Type: String
     Default: ENABLED
@@ -38,12 +35,8 @@ Resources:
               - Effect: Allow
                 Action: ["ec2:StopInstances", "ec2:StartInstances"]
                 Resource: !Sub "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/${InstanceId}"
-              - Effect: Allow
-                Action: ["rds:StopDBInstance", "rds:StartDBInstance"]
-                Resource: !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:${DbInstanceId}"
 
-  # Order matters: start the database first (it takes a few minutes), then the server;
-  # stop the server first, then the database.
+  # The server stops gracefully: Docker stops the containers (Postgres shuts down cleanly) first.
   StopServer:
     Type: AWS::Scheduler::Schedule
     Properties:
@@ -58,39 +51,12 @@ Resources:
         Input: !Sub '{"InstanceIds":["${InstanceId}"]}'
         RetryPolicy: { MaximumRetryAttempts: 5, MaximumEventAgeInSeconds: 3600 }
 
-  StopDatabase:
-    Type: AWS::Scheduler::Schedule
-    Properties:
-      Description: Stop the database ten minutes after the server
-      ScheduleExpression: cron(10 0 * * ? *)
-      ScheduleExpressionTimezone: Asia/Kolkata
-      State: !Ref State
-      FlexibleTimeWindow: { Mode: "OFF" }
-      Target:
-        Arn: arn:aws:scheduler:::aws-sdk:rds:stopDBInstance
-        RoleArn: !GetAtt SchedulerRole.Arn
-        Input: !Sub '{"DbInstanceIdentifier":"${DbInstanceId}"}'
-        RetryPolicy: { MaximumRetryAttempts: 5, MaximumEventAgeInSeconds: 3600 }
-
-  StartDatabase:
-    Type: AWS::Scheduler::Schedule
-    Properties:
-      Description: Start the database at 04:30 IST
-      ScheduleExpression: cron(30 4 * * ? *)
-      ScheduleExpressionTimezone: Asia/Kolkata
-      State: !Ref State
-      FlexibleTimeWindow: { Mode: "OFF" }
-      Target:
-        Arn: arn:aws:scheduler:::aws-sdk:rds:startDBInstance
-        RoleArn: !GetAtt SchedulerRole.Arn
-        Input: !Sub '{"DbInstanceIdentifier":"${DbInstanceId}"}'
-        RetryPolicy: { MaximumRetryAttempts: 5, MaximumEventAgeInSeconds: 3600 }
-
+  # A couple of minutes before 05:00, so the shop is open when it opens.
   StartServer:
     Type: AWS::Scheduler::Schedule
     Properties:
-      Description: Start the API server at 04:50 IST, after the database is up
-      ScheduleExpression: cron(50 4 * * ? *)
+      Description: Start the API server at 04:55 IST
+      ScheduleExpression: cron(55 4 * * ? *)
       ScheduleExpressionTimezone: Asia/Kolkata
       State: !Ref State
       FlexibleTimeWindow: { Mode: "OFF" }

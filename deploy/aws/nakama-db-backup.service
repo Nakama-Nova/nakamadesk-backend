@@ -1,0 +1,9 @@
+[Unit]
+Description=Dump the NakamaDesk database to S3
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nakama-db-backup
+TimeoutStartSec=900

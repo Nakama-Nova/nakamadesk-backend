@@ -1,5 +1,7 @@
-# AWS variant of deploy/compose: Caddy -> API, with Postgres on RDS and files in S3.
-# Run on the instance by deploy.sh; settings come from ./.env (rendered at deploy time).
+# AWS variant of deploy/compose: Caddy -> API -> Postgres, files in S3.
+# Postgres is RDS until deploy/aws/cutover-to-local-db.sh moves it into the `db` container below;
+# release.sh then adds `--profile localdb`. Run on the instance by release.sh; settings come from
+# ./.env (rendered at deploy time).
 name: nakama
 
 x-logging: &logging
@@ -27,8 +29,8 @@ services:
     env_file: .env
     environment:
       TRUST_PROXY_HEADERS: "1" # Caddy overwrites X-Forwarded-For
-    # One worker fits the 1 GB t3.micro (the Dockerfile default is 2). Raise API_WORKERS and
-    # API_MEM in /opt/nakama/app.env when the instance is made bigger.
+    # One worker keeps memory low (the Dockerfile default is 2). Raise API_WORKERS and API_MEM in
+    # /opt/nakama/app.env when there is memory to spare.
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--workers", "${API_WORKERS:-1}", "--proxy-headers", "--forwarded-allow-ips", "*"]
     depends_on:
@@ -44,7 +46,35 @@ services:
     build: { context: ../.., dockerfile: Dockerfile }
     command: ["alembic", "upgrade", "head"]
     env_file: .env
+    # Waits for the local database when it is in use (the profile is on); ignored when it is not.
+    depends_on:
+      db: { condition: service_healthy, required: false }
     restart: "no"
+    logging: *logging
+
+  # The database, once the cutover has been done. Its files live on the server's disk in
+  # /srv/nakama/pgdata and are dumped to S3 every 6 hours (db-backup.sh). Not started by a normal
+  # release until /opt/nakama/use-local-db exists.
+  db:
+    image: postgres:16
+    profiles: [localdb]
+    restart: unless-stopped
+    stop_grace_period: 60s # lets Postgres finish and shut down cleanly (the image stops it fast)
+    environment:
+      POSTGRES_USER: nakama
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: nakama
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "work_mem=4MB",
+              "-c", "max_connections=100", "-c", "log_min_duration_statement=500"]
+    shm_size: 128m
+    volumes:
+      - /srv/nakama/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nakama -d nakama"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: ${DB_MEM:-400m}
     logging: *logging
 
 volumes:

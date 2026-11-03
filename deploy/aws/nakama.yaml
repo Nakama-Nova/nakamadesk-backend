@@ -16,10 +16,11 @@ Parameters:
     Description: At least two subnets in different Availability Zones for the database.
   InstanceType:
     Type: String
-    Default: t3.micro
+    Default: t3.small
     Description: >-
-      t3.micro (1 GB) runs the API with 1 worker plus swap; t3.small (2 GB) is the next step.
-      Changing it on a live stack restarts the instance (a few minutes): see docs/DEPLOY_AWS.md.
+      t3.small (2 GB) runs the API, Caddy and, after the cutover, the Postgres container. t3.micro
+      (1 GB) is too small for all three. Changing it on a live stack restarts the instance (a few
+      minutes): see docs/DEPLOY_AWS.md.
   DbInstanceClass:
     Type: String
     Default: db.t3.micro

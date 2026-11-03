@@ -21,6 +21,15 @@ if ! swapon --show | grep -q .; then
 fi
 echo 'vm.swappiness=20' > /etc/sysctl.d/99-nakama.conf && sysctl -q -p /etc/sysctl.d/99-nakama.conf
 
+# Where the database lives: RDS, until cutover-to-local-db.sh creates /opt/nakama/use-local-db.
+# Only that script (and removing the file again) changes it; a normal release never does.
+if [ -f /opt/nakama/use-local-db ]; then
+  DBHOST=db DBSSL=disable PROFILE="--profile localdb"
+  mkdir -p /srv/nakama/pgdata
+else
+  DBHOST=$DB_HOST DBSSL=require PROFILE=""
+fi
+
 DBPW=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$DB_SECRET_ID" --query SecretString --output text)
 SK=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$APP_SECRET_ID" --query SecretString --output text)
 
@@ -28,7 +37,8 @@ cd "$D/deploy/aws"
 umask 077
 cat > .env <<EOF
 ENV=production
-DATABASE_URL=postgresql://nakama:$DBPW@$DB_HOST:5432/nakama?sslmode=require
+DATABASE_URL=postgresql://nakama:$DBPW@$DBHOST:5432/nakama?sslmode=$DBSSL
+POSTGRES_PASSWORD=$DBPW
 SECRET_KEY=$SK
 S3_BUCKET=$S3_BUCKET
 S3_REGION=$AWS_REGION
@@ -39,7 +49,7 @@ EOF
 # hand on the instance. Secrets stay in Secrets Manager.
 if [ -f /opt/nakama/app.env ]; then cat /opt/nakama/app.env >> .env; fi
 
-API_TAG=$TAG docker compose up -d --build
+API_TAG=$TAG docker compose $PROFILE up -d --build
 
 # Wait for the API to report healthy; if it never does, go back to the previous release.
 for _ in $(seq 1 24); do
@@ -50,7 +60,7 @@ if [ "$(docker inspect -f '{{.State.Health.Status}}' nakama-api-1 2>/dev/null)" 
   echo "release $TAG did not become healthy" >&2
   if [ -n "$PREV" ] && [ -d "$PREV" ]; then
     echo "rolling back to $PREV" >&2
-    (cd "$PREV/deploy/aws" && API_TAG=$(basename "$PREV") docker compose up -d)
+    (cd "$PREV/deploy/aws" && API_TAG=$(basename "$PREV") docker compose $PROFILE up -d)
   fi
   exit 1
 fi
@@ -63,6 +73,9 @@ docker image prune -f >/dev/null
 install -m 755 "$D/deploy/aws/pull-deploy.sh" /usr/local/bin/nakama-pull-deploy
 install -m 644 "$D/deploy/aws/nakama-pull-deploy.service" /etc/systemd/system/
 install -m 644 "$D/deploy/aws/nakama-pull-deploy.timer" /etc/systemd/system/
+install -m 755 "$D/deploy/aws/db-backup.sh" /usr/local/bin/nakama-db-backup
+install -m 644 "$D/deploy/aws/nakama-db-backup.service" /etc/systemd/system/
+install -m 644 "$D/deploy/aws/nakama-db-backup.timer" /etc/systemd/system/
 systemctl daemon-reload
-systemctl enable --now nakama-pull-deploy.timer >/dev/null
+systemctl enable --now nakama-pull-deploy.timer nakama-db-backup.timer >/dev/null
 echo "release $TAG is live"
