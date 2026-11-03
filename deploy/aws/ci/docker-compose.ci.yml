@@ -1,6 +1,6 @@
 # CI only (see rollout-test.sh). Added on top of ../docker-compose.yml with COMPOSE_FILE so the real
 # release, cutover and backup scripts run on a clean Ubuntu runner: a plain Postgres stands in for
-# RDS and MinIO for S3. Never used on the server.
+# RDS (S3 is an emulator running on the runner itself). Never used on the server.
 services:
   rds-sim:
     image: postgres:16
@@ -14,14 +14,9 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: quay.io/minio/minio:latest
-    command: ["server", "/data"]
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    # The scripts run on the host and talk to it with the real AWS CLI.
-    ports: ["127.0.0.1:9000:9000"]
+  # The S3 emulator runs on the runner, not in a container: the API reaches it as the host.
+  api:
+    extra_hosts: ["host.docker.internal:host-gateway"]
 
   # Migrations run against the stand-in for RDS, so wait for it.
   migrate:

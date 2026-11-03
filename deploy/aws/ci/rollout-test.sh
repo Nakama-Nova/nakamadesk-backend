@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CI only:  sudo -E bash deploy/aws/ci/rollout-test.sh      (a clean Ubuntu runner with Docker)
 #
-# Runs the real AWS rollout end to end, with RDS faked by a plain Postgres and S3 by MinIO:
+# Runs the real AWS rollout end to end, with RDS faked by a plain Postgres and S3 by the `moto` emulator:
 #   release on "RDS" -> rehearse the copy -> real cutover -> data survives a restart in its Docker
 #   volume -> S3 dump and prune -> restore test -> photos are served from S3 and never touch disk.
 # The scripts under test are the production ones; the only test knobs are RDS_SSLMODE and
@@ -24,14 +24,14 @@ healthy() { for _ in $(seq 1 30); do curl -fsS http://127.0.0.1/health/ 2>/dev/n
 on_error() { echo "--- container logs ---"; dcl logs --no-color --tail 60 2>&1 || true; }
 trap on_error ERR
 
-step "set up: fake /opt/nakama, a fake Secrets Manager, S3 aimed at MinIO"
+step "set up: fake /opt/nakama, a fake Secrets Manager, an S3 emulator"
 REAL_AWS=$(command -v aws) || fail "no aws CLI on this runner"
 export REAL_AWS
 mkdir -p /opt/nakama/releases /opt/ci-bin
 cat > /opt/ci-bin/aws <<'EOF'
 #!/usr/bin/env bash
 # Secrets Manager does not exist in CI: answer the two secret reads. Everything else is the real
-# AWS CLI, aimed at MinIO by AWS_ENDPOINT_URL_S3.
+# AWS CLI, aimed at the S3 emulator by AWS_ENDPOINT_URL_S3.
 if [ "${1:-}" = secretsmanager ]; then
   case "$*" in
     *ci-db*)  printf 'ci-db-pass' ;;
@@ -53,13 +53,21 @@ CORS_ORIGINS=
 RDS_SSLMODE=disable
 EOF
 cat > /opt/nakama/app.env <<'EOF'
-S3_ENDPOINT_URL=http://minio:9000
-S3_ACCESS_KEY_ID=minioadmin
-S3_SECRET_ACCESS_KEY=minioadmin
+S3_ENDPOINT_URL=http://host.docker.internal:9000
+S3_ACCESS_KEY_ID=ci
+S3_SECRET_ACCESS_KEY=ci
 EOF
 rm -rf "$D" && cp -a "$REPO" "$D"
+
+# S3 emulator on the runner (not a container, so no image has to exist); bound to every interface
+# so the API container can reach it as host.docker.internal.
+python3 -m venv /opt/ci-moto
+/opt/ci-moto/bin/pip install -q 'moto[server]'
+nohup /opt/ci-moto/bin/moto_server -H 0.0.0.0 -p 9000 >/tmp/moto.log 2>&1 &
+for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/moto-api/ >/dev/null 2>&1 && break; sleep 1; done
+curl -fsS http://127.0.0.1:9000/moto-api/ >/dev/null || { cat /tmp/moto.log; fail "the S3 emulator did not start"; }
 export PATH=/opt/ci-bin:$PATH
-export AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_DEFAULT_REGION=ap-southeast-2
+export AWS_ACCESS_KEY_ID=ci AWS_SECRET_ACCESS_KEY=ci AWS_DEFAULT_REGION=ap-southeast-2
 export AWS_ENDPOINT_URL_S3=http://127.0.0.1:9000
 export COMPOSE_FILE=docker-compose.yml:ci/docker-compose.ci.yml
 export NAKAMA_SKIP_TIMERS=1
@@ -71,7 +79,6 @@ current=$(dc exec -T api alembic current); echo "$current" | grep -q '(head)' ||
 case "$(api_url)" in *@rds-sim:*) ;; *) fail "the API is not using RDS: $(api_url)";; esac
 [ ! -f /opt/nakama/use-local-db ] || fail "the marker exists before the cutover"
 docker ps --format '{{.Names}}' | grep -qx nakama-db-1 && fail "the local db started without the cutover"
-for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break; sleep 2; done
 aws s3 mb s3://nakama-ci >/dev/null
 echo "ok: on RDS, migrated, healthy; the local database is not running"
 
@@ -107,8 +114,7 @@ case "$(api_url)" in *@db:*) ;; *) fail "a release moved the API back to RDS";; 
 echo "ok: 5 rows after down and up; a release keeps the local database"
 
 step "5. backup to S3, and old dumps are pruned"
-for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null 2>&1 && break; sleep 2; done
-aws s3 mb s3://nakama-ci >/dev/null 2>&1 || true   # the stand-in S3 has no volume, so it starts empty again
+aws s3 ls s3://nakama-ci >/dev/null 2>&1 || fail "the bucket vanished with the restart"   # the emulator is outside Docker, so it survives
 head -c 6000 /dev/urandom > /tmp/old.dump
 aws s3 cp /tmp/old.dump s3://nakama-ci/db/nakama-20200101T000000Z.dump --only-show-errors
 bash "$D/deploy/aws/db-backup.sh"
