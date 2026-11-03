@@ -1,0 +1,24 @@
+# CI only (see rollout-test.sh). Added on top of ../docker-compose.yml with COMPOSE_FILE so the real
+# release, cutover and backup scripts run on a clean Ubuntu runner: a plain Postgres stands in for
+# RDS (S3 is an emulator running on the runner itself). Never used on the server.
+services:
+  rds-sim:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: nakama
+      POSTGRES_PASSWORD: ci-db-pass
+      POSTGRES_DB: nakama
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nakama -d nakama"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # The S3 emulator runs on the runner, not in a container: the API reaches it as the host.
+  api:
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  # Migrations run against the stand-in for RDS, so wait for it.
+  migrate:
+    depends_on:
+      rds-sim: { condition: service_healthy }

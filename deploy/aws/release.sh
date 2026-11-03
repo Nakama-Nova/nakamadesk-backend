@@ -16,10 +16,18 @@ PREV=$(readlink /opt/nakama/current || true)
 # API killed. Created once; every release checks it is still there.
 if ! swapon --show | grep -q .; then
   [ -f /swapfile ] || { fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null; }
-  swapon /swapfile
+  swapon /swapfile || echo "could not enable swap; continuing without it" >&2
   grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 echo 'vm.swappiness=20' > /etc/sysctl.d/99-nakama.conf && sysctl -q -p /etc/sysctl.d/99-nakama.conf
+
+# Where the database lives: RDS, until cutover-to-local-db.sh creates /opt/nakama/use-local-db.
+# Only that script (and removing the file again) changes it; a normal release never does.
+if [ -f /opt/nakama/use-local-db ]; then
+  DBHOST=db DBSSL=disable PROFILE="--profile localdb"
+else
+  DBHOST=$DB_HOST DBSSL=${RDS_SSLMODE:-require} PROFILE="" # RDS_SSLMODE: only for CI, which fakes RDS
+fi
 
 DBPW=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$DB_SECRET_ID" --query SecretString --output text)
 SK=$(aws secretsmanager get-secret-value --region "$AWS_REGION" --secret-id "$APP_SECRET_ID" --query SecretString --output text)
@@ -28,7 +36,8 @@ cd "$D/deploy/aws"
 umask 077
 cat > .env <<EOF
 ENV=production
-DATABASE_URL=postgresql://nakama:$DBPW@$DB_HOST:5432/nakama?sslmode=require
+DATABASE_URL=postgresql://nakama:$DBPW@$DBHOST:5432/nakama?sslmode=$DBSSL
+POSTGRES_PASSWORD=$DBPW
 SECRET_KEY=$SK
 S3_BUCKET=$S3_BUCKET
 S3_REGION=$AWS_REGION
@@ -39,7 +48,7 @@ EOF
 # hand on the instance. Secrets stay in Secrets Manager.
 if [ -f /opt/nakama/app.env ]; then cat /opt/nakama/app.env >> .env; fi
 
-API_TAG=$TAG docker compose up -d --build
+API_TAG=$TAG docker compose $PROFILE up -d --build
 
 # Wait for the API to report healthy; if it never does, go back to the previous release.
 for _ in $(seq 1 24); do
@@ -50,7 +59,7 @@ if [ "$(docker inspect -f '{{.State.Health.Status}}' nakama-api-1 2>/dev/null)" 
   echo "release $TAG did not become healthy" >&2
   if [ -n "$PREV" ] && [ -d "$PREV" ]; then
     echo "rolling back to $PREV" >&2
-    (cd "$PREV/deploy/aws" && API_TAG=$(basename "$PREV") docker compose up -d)
+    (cd "$PREV/deploy/aws" && API_TAG=$(basename "$PREV") docker compose $PROFILE up -d)
   fi
   exit 1
 fi
@@ -59,10 +68,20 @@ ln -sfn "$D" /opt/nakama/current
 ls -1dt /opt/nakama/releases/* | tail -n +4 | xargs -r rm -rf
 docker image prune -f >/dev/null
 
-# Keep the auto-deployer current: it ships with each release (takes effect on its next run).
-install -m 755 "$D/deploy/aws/pull-deploy.sh" /usr/local/bin/nakama-pull-deploy
-install -m 644 "$D/deploy/aws/nakama-pull-deploy.service" /etc/systemd/system/
-install -m 644 "$D/deploy/aws/nakama-pull-deploy.timer" /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now nakama-pull-deploy.timer >/dev/null
+# Photos and 3D models live in S3 now, so the old nightly sync of a local media folder (made by
+# first boot on older servers) has nothing to copy.
+rm -f /etc/cron.d/nakama-media-backup
+
+# Keep the auto-deployer and the backup timer current: they ship with each release (a change takes
+# effect on the next run). CI sets NAKAMA_SKIP_TIMERS so a test runner does not start them.
+if [ -z "${NAKAMA_SKIP_TIMERS:-}" ]; then
+  install -m 755 "$D/deploy/aws/pull-deploy.sh" /usr/local/bin/nakama-pull-deploy
+  install -m 644 "$D/deploy/aws/nakama-pull-deploy.service" /etc/systemd/system/
+  install -m 644 "$D/deploy/aws/nakama-pull-deploy.timer" /etc/systemd/system/
+  install -m 755 "$D/deploy/aws/db-backup.sh" /usr/local/bin/nakama-db-backup
+  install -m 644 "$D/deploy/aws/nakama-db-backup.service" /etc/systemd/system/
+  install -m 644 "$D/deploy/aws/nakama-db-backup.timer" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now nakama-pull-deploy.timer nakama-db-backup.timer >/dev/null
+fi
 echo "release $TAG is live"

@@ -224,3 +224,15 @@ jobs:
         run: |
           $COMPOSE down -v
           if [ -n "$DEV" ]; then $DEV down -v; fi
+
+  # The AWS deployment (deploy/aws): the real release, cutover, backup and restore scripts run
+  # on a clean Ubuntu runner. RDS is faked by a plain Postgres and S3 by the moto emulator; Docker is real.
+  # Catches what only shows up at runtime: Compose profiles, volumes, the data copy, S3 paths.
+  aws-rollout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Roll out, move the database into a Docker volume, back up, restore, serve photos from S3
+        run: sudo -E bash deploy/aws/ci/rollout-test.sh
