@@ -60,6 +60,31 @@ The API sends texts through Amazon SNS with the instance's AWS role (no keys). *
 
 Until all of that is done the routes answer 503 ("Phone verification is not set up yet") and nothing is sent. The API's behaviour and limits are in ONBOARDING 4c.
 
+## Email (shopper sign-in codes, staff invites and resets)
+The API sends mail through **Amazon SES** with the server's own AWS role, so there is **no mail password to store**. SES is allowed on the free plan. Staff invites and password resets need it too, so set it up before recreating staff accounts. In order:
+
+1. **Verify the domain.** `aws sesv2 create-email-identity --email-identity vrikshastudios.com` prints three DKIM tokens. At the DNS host add three CNAME records, `<token>._domainkey.vrikshastudios.com` -> `<token>.dkim.amazonses.com`, and add `include:amazonses.com` to the existing SPF TXT record (which already has Zoho's) so mail from both passes. Check with `aws sesv2 get-email-identity --email-identity vrikshastudios.com --query DkimAttributes.Status` (`SUCCESS` after a few minutes).
+2. **Let the server send**, in a stack of its own (the main stack is untouched):
+   ```bash
+   ROLE=$(aws cloudformation describe-stack-resource --stack-name nakama --logical-resource-id InstanceRole --query StackResourceDetail.PhysicalResourceId --output text)
+   aws cloudformation create-stack --stack-name nakama-ses --capabilities CAPABILITY_IAM \
+     --template-body file://deploy/aws/ses-policy.yaml --parameters ParameterKey=RoleName,ParameterValue=$ROLE
+   ```
+   It allows `ses:SendEmail` only from an address `@vrikshastudios.com`.
+3. **Leave the SES sandbox.** A new SES account can mail only addresses it has verified (200 a day, 1 a second). Request production access once: console (SES, Account dashboard) or `aws sesv2 put-account-details --production-access-enabled --mail-type TRANSACTIONAL --website-url https://vrikshastudios.com --use-case-description "..." --contact-language EN`. AWS usually answers within a day. Until then, test with addresses you verify yourself (`aws sesv2 create-email-identity --email-identity you@example.com`, then click the link in the mail it sends).
+4. **Tell the app** (non-secret settings in a Session Manager shell; the next release picks them up):
+   ```bash
+   sudo tee -a /opt/nakama/app.env <<'EOF'
+   EMAIL_PROVIDER=ses
+   EMAIL_FROM=Vriksha Studios <notifications@vrikshastudios.com>
+   EMAIL_REPLY_TO=info@vrikshastudios.com
+   EOF
+   ```
+   Then promote any commit or run `deploy/aws/deploy.sh`, so the container restarts with them.
+5. **Test:** ask for a shopper code (`POST /account/request-code`) with a verified address and read the mail. A mail that never arrives shows in `docker compose logs api` as "could not send a sign-in code" with SES's reason (most often: the recipient is not verified while in the sandbox).
+
+An SMTP server (Zoho, Brevo) works too (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`), but its password is a secret that would need a safe place on the server; SES avoids that.
+
 ## Files (photos and 3D models)
 The server keeps **no files on its disk**. When `S3_BUCKET` is set (it is on AWS) every upload of a product photo or `.glb` goes to the bucket under `public/items/...` and `/media/public/...` serves it from there (long cache headers, so the CDN or browser asks once). Staff-only files (scans, STL/OBJ, G-code, part models) are uploaded straight to the bucket with short-lived signed URLs and are never served by `/media`. Only the `public/` prefix is ever served; anything else answers 404. With no bucket (development, tests) the app falls back to a local `media` folder. The only state on the server is the database volume.
 
