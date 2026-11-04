@@ -41,6 +41,28 @@ class OrderItemCreate(BaseModel):
         return self
 
 
+class OrderItemEdit(OrderItemCreate):
+    """
+    One piece on an order being edited. Send `id` to change a piece that is already on
+    the order; leave it out to add a new one.
+    """
+
+    id: Optional[UUID] = None
+
+
+class OrderItemsUpdate(BaseModel):
+    """
+    The pieces an open order should have from now on: the whole list, not just the
+    changes. A piece left out is removed. `estimated_amount` is the agreed price; leave
+    it out to keep the price as it is.
+    """
+
+    items: List[OrderItemEdit] = Field(min_length=1, max_length=100)
+    estimated_amount: Optional[Decimal] = Field(
+        default=None, ge=0, max_digits=12, decimal_places=2
+    )
+
+
 class OrderItemResponse(BaseModel):
     """Data Transfer Object for a single order line item."""
 
