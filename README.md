@@ -132,7 +132,6 @@ tests/            pytest suite
 | [ONBOARDING.md](docs/ONBOARDING.md) | Start here: architecture, roles, sync, known gaps |
 | [LOCAL_DEV.md](docs/LOCAL_DEV.md) | Run the stack locally with Docker |
 | [DEPLOY.md](docs/DEPLOY.md), [DEPLOY_AWS.md](docs/DEPLOY_AWS.md) | Deploy on one VM, or on AWS |
-| [BETA.md](docs/BETA.md) | The throw-away beta on Vercel and Supabase |
 | [SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md), [MICROSERVICES_DESIGN.md](docs/MICROSERVICES_DESIGN.md), [FINANCE_LEDGER_DESIGN.md](docs/FINANCE_LEDGER_DESIGN.md) | Design drafts and decisions. The finance ledger plan is **not built yet** |
 | [docs/design](docs/design) | Scan and 3D Lab, restoration, letters, phone screens |
 | [SECURITY.md](SECURITY.md) | How to report a vulnerability |
