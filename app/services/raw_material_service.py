@@ -1,6 +1,9 @@
 from typing import List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
+
 from app.models.bom import BillOfMaterials
 from app.models.price_history import RawMaterialPriceHistory
 from app.models.raw_material import RawMaterial
@@ -162,6 +165,22 @@ def delete_raw_material(uow: AbstractUnitOfWork, material_id: UUID) -> bool:
         db_material = uow.raw_materials.get_by_id(material_id)
         if not db_material:
             return False
-        uow.raw_materials.delete(db_material)
-        uow.commit()
+        name = db_material.name
+        try:
+            # the price notes written when it was set up go with it; real use (stock moves,
+            # purchases, recipes) keeps the material, and the database says so
+            uow.session.query(RawMaterialPriceHistory).filter(
+                RawMaterialPriceHistory.material_id == material_id
+            ).delete(synchronize_session=False)
+            uow.raw_materials.delete(db_material)
+            uow.commit()
+        except IntegrityError:
+            uow.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{name} has stock history, purchases or a recipe, so it cannot be "
+                    "deleted."
+                ),
+            ) from None
     return True

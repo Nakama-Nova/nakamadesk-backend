@@ -203,3 +203,32 @@ def test_every_staff_role_can_read_stock_but_only_owner_manager_see_costs(
         )
         == 400
     )
+
+
+def test_a_material_never_used_can_be_deleted_but_one_with_stock_history_is_refused(
+    auth_client,
+):
+    def make(**extra):
+        return auth_client.post(
+            "/raw-materials/",
+            json={
+                "name": f"Mat {uuid.uuid4().hex[:6]}",
+                "unit": "kg",
+                "current_price": 100,
+                **extra,
+            },
+        ).json()
+
+    fresh = make()
+    assert auth_client.delete(f"/raw-materials/{fresh['id']}").status_code == 200
+    assert auth_client.delete(f"/raw-materials/{fresh['id']}").status_code == 404
+
+    used = make()
+    adj = auth_client.post(
+        f"/raw-materials/{used['id']}/adjust", json={"quantity_change": 5}
+    )
+    assert adj.status_code == 200, adj.text
+    r = auth_client.delete(f"/raw-materials/{used['id']}")
+    assert r.status_code == 409 and "cannot be deleted" in r.json()["detail"]
+    ids = [m["id"] for m in auth_client.get("/raw-materials/").json()]
+    assert used["id"] in ids  # still there, nothing half-deleted
