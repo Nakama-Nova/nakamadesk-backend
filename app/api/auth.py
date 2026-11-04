@@ -79,7 +79,7 @@ def login(
     ip = login_guard.client_ip(request)
     login_guard.check(db, form_data.username, ip)  # 429 when guessing too often
 
-    user = db.query(User).filter(User.username == form_data.username).first()
+    user = auth_service.find_by_username(db, form_data.username)
 
     # Always hash once, so an unknown username takes as long as a wrong password.
     stored = user.password_hash if user else auth_service.DUMMY_HASH

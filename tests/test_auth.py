@@ -148,3 +148,68 @@ def test_role_based_access_worker(worker_client: TestClient):
     }
     response_worker = worker_client.post("/raw-materials/", json=payload)
     assert response_worker.status_code in [401, 403]
+
+
+def test_a_username_works_whatever_its_capitals(client: TestClient, db):
+    """The account is 'Swapnac'; she types 'swapnac' (or SWAPNAC): she must get in."""
+    make_user(db, "Swapnac", "password123")
+    for typed in ("Swapnac", "swapnac", "SWAPNAC", " swapnac "):
+        r = client.post(
+            "/auth/login", data={"username": typed, "password": "password123"}
+        )
+        assert r.status_code == 200, (typed, r.text)
+        assert (
+            r.json()["username"] == "Swapnac"
+        )  # the account's own spelling comes back
+    assert (
+        client.post(
+            "/auth/login", data={"username": "swapnac", "password": "wrong-one"}
+        ).status_code
+        == 401
+    )
+
+
+def test_two_names_that_differ_only_by_case_are_not_allowed(db):
+    import pytest
+    from fastapi import HTTPException
+
+    make_user(db, "Kavya", "password123")
+    with pytest.raises(HTTPException) as e:
+        make_user(db, "kavya", "password123")
+    assert e.value.status_code == 400 and "already exists" in e.value.detail
+
+
+def test_an_exact_match_wins_when_old_data_has_two_spellings(client: TestClient, db):
+    """Accounts made before this rule may differ only by case: the exact spelling gets its own
+    account, and a third spelling matches neither (nobody is guessed)."""
+    from app.models.user import User
+    from app.services import auth_service
+
+    make_user(db, "Rohan", "password123")
+    b = User(
+        username="rohan",
+        email="rohan2@example.com",
+        password_hash=auth_service.hash_password("other-pass-1"),
+        role="worker",
+        is_active=True,
+    )
+    db.add(b)
+    db.commit()
+    assert (
+        client.post(
+            "/auth/login", data={"username": "Rohan", "password": "password123"}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/auth/login", data={"username": "rohan", "password": "other-pass-1"}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/auth/login", data={"username": "ROHAN", "password": "password123"}
+        ).status_code
+        == 401
+    )
