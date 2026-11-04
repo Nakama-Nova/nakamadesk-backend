@@ -104,8 +104,28 @@ class PaymentResponse(BaseModel):
     note: Optional[str] = None
     paid_on: date
     created_at: datetime
+    voided_at: Optional[datetime] = None
+    void_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PaymentUpdate(BaseModel):
+    """Correct a payment already recorded. Only the fields sent change."""
+
+    amount: Optional[Decimal] = Field(
+        default=None, gt=0, max_digits=12, decimal_places=2
+    )
+    method: Optional[Literal["cash", "upi", "bank", "cheque", "other"]] = None
+    reference: Optional[str] = Field(default=None, max_length=80)
+    note: Optional[str] = Field(default=None, max_length=200)
+    paid_on: Optional[date] = None
+
+
+class PaymentVoid(BaseModel):
+    """Why a payment is being taken off the order (it stays on record)."""
+
+    reason: str = Field(min_length=3, max_length=300)
 
 
 class OrderUpdate(BaseModel):

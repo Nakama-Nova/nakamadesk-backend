@@ -7,12 +7,14 @@ from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse
+from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse, SaleUpdate
 from app.services.sales_service import (
+    cancel_sale,
     create_sale_transaction,
     get_all_sales,
     get_sale_by_id,
     get_sale_items_by_id,
+    update_sale,
 )
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
@@ -129,3 +131,34 @@ def get_sale_items(
         List[SaleItemResponse]: List of items in the sale.
     """
     return get_sale_items_by_id(uow, sale_id)
+
+
+@router.patch("/{sale_id}", response_model=SaleResponse)
+def edit_sale(
+    sale_id: UUID,
+    data: SaleUpdate,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Correct a bill's customer or payment details. What was sold and at what price is
+    fixed: to change that, cancel the bill and make a new one. RBAC: OWNER, MANAGER.
+    """
+    return update_sale(uow, sale_id, data, current_user.id)
+
+
+@router.delete("/{sale_id}", response_model=SaleResponse)
+def delete_sale(
+    sale_id: UUID,
+    reason: str = Query(min_length=3, max_length=300),
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Delete a bill: the stock it took comes back (to the same location, with a stock
+    movement for each piece), the bill stays in the history marked cancelled with the
+    reason, the reports stop counting it, and the finance ledger reverses it on the
+    next sync. A bill made from an order frees the order to be billed again.
+    RBAC: OWNER only.
+    """
+    return cancel_sale(uow, sale_id, reason, current_user.id)

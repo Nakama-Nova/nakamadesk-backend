@@ -212,7 +212,7 @@ def plan_order_payment(
     payment: OrderPayment, order: Order, sale: Optional[Sale]
 ) -> Optional[Plan]:
     amount = _money(payment.amount)
-    if amount <= 0:
+    if amount <= 0 or payment.voided_at is not None:
         return None
     account, problem = method_account(payment.method)
     # Money received before the order was billed is held for it (a customer advance);
@@ -647,7 +647,8 @@ def _sales(session, result, user_id, date_from, date_to, dry_run):
                 (
                     _money(p.amount)
                     for p in session.query(OrderPayment).filter(
-                        OrderPayment.order_id == order.id
+                        OrderPayment.order_id == order.id,
+                        OrderPayment.voided_at.is_(None),
                     )
                     if _utc_naive(p.created_at) <= _utc_naive(sale.created_at)
                 ),
