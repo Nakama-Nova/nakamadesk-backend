@@ -20,8 +20,8 @@ from app.db.base import Base
 class OrderPayment(Base):
     """
     Money received against an order: the advance, instalments and the final balance.
-    Orders.advance_paid is the running total of these rows, so every rupee has a date,
-    a method and who took it. Rows are never edited or deleted.
+    Orders.advance_paid is the running total of the live rows, so every rupee has a date,
+    a method and who took it. A wrong row is voided (kept, with the reason), never deleted.
     """
 
     __tablename__ = "order_payments"
@@ -52,5 +52,11 @@ class OrderPayment(Base):
         default=lambda: datetime.now(timezone.utc),
         server_default=text("now()"),
     )
+
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    void_reason = Column(String, nullable=True)
 
     order = relationship("Order", back_populates="payments")

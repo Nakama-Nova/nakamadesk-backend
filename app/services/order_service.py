@@ -393,3 +393,123 @@ def update_order(uow: AbstractUnitOfWork, order_id: UUID, data: OrderUpdate) -> 
             setattr(order, key, value)
         uow.commit()
     return get_order(uow, order_id)
+
+
+# ---------------------------------------------------------------------------
+# Correcting the money on an order, and deleting an order that has nothing attached
+# ---------------------------------------------------------------------------
+
+
+def _live_payments(order: Order) -> List[OrderPayment]:
+    return [p for p in order.payments if p.voided_at is None]
+
+
+def _recount(uow: AbstractUnitOfWork, order: Order) -> None:
+    """advance_paid is the sum of the live payments; the bill (if any) follows it."""
+    order.advance_paid = sum(
+        (Decimal(p.amount) for p in _live_payments(order)), Decimal("0.00")
+    )
+    if order.sale_id:
+        sale = uow.session.get(Sale, order.sale_id)
+        sale.payment_status = invoice_status(order.advance_paid, sale.total_amount)
+        live = _live_payments(order)
+        sale.payment_method = live[-1].method if live else None
+
+
+def _locked_payment(uow: AbstractUnitOfWork, order_id: UUID, payment_id: UUID):
+    order = (
+        uow.session.query(Order).filter(Order.id == order_id).with_for_update().first()
+    )
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    payment = next((p for p in order.payments if p.id == payment_id), None)
+    if payment is None:
+        raise HTTPException(status_code=404, detail="Payment not found on this order")
+    if payment.voided_at is not None:
+        raise HTTPException(status_code=409, detail="This payment is already voided")
+    return order, payment
+
+
+def update_payment(
+    uow: AbstractUnitOfWork, order_id: UUID, payment_id: UUID, data
+) -> Order:
+    """Correct a payment's amount, method, reference, note or date."""
+    changes = data.model_dump(exclude_unset=True)
+    with uow:
+        order, payment = _locked_payment(uow, order_id, payment_id)
+        if "amount" in changes:
+            others = sum(
+                (Decimal(p.amount) for p in _live_payments(order) if p is not payment),
+                Decimal("0.00"),
+            )
+            base = Decimal(
+                order.final_amount
+                if (order.final_amount or 0) > 0
+                else order.estimated_amount or 0
+            )
+            if base > 0 and others + changes["amount"] > base:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"That is more than the balance due (Rs {base - others})",
+                )
+        for key, value in changes.items():
+            if value is not None:
+                setattr(payment, key, value)
+        _recount(uow, order)
+        uow.commit()
+    return get_order(uow, order_id)
+
+
+def void_payment(
+    uow: AbstractUnitOfWork, order_id: UUID, payment_id: UUID, reason: str, user_id
+) -> Order:
+    """Take a wrong payment off the order. It stays on record with the reason."""
+    with uow:
+        order, payment = _locked_payment(uow, order_id, payment_id)
+        payment.voided_at = datetime.now(timezone.utc)
+        payment.voided_by = user_id
+        payment.void_reason = reason.strip()
+        _recount(uow, order)
+        uow.commit()
+    logger.info("Payment %s voided on order %s", payment_id, order.order_number)
+    return get_order(uow, order_id)
+
+
+def delete_order(uow: AbstractUnitOfWork, order_id: UUID) -> None:
+    """
+    Remove an order that never went anywhere. Anything with money, a bill, production
+    or a letter attached is kept (cancel it instead), so no record is left pointing at
+    a missing order.
+    """
+    from app.models.letter import Letter
+    from app.models.production_job import ProductionJob
+
+    with uow:
+        order = (
+            uow.session.query(Order)
+            .filter(Order.id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        reasons = []
+        if order.sale_id:
+            reasons.append(f"it has been billed ({order.invoice_number})")
+        if order.payments:
+            reasons.append("it has payments on record")
+        if uow.session.query(ProductionJob).filter(ProductionJob.order_id == order.id).first():  # fmt: skip
+            reasons.append("it has production jobs")
+        if uow.session.query(Letter).filter(Letter.order_id == order.id).first():
+            reasons.append("it has letters")
+        if reasons:
+            raise HTTPException(
+                status_code=409,
+                detail=f"{order.order_number} cannot be deleted: "
+                + ", ".join(reasons)
+                + ". Cancel it instead.",
+            )
+        reservation_service.release(uow.session, order.id)
+        uow.session.delete(order)
+        uow.commit()
+    logger.info("Order %s deleted", order.order_number)

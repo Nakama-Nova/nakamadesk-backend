@@ -57,7 +57,7 @@ def _ledger_sales(session: Session, date_from, date_to) -> Dict[str, Decimal]:
 def _source_payments(session: Session, date_from, date_to) -> Dict[str, Decimal]:
     q = session.query(
         _month(OrderPayment.paid_on), func.coalesce(func.sum(OrderPayment.amount), 0)
-    )
+    ).filter(OrderPayment.voided_at.is_(None))
     if date_from:
         q = q.filter(OrderPayment.paid_on >= date_from)
     if date_to:

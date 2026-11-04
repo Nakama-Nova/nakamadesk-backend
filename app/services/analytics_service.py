@@ -20,6 +20,11 @@ from app.schemas.report import (
 )
 
 
+def _counted():
+    """A cancelled bill is out of every sales report."""
+    return func.coalesce(Sale.order_status, "completed") != "cancelled"
+
+
 def get_sales_analytics(
     uow: AbstractUnitOfWork,
     start_date: Optional[date] = None,
@@ -41,7 +46,7 @@ def get_sales_analytics(
         func.sum(Sale.total_amount).label("total_revenue"),
         func.sum(Sale.tax_total).label("total_tax"),
         func.sum(Sale.discount).label("total_discount"),
-    )
+    ).filter(_counted())
 
     if start_date:
         query = query.filter(
@@ -89,6 +94,8 @@ def get_top_products(
             func.sum(SaleItem.total_price).label("revenue"),
         )
         .join(SaleItem, Item.id == SaleItem.item_id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .filter(_counted())
         .group_by(Item.id)
         .order_by(func.sum(SaleItem.quantity).desc())
         .limit(limit)
@@ -152,9 +159,9 @@ def get_profit_loss(
         ProfitLossResponse: P&L summary including margin and performance alerts.
     """
     # 1. Get Revenue (Total Sales)
-    rev_query = uow.session.query(func.sum(SaleItem.total_price))
-    if start_date or end_date:
-        rev_query = rev_query.join(Sale)
+    rev_query = (
+        uow.session.query(func.sum(SaleItem.total_price)).join(Sale).filter(_counted())
+    )
     if start_date:
         rev_query = rev_query.filter(
             Sale.created_at >= datetime.combine(start_date, datetime.min.time())
@@ -170,8 +177,7 @@ def get_profit_loss(
     cost_query = uow.session.query(
         func.sum(SaleItem.quantity * Item.production_cost)
     ).join(Item, SaleItem.item_id == Item.id)
-    if start_date or end_date:
-        cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id)
+    cost_query = cost_query.join(Sale, SaleItem.sale_id == Sale.id).filter(_counted())
     if start_date:
         cost_query = cost_query.filter(
             Sale.created_at >= datetime.combine(start_date, datetime.min.time())
@@ -226,13 +232,12 @@ def get_gst_summary(
         func.sum(SaleItem.sgst_amount).label("sgst"),
     )
 
+    query = query.join(Sale).filter(_counted())
     if start_date:
-        query = query.join(Sale).filter(
+        query = query.filter(
             Sale.created_at >= datetime.combine(start_date, datetime.min.time())
         )
     if end_date:
-        if not start_date:  # joining Sale if not already joined
-            query = query.join(Sale)
         query = query.filter(
             Sale.created_at <= datetime.combine(end_date, datetime.max.time())
         )
@@ -272,7 +277,9 @@ def export_sales_to_excel(
     Returns:
         BytesIO: In-memory Excel file stream.
     """
-    query = uow.session.query(Sale).options(joinedload(Sale.customer))
+    query = (
+        uow.session.query(Sale).options(joinedload(Sale.customer)).filter(_counted())
+    )
     if start_date:
         query = query.filter(func.date(Sale.created_at) >= start_date)
     if end_date:

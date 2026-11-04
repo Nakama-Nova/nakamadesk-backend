@@ -134,7 +134,8 @@ def invoice_order(
             )
 
         paid = Decimal(order.advance_paid or 0)
-        last = order.payments[-1] if order.payments else None
+        live = [p for p in order.payments if p.voided_at is None]
+        last = live[-1] if live else None
         sale = Sale(
             id=sale_id,
             invoice_number=generate_invoice_number(uow.session),

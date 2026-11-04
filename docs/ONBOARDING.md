@@ -201,6 +201,15 @@ A double-entry book in its own package, `app/finance/`, with its own tables (`fi
   - The new **`accountant`** role is for your CA: it can read every finance route and report and change nothing (no sync, journal, accounts or closing). Create the user with role `accountant`. Until the shadow month is signed off these are previews; the existing reports stay official.
 - Not built yet: depreciation, GST, the small data fixes (sale collections, supplier payments, cost on sale lines).
 
+## 4h. Editing and deleting bills and orders
+
+Nothing that touched money is erased. "Delete" means: undo what it did, and keep the record with the reason.
+
+- **Delete a bill** (`DELETE /sales/{id}?reason=...`, owner): every catalogue piece goes back on the shelf, to the location it left, with a `finished_in` stock movement pointing at the bill. The bill stays in the history as `cancelled`; the sales reports (sales, top products, profit and loss, GST, the Excel export) and the profit report stop counting it; the finance ledger reverses it on the next sync. Cash paid across the counter is treated as given back. A bill made from an order frees the order to be billed again (and holds its stock again); the customer's payments stay on the order. Once only, and the reason goes to the audit log.
+- **Edit a bill** (`PATCH /sales/{id}`, owner or manager): the customer, and the payment status and method of a counter bill. What was sold and the prices are fixed: cancel the bill and make a new one. A bill made from an order follows the payments on its order.
+- **Orders**: `PATCH /orders/{id}/payments/{pid}` corrects a payment (owner); `POST /orders/{id}/payments/{pid}/void` takes a wrong one off with a reason (owner). It stays on record, and the order's paid total, its bill and the ledger follow. `DELETE /orders/{id}` removes an order that never went anywhere; one with a bill, payments, production jobs or letters returns 409 (cancel it instead).
+- Run `python -m app.cli finance-sync` (or `POST /finance/sync`) to bring the ledger up to date after any of these.
+
 ## 5. Running it locally
 
 To run it the way production does (Docker, Caddy, Postgres, backups), see [DEPLOY.md](DEPLOY.md). The first-login command there is the same `python -m app.cli create-owner`, run with `docker compose exec api python -m app.cli create-owner`.
