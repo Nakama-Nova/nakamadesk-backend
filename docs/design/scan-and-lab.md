@@ -269,3 +269,62 @@ Differences from the sketch in section 4:
 - Not built: a retry button for failed jobs, an "old jobs" warning screen.
 
 **Correction (found while preparing the beta): presigned PUT, not POST.** Supabase Storage's S3 API implements `PutObject` but not browser-style `PostObject` policies (checked against its S3 compatibility page), and Cloudflare R2 is in the same position. Every presign endpoint (`/uploads/presign`, `/scans/{id}/presign`, `/scans/{id}/results/presign`) therefore returns `{key, url, method: "PUT", headers}`: the client sends the file as the request body with those headers. `Content-Length` and `Content-Type` are part of the signature, so the store still rejects a different size or type. Works on AWS S3, R2 and Supabase. Bucket lifecycle rules do not exist on Supabase, so the 60-day source retention needs a small scheduled job there (not built).
+
+## 13. As built: joints and hardware (branch `claude/lab-joints-hardware-35cfa2`)
+
+Migration `a4d7c1e9b2f6` (additive, has a downgrade): `furniture_parts.joint_type` (nullable text) and table `furniture_hardware`. Every API change is additive; existing fields and calls behave as before.
+
+### Joints
+Each part has an optional `joint_type`, one of:
+
+| Value | Shown as |
+|---|---|
+| `butt_glue` | Butt joint, glued |
+| `mortise_tenon` | Mortise and tenon |
+| `dowel` | Dowel joint |
+| `half_lap` | Half-lap |
+| `dovetail` | Dovetail |
+| `pocket_screw` | Pocket screw |
+| `biscuit` | Biscuit joint |
+| `other` | Other (use the note) |
+
+Anything else is refused (422). `joinery_note` stays for free text ("tenon 10 mm, wedged"). Clients that never send `joint_type` keep working: it is simply empty. The viewer shows it in "Selected part".
+
+### Hardware
+`furniture_hardware` holds one line per kind of fastener for a furniture item: `kind`, `name` (for example "Wood screw 4 x 50 mm"), `qty_expr`, optional `part_id` and `assembly_step`, `note`, `sort`. Kinds: `screw`, `nail`, `dowel`, `bolt`, `bracket`, `glue`, `clamp`, `other`.
+
+- **Quantity is a formula** of L, W, H, the same language as part sizes (no new functions). The solved quantity is rounded **up** to a whole number (`4.5` gives `5`, an exact `4.0` stays `4`).
+- **Validated on save** for the standard size and every preset: it must be valid and give **0 or more**. The 422 names the item, the line and the size, for example `Dining Chair: hardware line 2, for size S: Oval nail: quantity formula 'L - 420' gives -20, it must be 0 or more`. Changing the standard size or the presets re-checks the hardware as well as the parts.
+- **Step**: a line uses its own `assembly_step`; with none, the step of its `part_id`; with neither, no step.
+- **Clamps are tools, not stock.** Lines of kind `clamp` are never in `hardware`; they come back in `tools`, grouped by build step ("hold with"), steps with none last. They are in no volume or cost total (the cutting list is unchanged by hardware). A line whose quantity solves to 0 is left out of the solved lists but stays in the definition.
+
+### API
+```
+GET /lab/items/{id}              (workshop roles)   adds: parts[].joint_type,
+                                  hardware: [{kind, items:[{id, kind, name, qty, step, part_id, note}]}],
+                                  tools:    [{step|null, items:[...same...]}]
+GET /lab/items/{id}/definition   (owner, manager)   adds: parts[].joint_type,
+                                  hardware: [{id, kind, name, qty_expr, part_id, assembly_step, note}]
+PUT /lab/items/{id}/parts        accepts joint_type, and an optional id per part (see below)
+PUT /lab/items/{id}/hardware     (owner, manager)   {"hardware": [HardwareIn...]}, at most 100 lines
+                                  replaces the whole list, returns the solved item
+```
+`PUT .../hardware` follows the same rules as parts: owner or manager, and the Lab cookie needs the `X-Lab-Client: 1` header. `definition.hardware` is the full editable list **including clamps** (kind `clamp`), because it is what the PUT replaces; the split into `hardware` and `tools` happens only in the solved output.
+
+**Linking to a part and saving parts.** `PUT .../parts` replaces the list, so parts normally get new ids and the database would clear every `part_id`. A part sent **with its `id`** (the editor does; the id must belong to this item) keeps that id, and hardware stays linked. A client that sends no ids (desktop and phone today) still works, but its parts are new, so links are cleared and the lines stay as unlinked hardware.
+
+### Editor and viewer
+The editor has a joint dropdown per part row and a Hardware table (kind, name, quantity formula, step, note) with Add, Copy and Delete; the server's 422 text is shown as-is. The viewer shows the joint in "Selected part", a "Hardware" list under the cutting list (quantity × name, grouped by kind) and a "Hold with" list per build step. Both are in the printed page.
+
+### Worked example: a queen bed
+Overall size L 2100 (head to foot), W 1600, H 1000. Parts: four posts, head rail (`dowel`), side ledgers (`pocket_screw`).
+
+| Kind | Name | Quantity formula | Step | Standard (2100 × 1600) | Small (2000) |
+|---|---|---|---|---|---|
+| screw | Wood screw 4 x 50 mm | `4 * (L - 160) / 200` (4 per slat ledger, a slat every 200 mm) | 2 | 39 (38.8 up) | 37 (36.8 up) |
+| dowel | Dowel 10 x 60 mm | `8` (2 per rail-to-post joint, 4 joints) | 2 | 8 | 8 |
+| glue | Wood glue (PVA) | `1` | 2 | 1 | 1 |
+| clamp | Bar clamp 1200 mm | `4` | 2 | tools, step 2: 4 | 4 |
+| clamp | F-clamp 300 mm | `4` | 1 | tools, step 1: 4 | 4 |
+
+The viewer then shows "Screws: 39 × Wood screw 4 x 50 mm", "Dowels: 8 × ...", "Glue: 1 × ...", and under "Hold with": step 1 four F-clamps, step 2 four bar clamps. The same example runs as a test (`test_a_bed_with_ledger_screws_dowels_and_clamps`); nothing is written to any real database.

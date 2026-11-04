@@ -19,6 +19,7 @@ from app.models.customer_account import (  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
 from app.models.design import Design, DesignProduct  # noqa: F401
 from app.models.expense import Expense  # noqa: F401
+from app.models.furniture_hardware import FurnitureHardware  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
 from app.models.inventory_movement import InventoryMovement  # noqa: F401
 from app.models.invoice_counter import InvoiceCounter  # noqa: F401

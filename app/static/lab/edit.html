@@ -51,7 +51,7 @@
           <thead>
             <tr>
               <th>Name</th><th>Wood</th><th>Length</th><th>Width</th><th>Thickness</th><th>Axis</th>
-              <th>x</th><th>y</th><th>z</th><th>Step</th><th>Joinery note</th><th></th>
+              <th>x</th><th>y</th><th>z</th><th>Step</th><th>Joint</th><th>Joinery note</th><th></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -63,6 +63,29 @@
         <span class="ok" id="partsOk" aria-live="polite"></span>
       </div>
       <div class="error" id="partsError" role="alert"></div>
+    </section>
+
+    <section class="card" aria-labelledby="h-hw">
+      <h2 id="h-hw">Hardware</h2>
+      <p class="small muted" style="margin:0 0 8px">
+        Screws, nails, dowels, bolts, brackets, glue and clamps. The quantity is a formula like the sizes
+        (for example <code>L / 150</code>) and is rounded up to a whole number. Clamps are tools, not stock:
+        the Lab lists them under the build step they hold. Step is optional.
+      </p>
+      <div class="parts">
+        <table id="hardware">
+          <thead>
+            <tr><th>Kind</th><th>Name</th><th>Quantity</th><th>Step</th><th>Note</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="addHw">Add hardware</button>
+        <button type="button" class="primary" id="saveHw">Save hardware</button>
+        <span class="ok" id="hwOk" aria-live="polite"></span>
+      </div>
+      <div class="error" id="hwError" role="alert"></div>
     </section>
   </div>
 

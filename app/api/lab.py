@@ -24,6 +24,7 @@ from app.db.deps import (
     get_lab_user,
     get_uow,
 )
+from app.models.furniture_hardware import FurnitureHardware
 from app.models.furniture_part import FurniturePart
 from app.models.item import Item
 from app.models.product_asset import ProductAsset
@@ -32,6 +33,8 @@ from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.lab import (
     FurnitureIn,
+    HardwareListIn,
+    HardwareOut,
     LabItem,
     LinkIn,
     PartOut,
@@ -84,6 +87,31 @@ def _parts(uow: AbstractUnitOfWork, item_id: UUID) -> List[FurniturePart]:
     )
 
 
+def _hardware(uow: AbstractUnitOfWork, item_id: UUID) -> List[FurnitureHardware]:
+    return (
+        uow.session.query(FurnitureHardware)
+        .filter(FurnitureHardware.item_id == item_id)
+        .order_by(FurnitureHardware.sort)
+        .all()
+    )
+
+
+def _check_all(uow: AbstractUnitOfWork, item: Item) -> None:
+    """After a size change: the parts AND the hardware must still work at every size."""
+    parts = _parts(uow, item.id)
+    lab_service.check_definition(item, parts)
+    lab_service.check_hardware(item, _hardware(uow, item.id), parts)
+
+
+def _solved(uow: AbstractUnitOfWork, item: Item, **size) -> dict:
+    return lab_service.solve(
+        item,
+        _parts(uow, item.id),
+        hardware=_hardware(uow, item.id),
+        **size,
+    )
+
+
 # ------------------------------------------------------------------ read (everyone in the workshop)
 @router.get("/items", response_model=List[LabItem])
 def list_furniture(
@@ -124,7 +152,7 @@ def solve_item(
 ):
     """The parts, positions and cutting list for a size. Read-only: nothing is saved."""
     item = _furniture(uow, item_id)
-    return lab_service.solve(item, _parts(uow, item_id), size, l, w, h)
+    return _solved(uow, item, size=size, l=l, w=w, h=h)
 
 
 @router.get("/parts/{part_id}/model")
@@ -173,6 +201,11 @@ def get_definition(
             PartOut.model_validate(p).model_dump(mode="json")
             for p in _parts(uow, item_id)
         ],
+        # every line, clamps included (kind "clamp"): this is what PUT .../hardware replaces
+        "hardware": [
+            HardwareOut.model_validate(h).model_dump(mode="json")
+            for h in _hardware(uow, item_id)
+        ],
     }
 
 
@@ -186,7 +219,15 @@ def replace_parts(
     """Replace the whole part list. Rejected unless every formula works for every size."""
     item = _item(uow, item_id)
     new_parts = []
+    kept = {p.id for p in _parts(uow, item_id)}
+    seen = set()
     for n, p in enumerate(body.parts):
+        if p.id and (p.id not in kept or p.id in seen):
+            raise HTTPException(
+                status_code=422, detail=f"{p.name}: id is not a part of this item"
+            )
+        if p.id:
+            seen.add(p.id)
         if p.raw_material_id and not uow.session.get(RawMaterial, p.raw_material_id):
             raise HTTPException(
                 status_code=422, detail=f"{p.name}: raw material not found"
@@ -207,12 +248,54 @@ def replace_parts(
         item, new_parts
     )  # 422 with the part and size on failure
     with uow:
+        # Hardware points at parts by id and the delete below sets those links to
+        # NULL, so remember the ones whose part comes back (same id) and restore them.
+        links = {h.id: h.part_id for h in _hardware(uow, item_id) if h.part_id in seen}
         uow.session.query(FurniturePart).filter(
             FurniturePart.item_id == item_id
         ).delete()
         uow.session.add_all(new_parts)
+        uow.session.flush()
+        for hw_id, part_id in links.items():
+            uow.session.query(FurnitureHardware).filter(
+                FurnitureHardware.id == hw_id
+            ).update({"part_id": part_id})
         uow.commit()
-    return lab_service.solve(item, _parts(uow, item_id))
+    uow.session.expire_all()
+    return _solved(uow, item)
+
+
+@router.put("/items/{item_id}/hardware")
+def replace_hardware(
+    item_id: UUID,
+    body: HardwareListIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Replace the whole hardware list (screws, nails, dowels, clamps...). Rejected
+    unless every quantity formula gives 0 or more for every size.
+    """
+    item = _item(uow, item_id)
+    parts = _parts(uow, item_id)
+    part_ids = {p.id for p in parts}
+    new_lines = []
+    for n, h in enumerate(body.hardware):
+        if h.part_id and h.part_id not in part_ids:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{item.name}: hardware line {n + 1} ({h.name}): part not found on this item",
+            )
+        new_lines.append(FurnitureHardware(item_id=item_id, sort=n, **h.model_dump()))
+    lab_service.check_hardware(item, new_lines, parts)
+    with uow:
+        uow.session.query(FurnitureHardware).filter(
+            FurnitureHardware.item_id == item_id
+        ).delete()
+        uow.session.add_all(new_lines)
+        uow.commit()
+    uow.session.expire_all()
+    return _solved(uow, item)
 
 
 @router.put("/items/{item_id}/presets")
@@ -229,9 +312,7 @@ def set_presets(
     }
     with uow:
         item.size_presets = new or None
-        lab_service.check_definition(
-            item, _parts(uow, item_id)
-        )  # raises -> rolled back
+        _check_all(uow, item)  # raises -> rolled back
         uow.commit()
     return {"presets": lab_service.presets(item)}
 
@@ -247,9 +328,7 @@ def set_size(
     item = _item(uow, item_id)
     with uow:
         item.dimensions_mm = {"l": body.l, "w": body.w, "h": body.h}
-        lab_service.check_definition(
-            item, _parts(uow, item_id)
-        )  # raises -> rolled back
+        _check_all(uow, item)  # raises -> rolled back
         uow.commit()
     return {"dimensions_mm": item.dimensions_mm}
 
