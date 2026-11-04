@@ -27,6 +27,7 @@ from app.models.sale import Sale
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.order import (
     OrderCreate,
+    OrderItemsUpdate,
     OrderStatusUpdate,
     OrderUpdate,
     PaymentCreate,
@@ -513,3 +514,111 @@ def delete_order(uow: AbstractUnitOfWork, order_id: UUID) -> None:
         uow.session.delete(order)
         uow.commit()
     logger.info("Order %s deleted", order.order_number)
+
+
+def update_items(
+    uow: AbstractUnitOfWork, order_id: UUID, data: OrderItemsUpdate
+) -> Order:
+    """
+    Change the pieces on an order that is still open: change, add or remove them. The
+    list sent is the order's pieces from now on. A confirmed order's stock hold is set
+    again for the new pieces, so nothing stays held for a piece that was taken off.
+    A piece being made (it has a live production job) cannot be taken off, and a billed order
+    must have its bill cancelled first, because the bill was made from these pieces.
+    """
+    from app.models.production_job import ProductionJob
+
+    with uow:
+        order = (
+            uow.session.query(Order)
+            .filter(Order.id == order_id)
+            .with_for_update()
+            .first()
+        )
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if order.status in ("delivered", "cancelled"):
+            raise HTTPException(
+                status_code=409, detail=f"A {order.status} order cannot be edited"
+            )
+        if order.sale_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"This order has been billed ({order.invoice_number}). "
+                "Cancel the bill first, then change the pieces",
+            )
+
+        sent_ids = [line.id for line in data.items if line.id]
+        if len(sent_ids) != len(set(sent_ids)):
+            raise HTTPException(
+                status_code=422, detail="A piece is listed more than once"
+            )
+        on_order = {line.id: line for line in order.items}
+        for line_id in sent_ids:
+            if line_id not in on_order:
+                raise HTTPException(
+                    status_code=404, detail=f"Piece {line_id} is not on this order"
+                )
+        for line in data.items:
+            if line.item_id and not uow.items.get_by_id(line.item_id):
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Item {line.item_id} not found in catalogue",
+                )
+
+        removed = [line for line in order.items if line.id not in set(sent_ids)]
+        for line in removed:
+            if not line.item_id:
+                continue
+            job = (
+                uow.session.query(ProductionJob)
+                .filter(
+                    ProductionJob.order_id == order.id,
+                    ProductionJob.item_id == line.item_id,
+                    ProductionJob.status != "cancelled",
+                )
+                .first()
+            )
+            if job:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Job {job.job_number} is making this piece, so it cannot "
+                    "be taken off the order. Change its quantity or notes instead",
+                )
+
+        if data.estimated_amount is not None:
+            final = Decimal(order.final_amount or 0)
+            if final <= 0 and data.estimated_amount < Decimal(order.advance_paid or 0):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"The amount is less than the Rs {order.advance_paid} already paid",
+                )
+            order.estimated_amount = data.estimated_amount
+
+        for line in removed:
+            order.items.remove(line)  # delete-orphan removes the row
+        for sent in data.items:
+            if sent.id:
+                row = on_order[sent.id]
+                row.item_id = sent.item_id
+                row.item_name = sent.item_name
+                row.quantity = sent.quantity
+                row.unit_price = sent.unit_price
+                row.notes = sent.notes
+            else:
+                order.items.append(
+                    OrderItem(
+                        item_id=sent.item_id,
+                        item_name=sent.item_name,
+                        quantity=sent.quantity,
+                        unit_price=sent.unit_price,
+                        notes=sent.notes,
+                    )
+                )
+        uow.session.flush()
+        if order.status in ("confirmed", "in_production", "ready"):
+            reservation_service.release(uow.session, order.id)
+            reservation_service.set_aside(uow.session, order)
+        uow.commit()
+    logger.info("Pieces on order %s changed", order.order_number)
+    return get_order(uow, order_id)

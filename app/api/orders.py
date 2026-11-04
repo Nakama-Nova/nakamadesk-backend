@@ -22,6 +22,7 @@ from app.repositories.base import AbstractUnitOfWork
 from app.schemas.order import (
     OrderCreate,
     OrderInvoiceRequest,
+    OrderItemsUpdate,
     OrderResponse,
     OrderStatusUpdate,
     OrderUpdate,
@@ -223,6 +224,23 @@ def invoice_order(
     if not created:
         response.status_code = 200
     return sale
+
+
+@router.put("/{order_id}/items", response_model=OrderResponse)
+def edit_order_items(
+    order_id: UUID,
+    data: OrderItemsUpdate,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Change the pieces on an open order: send the whole list (a piece with its `id` is
+    changed, one without is added, one left out is removed) and, if the price moved,
+    the new `estimated_amount`. Stock held for a confirmed order follows. Refused for a
+    billed, delivered or cancelled order (409), and for taking off a piece that has a
+    production job. RBAC: OWNER, MANAGER.
+    """
+    return order_service.update_items(uow, order_id, data)
 
 
 @router.patch("/{order_id}/payments/{payment_id}", response_model=OrderResponse)
