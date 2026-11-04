@@ -87,6 +87,31 @@
       </div>
       <div class="error" id="hwError" role="alert"></div>
     </section>
+
+    <section class="card" aria-labelledby="h-carv">
+      <h2 id="h-carv">Carvings</h2>
+      <p class="small muted" style="margin:0 0 8px">
+        Put a design on a face of a part. The design and its picture are stored <b>once</b> under CNC designs;
+        use the same design on as many parts as you like (Copy, then change the part, and tick Mirror for the
+        other side). Make a new design, with its picture, in CNC designs first. Placing a design here files it under
+        <i>furniture</i> there. The picture is centred on the face, scaled to fit inside the margin. Save the parts
+        first: you can only pick parts that are saved.
+      </p>
+      <div class="parts">
+        <table id="carvings">
+          <thead>
+            <tr><th>Part</th><th>Design</th><th>Face</th><th>Margin (mm)</th><th>Mirror</th><th>Note</th><th></th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="addCarving">Add carving</button>
+        <button type="button" class="primary" id="saveCarvings">Save carvings</button>
+        <span class="ok" id="carvingsOk" aria-live="polite"></span>
+      </div>
+      <div class="error" id="carvingsError" role="alert"></div>
+    </section>
   </div>
 
   <script type="module" src="/lab/static/edit.js"></script>

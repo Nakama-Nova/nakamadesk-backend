@@ -18,6 +18,7 @@ JointType = Literal[
 HardwareKind = Literal[
     "screw", "nail", "dowel", "bolt", "bracket", "glue", "clamp", "other"
 ]
+Face = Literal["left", "right", "front", "back", "top", "bottom"]
 JOINT_TYPES = get_args(JointType)
 HARDWARE_KINDS = get_args(HardwareKind)
 
@@ -46,6 +47,7 @@ class PartIn(BaseModel):
 
 class PartOut(PartIn):
     id: UUID
+    sort: int = 0  # row order, so an editor can match a saved row to its id
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +75,28 @@ class HardwareOut(HardwareIn):
 
 class HardwareListIn(BaseModel):
     hardware: List[HardwareIn] = Field(max_length=100)
+
+
+class CarvingIn(BaseModel):
+    """A design carved on one face of a part. The design itself is stored once, under CNC designs."""
+
+    part_id: UUID
+    design_id: UUID
+    face: Face
+    margin_mm: int = Field(default=0, ge=0, le=500)  # kept clear at the face's edge
+    mirror: bool = False  # flip left-right, e.g. for the other side panel
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
+class CarvingOut(CarvingIn):
+    id: UUID
+    part_id: Optional[UUID] = None  # None once its part was removed
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CarvingListIn(BaseModel):
+    carvings: List[CarvingIn] = Field(max_length=60)
 
 
 class SizeIn(BaseModel):

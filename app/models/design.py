@@ -1,12 +1,22 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, text
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
 
 DESIGN_STATUSES = ("draft", "ready", "retired")
+# furniture = carved onto furniture parts in the 3D Lab; general = everything else
+DESIGN_CATEGORIES = ("general", "furniture")
 
 
 class Design(Base):
@@ -18,6 +28,7 @@ class Design(Base):
     """
 
     __tablename__ = "designs"
+    __table_args__ = (UniqueConstraint("image_sha256", name="uq_designs_image_sha256"),)
 
     id = Column(
         UUID(as_uuid=True),
@@ -35,6 +46,15 @@ class Design(Base):
         index=True,
     )
     status = Column(String, nullable=False, default="draft", server_default="draft")
+    category = Column(
+        String, nullable=False, default="general", server_default="general"
+    )
+    # The design's picture (what the Lab shows on a furniture part). It is kept in the
+    # PRIVATE store (key under private/designs/) and never served by /media.
+    # image_sha256 makes a picture be stored once: the same file cannot be added twice.
+    image_key = Column(String, nullable=True)
+    image_type = Column(String, nullable=True)
+    image_sha256 = Column(String(64), nullable=True)
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -8,7 +8,7 @@ picking Small/Medium/Large or typing a custom size just recalculates.
 
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -24,6 +24,8 @@ from app.db.deps import (
     get_lab_user,
     get_uow,
 )
+from app.models.design import Design
+from app.models.furniture_carving import FurnitureCarving
 from app.models.furniture_hardware import FurnitureHardware
 from app.models.furniture_part import FurniturePart
 from app.models.item import Item
@@ -32,6 +34,8 @@ from app.models.raw_material import RawMaterial
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.lab import (
+    CarvingListIn,
+    CarvingOut,
     FurnitureIn,
     HardwareListIn,
     HardwareOut,
@@ -42,7 +46,7 @@ from app.schemas.lab import (
     PresetsIn,
     SizeIn,
 )
-from app.services import lab_service, media_service
+from app.services import design_service, lab_service, media_service
 from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/lab", tags=["3D Lab"])
@@ -96,18 +100,40 @@ def _hardware(uow: AbstractUnitOfWork, item_id: UUID) -> List[FurnitureHardware]
     )
 
 
+def _carvings(uow: AbstractUnitOfWork, item_id: UUID) -> List[FurnitureCarving]:
+    return (
+        uow.session.query(FurnitureCarving)
+        .filter(FurnitureCarving.item_id == item_id)
+        .order_by(FurnitureCarving.sort)
+        .all()
+    )
+
+
+def _designs(uow: AbstractUnitOfWork, ids) -> Dict[UUID, Design]:
+    ids = list(ids)
+    if not ids:
+        return {}
+    return {d.id: d for d in uow.session.query(Design).filter(Design.id.in_(ids)).all()}
+
+
 def _check_all(uow: AbstractUnitOfWork, item: Item) -> None:
-    """After a size change: the parts AND the hardware must still work at every size."""
+    """After a size change: parts, hardware AND carving margins must still work at every size."""
     parts = _parts(uow, item.id)
     lab_service.check_definition(item, parts)
     lab_service.check_hardware(item, _hardware(uow, item.id), parts)
+    carvings = _carvings(uow, item.id)
+    designs = _designs(uow, {c.design_id for c in carvings})
+    lab_service.check_carvings(item, carvings, parts, designs)
 
 
 def _solved(uow: AbstractUnitOfWork, item: Item, **size) -> dict:
+    carvings = _carvings(uow, item.id)
     return lab_service.solve(
         item,
         _parts(uow, item.id),
         hardware=_hardware(uow, item.id),
+        carvings=carvings,
+        designs=_designs(uow, {c.design_id for c in carvings}),
         **size,
     )
 
@@ -153,6 +179,27 @@ def solve_item(
     """The parts, positions and cutting list for a size. Read-only: nothing is saved."""
     item = _furniture(uow, item_id)
     return _solved(uow, item, size=size, l=l, w=w, h=h)
+
+
+@router.get("/designs/{design_id}/image")
+def design_image(
+    design_id: UUID,
+    user: User = Depends(get_lab_user),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    The picture of a design that is carved on some furniture, for the viewer. Only
+    designs placed in the Lab are served here; the rest of the library stays
+    owner and artisan only.
+    """
+    carved = (
+        uow.session.query(FurnitureCarving.id)
+        .filter(FurnitureCarving.design_id == design_id)
+        .first()
+    )
+    design = uow.session.get(Design, design_id) if carved else None
+    return design_service.image_response(design, store)
 
 
 @router.get("/parts/{part_id}/model")
@@ -206,6 +253,24 @@ def get_definition(
             HardwareOut.model_validate(h).model_dump(mode="json")
             for h in _hardware(uow, item_id)
         ],
+        "carvings": [
+            CarvingOut.model_validate(c).model_dump(mode="json")
+            for c in _carvings(uow, item_id)
+        ],
+        # the CNC designs an editor may carve (code and name only; designs stay owner/artisan)
+        "designs": [
+            {
+                "id": str(d.id),
+                "sku": d.sku,
+                "name": d.name,
+                "category": d.category,
+                "has_image": bool(d.image_key),
+            }
+            for d in uow.session.query(Design)
+            .filter(Design.status != "retired")
+            .order_by(Design.sku)
+            .all()
+        ],
     }
 
 
@@ -248,18 +313,26 @@ def replace_parts(
         item, new_parts
     )  # 422 with the part and size on failure
     with uow:
-        # Hardware points at parts by id and the delete below sets those links to
+        # Hardware and carvings point at parts by id and the delete below sets those links to
         # NULL, so remember the ones whose part comes back (same id) and restore them.
-        links = {h.id: h.part_id for h in _hardware(uow, item_id) if h.part_id in seen}
+        links = [
+            (model, row.id, row.part_id)
+            for model, rows in (
+                (FurnitureHardware, _hardware(uow, item_id)),
+                (FurnitureCarving, _carvings(uow, item_id)),
+            )
+            for row in rows
+            if row.part_id in seen
+        ]
         uow.session.query(FurniturePart).filter(
             FurniturePart.item_id == item_id
         ).delete()
         uow.session.add_all(new_parts)
         uow.session.flush()
-        for hw_id, part_id in links.items():
-            uow.session.query(FurnitureHardware).filter(
-                FurnitureHardware.id == hw_id
-            ).update({"part_id": part_id})
+        for model, row_id, part_id in links:
+            uow.session.query(model).filter(model.id == row_id).update(
+                {"part_id": part_id}
+            )
         uow.commit()
     uow.session.expire_all()
     return _solved(uow, item)
@@ -293,6 +366,57 @@ def replace_hardware(
             FurnitureHardware.item_id == item_id
         ).delete()
         uow.session.add_all(new_lines)
+        uow.commit()
+    uow.session.expire_all()
+    return _solved(uow, item)
+
+
+@router.put("/items/{item_id}/carvings")
+def replace_carvings(
+    item_id: UUID,
+    body: CarvingListIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Replace the whole list of carvings (a design on a part's face). A design is
+    stored once in CNC designs and may be placed any number of times, for
+    example on both side panels. A design placed here is filed under
+    "furniture" in the designs library.
+    """
+    item = _item(uow, item_id)
+    parts = _parts(uow, item_id)
+    part_ids = {p.id for p in parts}
+    designs = _designs(uow, {c.design_id for c in body.carvings})
+    new_rows = []
+    for n, c in enumerate(body.carvings, 1):
+        if c.part_id not in part_ids:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{item.name}: carving line {n}: part not found on this item",
+            )
+        design = designs.get(c.design_id)
+        if design is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{item.name}: carving line {n}: design not found",
+            )
+        if not design.image_key:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{item.name}: carving line {n}: {design.sku} ({design.name}) "
+                "has no picture yet. Add its picture in CNC designs first",
+            )
+        new_rows.append(FurnitureCarving(item_id=item_id, sort=n - 1, **c.model_dump()))
+    lab_service.check_carvings(item, new_rows, parts, designs)
+    with uow:
+        uow.session.query(FurnitureCarving).filter(
+            FurnitureCarving.item_id == item_id
+        ).delete()
+        uow.session.add_all(new_rows)
+        for d in designs.values():
+            if d.category == "general":
+                d.category = "furniture"
         uow.commit()
     uow.session.expire_all()
     return _solved(uow, item)

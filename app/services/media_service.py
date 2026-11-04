@@ -127,6 +127,45 @@ def delete(storage_key: str, storage: str = "local", store=None) -> None:
         pass
 
 
+# Staff-only pictures that the API itself serves (design pictures). They sit under
+# private/ in the object store, or on this server's disk when there is no store;
+# /media refuses this prefix, so they can never be fetched by URL.
+PRIVATE_PREFIX = "private/"
+
+
+def save_private(key: str, data: bytes, content_type: str, store=None) -> None:
+    """Keep a staff-only file under `key` (must start with private/)."""
+    assert key.startswith(PRIVATE_PREFIX)
+    if store is not None:
+        store.put_bytes(key, data, content_type)
+        return
+    path = _local_path(key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
+
+def read_private(key: str, max_bytes: int, store=None) -> bytes:
+    """The bytes of a private file. Raises KeyError if it is gone."""
+    assert key.startswith(PRIVATE_PREFIX)
+    if store is not None:
+        return store.get_bytes(key, max_bytes)
+    try:
+        return _local_path(key).read_bytes()
+    except (FileNotFoundError, ValueError):
+        raise KeyError(key) from None
+
+
+def delete_private(key: str, store=None) -> None:
+    """Remove a private file. Never fails the request: a stray file is harmless."""
+    try:
+        if store is not None:
+            store.delete(key)
+        else:
+            _local_path(key).unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def url(storage_key: str) -> str:
     return f"/media/{storage_key}"
 

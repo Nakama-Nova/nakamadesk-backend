@@ -386,3 +386,12 @@ def test_a_bed_with_ledger_screws_dowels_and_clamps(client, people):
         f"/lab/items/{bed['id']}", headers=h, params={"size": "S"}
     ).json()
     assert small["hardware"][0]["items"][0]["qty"] == 37  # 4 * 1840 / 200 = 36.8 -> 37
+
+
+def test_lab_pages_are_valid_utf8():
+    """A stray Latin-1 byte (an editor on Windows) shows as a broken character in the page."""
+    from pathlib import Path
+
+    folder = Path(__file__).resolve().parent.parent / "app" / "static" / "lab"
+    for page in [*folder.glob("*.js"), *folder.glob("*.html"), *folder.glob("*.css")]:
+        page.read_bytes().decode("utf-8")  # raises on a bad byte

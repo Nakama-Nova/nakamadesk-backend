@@ -12,30 +12,41 @@ from decimal import Decimal
 from typing import List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 
 from app.api.restorations import FileOut
 from app.db.deps import RESTORATION_ROLES, check_role, get_uow
-from app.models.design import DESIGN_STATUSES, Design, DesignProduct
+from app.models.design import (
+    DESIGN_CATEGORIES,
+    DESIGN_STATUSES,
+    Design,
+    DesignProduct,
+)
+from app.models.furniture_carving import FurnitureCarving
+from app.models.furniture_part import FurniturePart
 from app.models.item import Item
 from app.models.restoration import RestorationFile, RestorationProject
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate
-from app.services import inventory_service, sku_service
+from app.services import design_service, inventory_service, media_service, sku_service
+from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/designs", tags=["Designs"])
 
 Status = Literal["draft", "ready", "retired"]
 assert set(Status.__args__) == set(DESIGN_STATUSES)
+Category = Literal["general", "furniture"]
+assert set(Category.__args__) == set(DESIGN_CATEGORIES)
 
 
 class DesignCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     description: Optional[str] = Field(default=None, max_length=2000)
     restoration_id: Optional[UUID] = None  # the restoration it was taken from
+    category: Category = "general"
 
 
 class DesignUpdate(BaseModel):
@@ -43,6 +54,7 @@ class DesignUpdate(BaseModel):
     description: Optional[str] = Field(default=None, max_length=2000)
     restoration_id: Optional[UUID] = None
     status: Optional[Status] = None
+    category: Optional[Category] = None
 
 
 class ProductRef(BaseModel):
@@ -68,6 +80,8 @@ class DesignOut(BaseModel):
     name: str
     description: Optional[str]
     status: str
+    category: str
+    has_image: bool
     restoration_id: Optional[UUID]
     restoration_title: Optional[str]
     product_count: int
@@ -75,10 +89,20 @@ class DesignOut(BaseModel):
     updated_at: datetime
 
 
+class FurnitureUse(BaseModel):
+    """Where a design is carved: one row per placement (the design itself is stored once)."""
+
+    item_id: UUID
+    item_name: str
+    part_name: Optional[str]
+    face: str
+
+
 class DesignDetail(DesignOut):
     restoration: Optional[RestorationRef]
     products: List[ProductRef]
     files: List[FileOut]  # the 3D files and G-code of the restoration it came from
+    furniture: List[FurnitureUse]  # the furniture parts it is carved on (3D Lab)
 
 
 class ProductLink(BaseModel):
@@ -123,6 +147,8 @@ def _out(uow: AbstractUnitOfWork, d: Design) -> dict:
         "name": d.name,
         "description": d.description,
         "status": d.status,
+        "category": d.category,
+        "has_image": bool(d.image_key),
         "restoration_id": d.restoration_id,
         "restoration_title": source.title if source else None,
         "product_count": count,
@@ -139,6 +165,21 @@ def _products(uow: AbstractUnitOfWork, design_id: UUID) -> List[Item]:
         .order_by(Item.sku)
         .all()
     )
+
+
+def _furniture_use(uow: AbstractUnitOfWork, design_id: UUID) -> List[FurnitureUse]:
+    rows = (
+        uow.session.query(FurnitureCarving, Item.name, FurniturePart.name)
+        .join(Item, Item.id == FurnitureCarving.item_id)
+        .outerjoin(FurniturePart, FurniturePart.id == FurnitureCarving.part_id)
+        .filter(FurnitureCarving.design_id == design_id)
+        .order_by(Item.name, FurnitureCarving.sort)
+        .all()
+    )
+    return [
+        FurnitureUse(item_id=c.item_id, item_name=item, part_name=part, face=c.face)
+        for c, item, part in rows
+    ]
 
 
 def _ref(item: Item) -> ProductRef:
@@ -175,6 +216,7 @@ def create_design(
             name=req.name.strip(),
             description=req.description,
             restoration_id=req.restoration_id,
+            category=req.category,
             created_by=user.id,
         )
         uow.session.add(design)
@@ -187,6 +229,7 @@ def create_design(
 def list_designs(
     status: Optional[Status] = Query(default=None),
     restoration_id: Optional[UUID] = Query(default=None),
+    category: Optional[Category] = Query(default=None),
     item_id: Optional[UUID] = Query(
         default=None, description="designs this product is built from"
     ),
@@ -201,6 +244,8 @@ def list_designs(
         query = query.filter(Design.status == status)
     if restoration_id:
         query = query.filter(Design.restoration_id == restoration_id)
+    if category:
+        query = query.filter(Design.category == category)
     if item_id:
         query = query.join(DesignProduct, DesignProduct.design_id == Design.id).filter(
             DesignProduct.item_id == item_id
@@ -246,6 +291,7 @@ def get_design(
         ),
         "products": [_ref(i) for i in _products(uow, design.id)],
         "files": [FileOut.model_validate(f, from_attributes=True) for f in files],
+        "furniture": _furniture_use(uow, design.id),
     }
 
 
@@ -258,7 +304,7 @@ def update_design(
 ):
     design = _design(uow, design_id)
     changes = req.model_dump(exclude_unset=True)
-    for required in ("name", "status"):
+    for required in ("name", "status", "category"):
         if required in changes and changes[required] is None:
             raise HTTPException(status_code=422, detail=f"{required} cannot be empty")
     if "restoration_id" in changes:
@@ -268,6 +314,36 @@ def update_design(
     uow.commit()
     uow.refresh(design)
     return _out(uow, design)
+
+
+@router.put("/{design_id}/image", response_model=DesignOut)
+async def set_design_image(
+    design_id: UUID,
+    file: UploadFile = File(...),
+    user: User = Depends(check_role(RESTORATION_ROLES)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    The design's picture (JPG, PNG or WebP, 10 MB max), shown on furniture in the 3D
+    Lab. Private. The same picture cannot be stored under two designs (409 names the
+    first one): reuse that design and place it more than once instead.
+    """
+    design = _design(uow, design_id)
+    data = await file.read(media_service.max_read_size())
+    design_service.store_image(uow, design, data, file.content_type or "", store)
+    uow.refresh(design)
+    return _out(uow, design)
+
+
+@router.get("/{design_id}/image")
+def get_design_image(
+    design_id: UUID,
+    user: User = Depends(check_role(RESTORATION_ROLES)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    return design_service.image_response(_design(uow, design_id), store)
 
 
 @router.post("/{design_id}/products", response_model=List[ProductRef])
