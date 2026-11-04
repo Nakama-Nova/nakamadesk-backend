@@ -259,6 +259,13 @@ tr.total td {
 .parts td.note input {
   min-width: 180px;
 }
+ul.hw {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+}
+ul.hw li {
+  margin-bottom: 4px;
+}
 .ok {
   color: #2f7d4f;
   font-size: 0.9rem;

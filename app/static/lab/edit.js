@@ -15,8 +15,43 @@ const FIELDS = [
   ["y_expr", "0", "text"],
   ["z_expr", "0", "text"],
   ["assembly_step", null, "number"],
+  ["joint_type", null, "joint"],
   ["joinery_note", "", "text"],
 ];
+
+const JOINTS = [
+  ["", "none set"],
+  ["butt_glue", "Butt joint, glued"],
+  ["mortise_tenon", "Mortise and tenon"],
+  ["dowel", "Dowel joint"],
+  ["half_lap", "Half-lap"],
+  ["dovetail", "Dovetail"],
+  ["pocket_screw", "Pocket screw"],
+  ["biscuit", "Biscuit joint"],
+  ["other", "Other (use the note)"],
+];
+const KINDS = [
+  ["screw", "Screw"],
+  ["nail", "Nail"],
+  ["dowel", "Dowel"],
+  ["bolt", "Bolt"],
+  ["bracket", "Bracket"],
+  ["glue", "Glue"],
+  ["clamp", "Clamp (tool)"],
+  ["other", "Other"],
+];
+
+function select(options, value) {
+  const input = document.createElement("select");
+  for (const [v, label] of options) {
+    const o = document.createElement("option");
+    o.value = v;
+    o.textContent = label;
+    input.append(o);
+  }
+  input.value = value || options[0][0];
+  return input;
+}
 
 function cell(field, hint, kind, value) {
   const td = document.createElement("td");
@@ -24,14 +59,9 @@ function cell(field, hint, kind, value) {
   if (field === "joinery_note") td.className = "note";
   let input;
   if (kind === "axis") {
-    input = document.createElement("select");
-    for (const [v, label] of [["x", "x (left-right)"], ["y", "y (up)"], ["z", "z (front-back)"]]) {
-      const o = document.createElement("option");
-      o.value = v;
-      o.textContent = label;
-      input.append(o);
-    }
-    input.value = value || "x";
+    input = select([["x", "x (left-right)"], ["y", "y (up)"], ["z", "z (front-back)"]], value);
+  } else if (kind === "joint") {
+    input = select(JOINTS, value);
   } else {
     input = document.createElement("input");
     input.type = kind === "number" ? "number" : "text";
@@ -62,7 +92,11 @@ function addRow(part = {}) {
   const copy = document.createElement("button");
   copy.type = "button";
   copy.textContent = "Copy";
-  copy.addEventListener("click", () => tr.after(rowFrom(readRow(tr))));
+  copy.addEventListener("click", () => {
+    const part = readRow(tr);
+    delete part.id; // a copy is a new part
+    tr.after(rowFrom(part));
+  });
   const del = document.createElement("button");
   del.type = "button";
   del.className = "link";
@@ -79,8 +113,9 @@ function readRow(tr) {
   for (const el of tr.querySelectorAll("[data-field]")) {
     let v = el.value.trim();
     if (el.dataset.field === "assembly_step") v = Number(v) || 1;
-    part[el.dataset.field] = v === "" && ["wood_type", "joinery_note"].includes(el.dataset.field) ? null : v;
+    part[el.dataset.field] = v === "" && ["wood_type", "joint_type", "joinery_note"].includes(el.dataset.field) ? null : v;
   }
+  if (tr.dataset.partId) part.id = tr.dataset.partId; // keeps hardware linked to this part
   part.raw_material_id = tr.dataset.raw || null;
   part.model_asset_id = tr.dataset.model || null;
   return part;
@@ -176,6 +211,82 @@ $("saveParts").addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------- hardware
+function hwCell(field, td, input) {
+  input.dataset.field = field;
+  input.setAttribute("aria-label", field === "qty_expr" ? "quantity formula" : field.replace("_", " "));
+  td.append(input);
+  return td;
+}
+function textInput(value, hint, max) {
+  const i = document.createElement("input");
+  i.type = "text";
+  i.value = value ?? "";
+  i.placeholder = hint;
+  i.maxLength = max;
+  return i;
+}
+function addHwRow(line = {}) {
+  const tr = document.createElement("tr");
+  tr.dataset.partId = line.part_id || ""; // set through the API; kept when saving here
+  const name = hwCell("name", document.createElement("td"), textInput(line.name, "Wood screw 4 x 50 mm", 80));
+  name.className = "name";
+  const note = hwCell("note", document.createElement("td"), textInput(line.note, "", 300));
+  note.className = "note";
+  const step = document.createElement("input");
+  step.type = "number";
+  step.min = "1";
+  step.max = "50";
+  step.style.minWidth = "56px";
+  step.value = line.assembly_step ?? "";
+  tr.append(
+    hwCell("kind", document.createElement("td"), select(KINDS, line.kind)),
+    name,
+    hwCell("qty_expr", document.createElement("td"), textInput(line.qty_expr, "L / 150", 100)),
+    hwCell("assembly_step", document.createElement("td"), step),
+    note
+  );
+  const td = document.createElement("td");
+  td.style.whiteSpace = "nowrap";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", () => tr.after(addHwRow(readHwRow(tr))));
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "link";
+  del.textContent = "Delete";
+  del.addEventListener("click", () => tr.remove());
+  td.append(copy, del);
+  tr.append(td);
+  return tr;
+}
+function readHwRow(tr) {
+  const line = {};
+  for (const el of tr.querySelectorAll("[data-field]")) {
+    const v = el.value.trim();
+    line[el.dataset.field] = el.dataset.field === "assembly_step" ? (v === "" ? null : Number(v)) : v === "" && el.dataset.field === "note" ? null : v;
+  }
+  line.part_id = tr.dataset.partId || null;
+  return line;
+}
+$("addHw").addEventListener("click", () => {
+  const tr = addHwRow({ kind: "screw", name: "New hardware", qty_expr: "4" });
+  $("hardware").tBodies[0].append(tr);
+  tr.querySelector("select").focus();
+});
+$("saveHw").addEventListener("click", async () => {
+  $("hwError").textContent = "";
+  $("hwOk").textContent = "";
+  const hardware = [...$("hardware").tBodies[0].rows].map(readHwRow);
+  try {
+    await call("PUT", `/lab/items/${itemId}/hardware`, { hardware });
+    $("hwOk").textContent = `Saved ${hardware.length} lines. Open the Lab view to check them.`;
+  } catch (e) {
+    $("hwError").textContent = e.message;
+  }
+});
+
 async function init() {
   $("viewLink").href = `/lab/view/${itemId}`;
   sizeInputs();
@@ -187,6 +298,7 @@ async function init() {
     fillSizes(def);
     const body = $("parts").tBodies[0];
     def.parts.forEach((p) => body.append(addRow(p)));
+    (def.hardware || []).forEach((h) => $("hardware").tBodies[0].append(addHwRow(h)));
   } catch (e) {
     $("partsError").textContent = e.message;
   }

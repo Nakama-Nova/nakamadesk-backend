@@ -47,6 +47,7 @@ class FurniturePart(Base):
     y_expr = Column(String, nullable=False, default="0", server_default="0")
     z_expr = Column(String, nullable=False, default="0", server_default="0")
     assembly_step = Column(Integer, nullable=False, default=1, server_default="1")
+    joint_type = Column(String, nullable=True)  # see JOINT_TYPES in app/schemas/lab.py
     joinery_note = Column(Text, nullable=True)
     model_asset_id = Column(
         UUID(as_uuid=True),

@@ -8,6 +8,27 @@ const itemId = location.pathname.split("/").pop();
 const $ = (id) => document.getElementById(id);
 const MM = 0.001; // scene units are metres
 
+const JOINTS = {
+  butt_glue: "Butt joint, glued",
+  mortise_tenon: "Mortise and tenon",
+  dowel: "Dowel joint",
+  half_lap: "Half-lap",
+  dovetail: "Dovetail",
+  pocket_screw: "Pocket screw",
+  biscuit: "Biscuit joint",
+  other: "Other (see joinery note)",
+};
+const KINDS = {
+  screw: "Screws",
+  nail: "Nails",
+  dowel: "Dowels",
+  bolt: "Bolts",
+  bracket: "Brackets",
+  glue: "Glue",
+  clamp: "Clamps",
+  other: "Other",
+};
+
 // ---------------------------------------------------------------- scene
 const canvas = $("canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -193,6 +214,7 @@ function select(p) {
   line("Wood", d.wood || "not set");
   line("Build step", String(d.step));
   line("Position", `x ${d.pos.x}, y ${d.pos.y}, z ${d.pos.z} mm`);
+  if (d.joint_type) line("Joint", JOINTS[d.joint_type] || d.joint_type);
   if (d.note) line("Joinery", d.note);
 }
 
@@ -249,6 +271,40 @@ function renderCutting() {
   host.append(el("div", `Total ${cl.total_m3.toFixed(4)} mÂ³ in ${cl.pieces} pieces`, "small"));
 }
 
+// "4 x Wood screw 4 x 50 mm", with the part or step it belongs to underneath
+function hardwareList(host, items, partNames, showStep) {
+  const ul = el("ul", undefined, "hw");
+  for (const i of items) {
+    const li = el("li");
+    li.append(el("b", `${i.qty} × `), document.createTextNode(i.name));
+    const where = [];
+    if (i.part_id && partNames[i.part_id]) where.push(`for ${partNames[i.part_id]}`);
+    if (showStep && i.step) where.push(`step ${i.step}`);
+    if (i.note) where.push(i.note);
+    if (where.length) li.append(el("div", where.join(" · "), "muted small"));
+    ul.append(li);
+  }
+  host.append(ul);
+}
+
+function renderHardware() {
+  const names = Object.fromEntries(data.parts.map((p) => [p.id, p.name]));
+  const hw = $("hardware");
+  hw.replaceChildren();
+  if (!data.hardware?.length) hw.append(el("div", "No hardware listed yet.", "muted small"));
+  for (const g of data.hardware || []) {
+    hw.append(el("div", KINDS[g.kind] || g.kind, "wood"));
+    hardwareList(hw, g.items, names, true);
+  }
+  const tools = $("tools");
+  tools.replaceChildren();
+  if (!data.tools?.length) tools.append(el("div", "No clamps listed.", "muted small"));
+  for (const g of data.tools || []) {
+    tools.append(el("div", g.step ? `Step ${g.step}` : "Any step", "wood"));
+    hardwareList(tools, g.items, names, false);
+  }
+}
+
 async function load(params = {}) {
   const q = new URLSearchParams(params).toString();
   let res;
@@ -274,6 +330,7 @@ async function load(params = {}) {
   document.title = `${data.item.name} Â· 3D Lab`;
   renderPresets();
   renderCutting();
+  renderHardware();
   if (firstLoad) {
     // start with the whole piece visible: the step slider begins at its last step
     $("step").max = String(data.steps);
