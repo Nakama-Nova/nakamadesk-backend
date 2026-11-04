@@ -37,7 +37,7 @@ const KINDS = [
   ["bolt", "Bolt"],
   ["bracket", "Bracket"],
   ["glue", "Glue"],
-  ["clamp", "Clamp (tool)"],
+  ["clamp", "Clamp (workshop tool, not stock)"],
   ["other", "Other"],
 ];
 
@@ -206,6 +206,7 @@ $("saveParts").addEventListener("click", async () => {
   try {
     await call("PUT", `/lab/items/${itemId}/parts`, { parts });
     $("partsOk").textContent = `Saved ${parts.length} parts. Open the Lab view to check them.`;
+    await syncPartIds(); // new parts now have ids: keep them, so carvings and hardware stay on them
   } catch (e) {
     $("partsError").textContent = e.message;
   }
@@ -287,6 +288,139 @@ $("saveHw").addEventListener("click", async () => {
   }
 });
 
+// ---------------------------------------------------------------- carvings
+const FACE_OPTIONS = [
+  ["front", "front (z = 0 side)"],
+  ["back", "back"],
+  ["left", "left (x = 0 side)"],
+  ["right", "right"],
+  ["top", "top"],
+  ["bottom", "bottom"],
+];
+let partChoices = []; // saved parts: [id, label]
+let designChoices = []; // [id, label, has picture]
+
+function partLabels(parts) {
+  const total = {};
+  parts.forEach((p) => (total[p.name] = (total[p.name] || 0) + 1));
+  const seen = {};
+  return parts.map((p) => {
+    seen[p.name] = (seen[p.name] || 0) + 1;
+    return [p.id, total[p.name] > 1 ? `${p.name} (${seen[p.name]})` : p.name];
+  });
+}
+
+function fillPartSelect(sel, value) {
+  sel.replaceChildren();
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "choose a part";
+  sel.append(none);
+  for (const [id, label] of partChoices) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = label;
+    sel.append(o);
+  }
+  sel.value = value || "";
+}
+
+function addCarvingRow(c = {}) {
+  const tr = document.createElement("tr");
+  const part = document.createElement("select");
+  fillPartSelect(part, c.part_id);
+  const design = document.createElement("select");
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "choose a design";
+  design.append(none);
+  for (const [id, label, has] of designChoices) {
+    const o = document.createElement("option");
+    o.value = id;
+    o.textContent = has ? label : `${label} (no picture yet)`;
+    o.disabled = !has;
+    design.append(o);
+  }
+  design.value = c.design_id || "";
+  const face = select(FACE_OPTIONS, c.face || "front");
+  const margin = document.createElement("input");
+  margin.type = "number";
+  margin.min = "0";
+  margin.max = "500";
+  margin.style.minWidth = "64px";
+  margin.value = c.margin_mm ?? 0;
+  const mirror = document.createElement("input");
+  mirror.type = "checkbox";
+  mirror.checked = !!c.mirror;
+  mirror.style.width = "auto";
+  const note = textInput(c.note, "", 300);
+  const fields = { part_id: part, design_id: design, face, margin_mm: margin, mirror, note };
+  for (const [field, input] of Object.entries(fields)) {
+    input.dataset.field = field;
+    input.setAttribute("aria-label", field === "part_id" ? "part" : field === "design_id" ? "design" : field.replace("_mm", "").replace("_", " "));
+    const td = document.createElement("td");
+    if (field === "note") td.className = "note";
+    td.append(input);
+    tr.append(td);
+  }
+  const td = document.createElement("td");
+  td.style.whiteSpace = "nowrap";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy";
+  copy.addEventListener("click", () => tr.after(addCarvingRow(readCarvingRow(tr))));
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "link";
+  del.textContent = "Delete";
+  del.addEventListener("click", () => tr.remove());
+  td.append(copy, del);
+  tr.append(td);
+  return tr;
+}
+function readCarvingRow(tr) {
+  const v = {};
+  for (const el of tr.querySelectorAll("[data-field]")) {
+    v[el.dataset.field] = el.type === "checkbox" ? el.checked : el.value.trim();
+  }
+  return { part_id: v.part_id, design_id: v.design_id, face: v.face, margin_mm: Number(v.margin_mm) || 0, mirror: v.mirror, note: v.note || null };
+}
+function refreshPartSelects() {
+  for (const sel of $("carvings").querySelectorAll("select[data-field=part_id]")) fillPartSelect(sel, sel.value);
+}
+
+// After saving parts: read the saved ids back and keep them on the rows.
+async function syncPartIds() {
+  const def = await call("GET", `/lab/items/${itemId}/definition`);
+  [...$("parts").tBodies[0].rows].forEach((tr, i) => {
+    const saved = def.parts.find((p) => p.sort === i);
+    if (saved) tr.dataset.partId = saved.id;
+  });
+  partChoices = partLabels(def.parts);
+  refreshPartSelects();
+}
+
+$("addCarving").addEventListener("click", () => {
+  const tr = addCarvingRow({});
+  $("carvings").tBodies[0].append(tr);
+  tr.querySelector("select").focus();
+});
+$("saveCarvings").addEventListener("click", async () => {
+  $("carvingsError").textContent = "";
+  $("carvingsOk").textContent = "";
+  const carvings = [...$("carvings").tBodies[0].rows].map(readCarvingRow);
+  if (carvings.some((c) => !c.part_id || !c.design_id)) {
+    $("carvingsError").textContent = "Choose a part and a design on every row, or delete the row.";
+    return;
+  }
+  try {
+    await call("PUT", `/lab/items/${itemId}/carvings`, { carvings });
+    $("carvingsOk").textContent = `Saved ${carvings.length} carvings. Open the Lab view to check them.`;
+  } catch (e) {
+    $("carvingsError").textContent = e.message;
+  }
+});
+
 async function init() {
   $("viewLink").href = `/lab/view/${itemId}`;
   sizeInputs();
@@ -299,6 +433,9 @@ async function init() {
     const body = $("parts").tBodies[0];
     def.parts.forEach((p) => body.append(addRow(p)));
     (def.hardware || []).forEach((h) => $("hardware").tBodies[0].append(addHwRow(h)));
+    partChoices = partLabels(def.parts);
+    designChoices = (def.designs || []).map((d) => [d.id, `${d.sku} · ${d.name}`, d.has_image]);
+    (def.carvings || []).forEach((c) => $("carvings").tBodies[0].append(addCarvingRow(c)));
   } catch (e) {
     $("partsError").textContent = e.message;
   }

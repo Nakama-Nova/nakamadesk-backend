@@ -323,8 +323,48 @@ Overall size L 2100 (head to foot), W 1600, H 1000. Parts: four posts, head rail
 |---|---|---|---|---|---|
 | screw | Wood screw 4 x 50 mm | `4 * (L - 160) / 200` (4 per slat ledger, a slat every 200 mm) | 2 | 39 (38.8 up) | 37 (36.8 up) |
 | dowel | Dowel 10 x 60 mm | `8` (2 per rail-to-post joint, 4 joints) | 2 | 8 | 8 |
+| bracket | Bed rail bracket set (plates, bolt, nut) | `4` (one set per rail corner) | 2 | 4 | 4 |
 | glue | Wood glue (PVA) | `1` | 2 | 1 | 1 |
 | clamp | Bar clamp 1200 mm | `4` | 2 | tools, step 2: 4 | 4 |
 | clamp | F-clamp 300 mm | `4` | 1 | tools, step 1: 4 | 4 |
 
-The viewer then shows "Screws: 39 × Wood screw 4 x 50 mm", "Dowels: 8 × ...", "Glue: 1 × ...", and under "Hold with": step 1 four F-clamps, step 2 four bar clamps. The same example runs as a test (`test_a_bed_with_ledger_screws_dowels_and_clamps`); nothing is written to any real database.
+Bolt-on bed fittings (the gold-plated rail brackets with hex bolts, often sold as "bed clamps") stay in the bed, so they are kind `bracket` (or `bolt`) and are counted as stock. Kind `clamp` is only for workshop clamps that are taken off again.
+
+The viewer then shows "Screws: 39 × Wood screw 4 x 50 mm", "Dowels: 8 × ...", "Brackets: 4 × ...", "Glue: 1 × ...", and under "Hold with": step 1 four F-clamps, step 2 four bar clamps. The same example runs as a test (`test_a_bed_with_ledger_screws_dowels_and_clamps`); nothing is written to any real database.
+
+## 14. As built: carvings (designs on furniture parts)
+
+Migration `b5e8d2f0c3a7` (additive, has a downgrade, follows `a4d7c1e9b2f6`): `designs.category`, `designs.image_key` / `image_type` / `image_sha256`, and table `furniture_carvings`.
+
+### The idea: a design is stored once, placed many times
+A carving is a **design from CNC designs placed on one face of a furniture part**. The design (code `DES-0007`, its name, its picture) exists once in `designs`. Every place it is carved is one small row in `furniture_carvings` (part, face, margin, mirror, note). The same lotus on both door panels is **one design and two placements**, and the Lab lists it once as "carved in 2 places".
+
+The same picture also cannot be stored twice: `designs.image_sha256` is unique, so uploading identical bytes to a second design is refused (409) and names the first one, "use that design instead".
+
+### Designs library
+- `designs.category`: `general` (what every existing design is) or `furniture`. `GET /designs?category=furniture` filters. A design placed on a part in the Lab is moved from `general` to `furniture` automatically.
+- `PUT /designs/{id}/image` (owner, artisan; multipart `file`): the design's picture, JPG, PNG or WebP, 10 MB, checked as a real image. It is **private**: kept under `private/designs/...` in the object store (the server's disk in development) and refused by `/media`. `GET /designs/{id}/image` returns it to owner and artisan.
+- `GET /designs/{id}` adds `furniture`: where the design is carved (item, part, face). `DesignOut` adds `category` and `has_image`. Existing fields are unchanged.
+
+### Carvings in the Lab
+```
+PUT /lab/items/{id}/carvings   (owner, manager)  {"carvings": [{part_id, design_id, face, margin_mm, mirror, note}]}
+                               replaces the whole list (at most 60), returns the solved item
+GET /lab/items/{id}            adds carvings: [{id, part_id, part, design_id, sku, name, face, margin_mm, mirror, note,
+                                                area_mm:{w,h}, image_url}]
+                               and designs:   [{id, sku, name, placements, image_url}]   (each design once)
+GET /lab/items/{id}/definition adds carvings (raw), designs (the library an editor may choose from: id, sku, name,
+                               category, has_image) and sort on each part
+GET /lab/designs/{id}/image    (everyone who can view the Lab) the picture, but only of a design that is carved
+                               somewhere; the rest of the library stays owner and artisan only
+```
+- `face` is a face of the part's box in the assembled piece: `left` (x = 0 side), `right`, `front` (z = 0 side), `back`, `top`, `bottom`. The picture is centred on the face and scaled to fit inside `margin_mm` of its edge, keeping its proportions. `area_mm` is that room, so the CNC operator knows the size to carve. It follows the size (Small, Medium, Large, custom).
+- `mirror` flips the picture left to right, for the other side.
+- A design must have a picture before it can be placed (422 names it). The margin must leave room at the standard size and every preset (422 names the item, line and size); changing the size or the presets re-checks it.
+- **Part links:** like hardware, a carving points at a part by id. A part sent with its `id` when parts are saved keeps its carvings (the editor does this). A client that sends no ids still works, but its parts are new: the carvings stay in the list with no part, are not drawn, and can be pointed at a part again in the editor.
+- Managers can edit the Lab, so the editor shows them the code and name of every non-retired design. They still cannot open the designs library itself.
+
+### Editor and viewer
+The editor has a Carvings table (part, design, face, margin, mirror, note; Add, Copy, Delete). To carve the second panel: Copy the row, change the part, tick Mirror. Save the parts first; only saved parts can be picked, and saving parts reads their ids back so nothing is lost. The viewer draws each picture on its face (fetched once per design and shared by every place), shows "Carving" in the Selected part panel, and has a "Carvings" list under "Hold with" with a thumbnail per design and each place it is carved with its size. It prints with the rest.
+
+Not built: creating a design or uploading its picture from inside the Lab (use CNC designs), picture offset or rotation on the face, carving depth in the 3D view (the picture is flat), and the desktop app's designs screen does not show the picture or category yet.

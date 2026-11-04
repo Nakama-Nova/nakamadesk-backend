@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 
 from app.core.config import settings
-from app.services.media_service import MAX_BYTES, PUBLIC_PREFIX
+from app.services.media_service import MAX_BYTES, PRIVATE_PREFIX, PUBLIC_PREFIX
 from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(tags=["Media"])
@@ -24,7 +24,7 @@ _TYPES = {
 @router.api_route("/media/{key:path}", methods=["GET", "HEAD"], include_in_schema=False)
 def get_media(key: str, store: Optional[S3Store] = Depends(get_store_or_none)):
     media_type = _TYPES.get(Path(key).suffix.lower())
-    if media_type is None or ".." in key.split("/"):
+    if media_type is None or ".." in key.split("/") or key.startswith(PRIVATE_PREFIX):
         raise HTTPException(status_code=404, detail="Not found")
     headers = {
         # keys contain a random id, so a given URL never changes; s-maxage lets the CDN

@@ -12,6 +12,8 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from fastapi import HTTPException
 
+from app.models.design import Design
+from app.models.furniture_carving import FurnitureCarving
 from app.models.furniture_hardware import FurnitureHardware
 from app.models.furniture_part import FurniturePart
 from app.models.item import Item
@@ -22,6 +24,16 @@ SIZE_LABELS = {"S": "Small", "M": "Medium", "L": "Large"}
 CUSTOM_MIN, CUSTOM_MAX = 50.0, 5000.0  # mm, for each of L W H the achari may type
 MAX_PARTS = 150
 MAX_HARDWARE = 100
+MAX_CARVINGS = 60
+# which two box extents (x left-right, y up, z front-back) a face spans: across, then up
+FACE_SPANS = {
+    "left": ("z", "y"),
+    "right": ("z", "y"),
+    "front": ("x", "y"),
+    "back": ("x", "y"),
+    "top": ("x", "z"),
+    "bottom": ("x", "z"),
+}
 
 
 def _num(v: Any) -> Optional[float]:
@@ -230,6 +242,63 @@ def hardware_lists(lines: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def carving_area(size: Dict[str, float], face: str, margin: int) -> Dict[str, float]:
+    """Room for the picture on a face: the face less the margin on every side (mm)."""
+    across, up = FACE_SPANS[face]
+    return {
+        "w": round(size[across] - 2 * margin, 2),
+        "h": round(size[up] - 2 * margin, 2),
+    }
+
+
+def solve_carvings(
+    carvings: Iterable[FurnitureCarving],
+    solved_parts: List[Dict[str, Any]],
+    designs: Dict[Any, Design],
+) -> Dict[str, Any]:
+    """
+    Placements for the viewer, plus each design ONCE with how many places it is
+    carved. A carving whose part was removed is left out (it stays in the editor).
+    """
+    parts = {p["id"]: p for p in solved_parts}
+    out: List[Dict[str, Any]] = []
+    used: "OrderedDict[Any, Dict[str, Any]]" = OrderedDict()
+    for c in carvings:
+        part = parts.get(str(c.part_id)) if c.part_id else None
+        design = designs.get(c.design_id)
+        if not part or not design:
+            continue
+        url = f"/lab/designs/{design.id}/image"
+        out.append(
+            {
+                "id": str(c.id) if c.id else None,
+                "part_id": part["id"],
+                "part": part["name"],
+                "design_id": str(design.id),
+                "sku": design.sku,
+                "name": design.name,
+                "face": c.face,
+                "margin_mm": c.margin_mm,
+                "mirror": bool(c.mirror),
+                "note": c.note,
+                "area_mm": carving_area(part["size"], c.face, c.margin_mm),
+                "image_url": url,
+            }
+        )
+        entry = used.setdefault(
+            design.id,
+            {
+                "id": str(design.id),
+                "sku": design.sku,
+                "name": design.name,
+                "placements": 0,
+                "image_url": url,
+            },
+        )
+        entry["placements"] += 1
+    return {"carvings": out, "designs": list(used.values())}
+
+
 def solve(
     item: Item,
     parts: List[FurniturePart],
@@ -238,6 +307,8 @@ def solve(
     w: Optional[float] = None,
     h: Optional[float] = None,
     hardware: Optional[List[FurnitureHardware]] = None,
+    carvings: Optional[List[FurnitureCarving]] = None,
+    designs: Optional[Dict[Any, Design]] = None,
 ) -> Dict[str, Any]:
     dims, label = resolve_size(item, size, l, w, h)
     steps = {p.id: p.assembly_step for p in parts}
@@ -254,6 +325,7 @@ def solve(
         "cutting_list": cutting_list(solved),
         "steps": max((p["step"] for p in solved), default=0),
         **hardware_lists(lines),
+        **solve_carvings(carvings or [], solved, designs or {}),
     }
 
 
@@ -345,3 +417,40 @@ def check_hardware(
                     status_code=422,
                     detail=f"{item.name}: hardware line {n}, for {label}: {e}",
                 ) from None
+
+
+def check_carvings(
+    item: Item,
+    carvings: List[FurnitureCarving],
+    parts: List[FurniturePart],
+    designs: Dict[Any, Design],
+) -> None:
+    """
+    Before saving carvings (or changing sizes): the margin must leave room for
+    the picture on its face at the standard size AND every preset.
+    """
+    if len(carvings) > MAX_CARVINGS:
+        raise HTTPException(status_code=422, detail=f"At most {MAX_CARVINGS} carvings")
+    sizes = _sizes(item)
+    by_id = {p.id: p for p in parts}
+    for n, c in enumerate(carvings, 1):
+        part = by_id.get(c.part_id)
+        if part is None:
+            continue
+        design = designs.get(c.design_id)
+        what = f"{design.sku if design else 'design'} on {part.name}"
+        for label, dims in sizes:
+            try:
+                size = solve_part(part, dims)["size"]
+            except formula.FormulaError as e:
+                raise HTTPException(
+                    status_code=422, detail=f"For {label}: {e}"
+                ) from None
+            area = carving_area(size, c.face, c.margin_mm)
+            if area["w"] <= 0 or area["h"] <= 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"{item.name}: carving line {n} ({what}), for {label}: "
+                    f"a {c.margin_mm} mm margin leaves no room on the {c.face} face "
+                    f"({area['w']:g} x {area['h']:g} mm)",
+                )

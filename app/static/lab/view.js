@@ -29,6 +29,8 @@ const KINDS = {
   other: "Other",
 };
 
+const FACES = { left: "left", right: "right", front: "front", back: "back", top: "top", bottom: "bottom" };
+
 // ---------------------------------------------------------------- scene
 const canvas = $("canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -101,6 +103,7 @@ function buildParts(solved) {
     mesh.userData.part = d;
     group.add(mesh);
     parts.push({ data: d, mesh, centre, size, base: mat.color.clone(), mat });
+    addCarvings(parts[parts.length - 1]);
     box.expandByObject(mesh);
     if (d.has_model) loadModel(parts[parts.length - 1]);
   }
@@ -120,6 +123,70 @@ function buildParts(solved) {
   group.userData.span = box.getSize(new THREE.Vector3()).length();
   applyExplode();
   applySteps();
+}
+
+// ---------------------------------------------------------------- carvings
+// A design's picture is fetched once (it is stored once on the server) and shared by
+// every place it is carved. Fetched as a blob so the page's own-origin image rule holds.
+const textures = new Map();
+function loadTexture(url) {
+  if (!textures.has(url)) {
+    textures.set(
+      url,
+      fetch(url, { credentials: "same-origin" })
+        .then((r) => {
+          if (!r.ok) throw new Error("no picture");
+          return r.blob();
+        })
+        .then(
+          (blob) =>
+            new Promise((resolve, reject) => {
+              new THREE.TextureLoader().load(
+                URL.createObjectURL(blob),
+                (t) => {
+                  t.colorSpace = THREE.SRGBColorSpace;
+                  resolve(t);
+                },
+                undefined,
+                reject
+              );
+            })
+        )
+        .catch(() => null)
+    );
+  }
+  return textures.get(url);
+}
+
+// How a plane (facing +z, picture's right = +x, up = +y) is turned onto each face of the box
+const FACE_TURN = {
+  back: (m) => m,
+  front: (m) => m.rotateY(Math.PI),
+  right: (m) => m.rotateY(Math.PI / 2),
+  left: (m) => m.rotateY(-Math.PI / 2),
+  top: (m) => m.rotateX(-Math.PI / 2),
+  bottom: (m) => m.rotateX(Math.PI / 2),
+};
+const FACE_NORMAL = { back: [0, 0, 1], front: [0, 0, -1], right: [1, 0, 0], left: [-1, 0, 0], top: [0, 1, 0], bottom: [0, -1, 0] };
+
+async function addCarvings(p) {
+  for (const c of (data.carvings || []).filter((x) => x.part_id === p.data.id)) {
+    const tex = await loadTexture(c.image_url);
+    if (!tex || !parts.includes(p)) continue; // no picture, or the piece was rebuilt meanwhile
+    const aspect = tex.image.width / tex.image.height;
+    let w = c.area_mm.w * MM;
+    let h = c.area_mm.h * MM;
+    if (w / h > aspect) w = h * aspect;
+    else h = w / aspect; // keep the picture's proportions inside the room
+    const mat = new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.8, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+    plane.applyMatrix4(FACE_TURN[c.face](new THREE.Matrix4()));
+    if (c.mirror) plane.scale.x = -1;
+    const n = FACE_NORMAL[c.face];
+    plane.position.set(n[0] * (p.size.x / 2 + MM), n[1] * (p.size.y / 2 + MM), n[2] * (p.size.z / 2 + MM));
+    plane.userData.carving = c;
+    p.mesh.add(plane);
+  }
 }
 
 function explodeDirection(centre, middle) {
@@ -215,6 +282,9 @@ function select(p) {
   line("Build step", String(d.step));
   line("Position", `x ${d.pos.x}, y ${d.pos.y}, z ${d.pos.z} mm`);
   if (d.joint_type) line("Joint", JOINTS[d.joint_type] || d.joint_type);
+  for (const c of (data.carvings || []).filter((x) => x.part_id === d.id)) {
+    line("Carving", `${c.sku} ${c.name}, ${FACES[c.face]} face${c.mirror ? ", mirrored" : ""}, ${c.area_mm.w} × ${c.area_mm.h} mm`);
+  }
   if (d.note) line("Joinery", d.note);
 }
 
@@ -276,12 +346,12 @@ function hardwareList(host, items, partNames, showStep) {
   const ul = el("ul", undefined, "hw");
   for (const i of items) {
     const li = el("li");
-    li.append(el("b", `${i.qty} � `), document.createTextNode(i.name));
+    li.append(el("b", `${i.qty} × `), document.createTextNode(i.name));
     const where = [];
     if (i.part_id && partNames[i.part_id]) where.push(`for ${partNames[i.part_id]}`);
     if (showStep && i.step) where.push(`step ${i.step}`);
     if (i.note) where.push(i.note);
-    if (where.length) li.append(el("div", where.join(" � "), "muted small"));
+    if (where.length) li.append(el("div", where.join(" · "), "muted small"));
     ul.append(li);
   }
   host.append(ul);
@@ -302,6 +372,34 @@ function renderHardware() {
   for (const g of data.tools || []) {
     tools.append(el("div", g.step ? `Step ${g.step}` : "Any step", "wood"));
     hardwareList(tools, g.items, names, false);
+  }
+}
+
+// Each design once, with the places it is carved
+function renderCarvings() {
+  const host = $("carvings");
+  host.replaceChildren();
+  if (!data.designs?.length) {
+    host.append(el("div", "No carvings.", "muted small"));
+    return;
+  }
+  for (const d of data.designs) {
+    const head = el("div", undefined, "carving");
+    const img = el("img");
+    img.src = d.image_url;
+    img.alt = `Picture of ${d.name}`;
+    img.className = "thumb";
+    const title = el("div");
+    title.append(el("b", `${d.sku} ${d.name}`), el("div", d.placements === 1 ? "carved in 1 place" : `carved in ${d.placements} places`, "muted small"));
+    head.append(img, title);
+    host.append(head);
+    const ul = el("ul", undefined, "hw");
+    for (const c of data.carvings.filter((x) => x.design_id === d.id)) {
+      const li = el("li", `${c.part}, ${FACES[c.face]} face, ${c.area_mm.w} × ${c.area_mm.h} mm${c.mirror ? ", mirrored" : ""}`);
+      if (c.note) li.append(el("div", c.note, "muted small"));
+      ul.append(li);
+    }
+    host.append(ul);
   }
 }
 
@@ -331,6 +429,7 @@ async function load(params = {}) {
   renderPresets();
   renderCutting();
   renderHardware();
+  renderCarvings();
   if (firstLoad) {
     // start with the whole piece visible: the step slider begins at its last step
     $("step").max = String(data.steps);

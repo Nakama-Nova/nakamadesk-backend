@@ -259,6 +259,19 @@ tr.total td {
 .parts td.note input {
   min-width: 180px;
 }
+.carving {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+img.thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  background: var(--warm);
+  border-radius: 4px;
+}
 ul.hw {
   margin: 4px 0 10px;
   padding-left: 18px;
