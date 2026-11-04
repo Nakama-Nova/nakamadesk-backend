@@ -29,6 +29,7 @@ from app.finance.schemas import (
     AccountUpdate,
     Closing,
     ClosingIn,
+    EditIn,
     EntryOut,
     JournalIn,
     Ledger,
@@ -205,10 +206,12 @@ def post_entry(
     source_type: Optional[str] = None,
     source_id: Optional[str] = None,
     source_fingerprint: Optional[str] = None,
+    commit: bool = True,
 ) -> FinanceEntry:
     """
     Write one balanced entry. `lines` are dicts: account (code), debit, credit and
-    optionally location_id, party_type, party_id, note. Commits.
+    optionally location_id, party_type, party_id, note. Commits, unless commit=False
+    (the caller is writing several entries as one step and commits itself).
     """
     if entry_date > _today():
         raise HTTPException(
@@ -272,6 +275,9 @@ def post_entry(
     for line in prepared:
         line.entry_id = entry.id
         session.add(line)
+    if not commit:
+        session.flush()
+        return entry
     try:
         session.commit()  # the database checks the balance here, once all lines are in
     except (IntegrityError, DBAPIError) as e:
@@ -303,7 +309,11 @@ def post_journal(session: Session, data: JournalIn, user_id: UUID) -> EntryOut:
 
 
 def reverse(
-    session: Session, entry_id: UUID, data: ReverseIn, user_id: UUID
+    session: Session,
+    entry_id: UUID,
+    data: ReverseIn,
+    user_id: UUID,
+    commit: bool = True,
 ) -> EntryOut:
     """
     Undo an entry by posting its mirror image, dated today unless a date is given. The
@@ -348,8 +358,85 @@ def reverse(
         source_type=original.source_type,
         source_id=original.source_id,
         source_fingerprint=original.source_fingerprint,
+        commit=commit,
     )
     return to_out(session, reversal)
+
+
+def edit_entry(
+    session: Session, entry_id: UUID, data: EditIn, user_id: UUID
+) -> EntryOut:
+    """
+    Correct an entry the owner typed in. The books are never rewritten: the old entry is
+    reversed (on its own date when that month is open, else today) and the corrected one
+    posted, both in one step, so a failure leaves nothing half done. The new entry says
+    what it corrects. An entry made from a record (a sale, an expense...) is corrected at
+    its source and the next sync follows; typing over it here would be undone by that sync.
+    """
+    original = session.get(FinanceEntry, entry_id)
+    if original is None:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if original.kind == "posting":
+        raise HTTPException(
+            status_code=409,
+            detail=f"This entry comes from a {original.source_type} record. Correct that "
+            "record and sync, or post an adjusting journal entry",
+        )
+    if original.kind == "reversal":
+        raise HTTPException(
+            status_code=409, detail="A reversal cannot be edited; post a new entry"
+        )
+    if (
+        session.query(FinanceEntry.id)
+        .filter(FinanceEntry.reverses_id == entry_id)
+        .first()
+        is not None
+    ):
+        raise HTTPException(status_code=409, detail="This entry was already reversed")
+
+    reverse_on = original.entry_date
+    try:
+        _check_open(session, reverse_on)
+    except HTTPException:
+        reverse_on = _today()  # that month is closed; undo it today instead
+    try:
+        corrected = post_entry(
+            session,
+            entry_date=data.entry_date,
+            memo=f"{data.memo.strip()} (corrects the entry of {original.entry_date}: "
+            f"{data.reason.strip()})",
+            kind="manual",
+            created_by=user_id,
+            commit=False,
+            lines=[
+                {
+                    "account": ln.account,
+                    "debit": ln.debit,
+                    "credit": ln.credit,
+                    "location_id": ln.location_id,
+                    "note": ln.note,
+                }
+                for ln in data.lines
+            ],
+        )
+        reverse(
+            session,
+            entry_id,
+            ReverseIn(
+                reason=f"corrected: {data.reason.strip()}", entry_date=reverse_on
+            ),
+            user_id,
+            commit=False,
+        )
+        session.commit()  # the database checks both entries balance, together
+    except HTTPException:
+        session.rollback()
+        raise
+    except (IntegrityError, DBAPIError) as e:
+        session.rollback()
+        raise _refused(e) from None
+    session.refresh(corrected)
+    return to_out(session, corrected)
 
 
 class _L:

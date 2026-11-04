@@ -2,19 +2,21 @@
 Official letters: quotation, order confirmation with its advance receipt, purchase
 receipt (a piece bought from another artisan) and the certificate of a finished temple
 restoration. Each is numbered once (QTN-2026-27-0001), saved as a snapshot, and printed as
-a PDF on the shop's letterhead. A wrong letter is voided, never deleted.
+a PDF on the shop's letterhead. A wrong letter is edited (same number, same date) or
+voided; only a void letter can be deleted, and what it said is kept in the audit log.
 
 Who may issue and see each kind is in letter_service.ROLES: the owner all of them, a
 manager all but certificates, sales only quotations and order confirmations.
 """
 
+import json
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import or_
 
 from app.db.deps import check_role, get_uow
@@ -22,7 +24,7 @@ from app.models.enums import UserRole
 from app.models.letter import KINDS, Letter
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-from app.services import letter_pdf_service, letter_service
+from app.services import audit, letter_pdf_service, letter_service
 
 router = APIRouter(prefix="/letters", tags=["Letters"])
 
@@ -270,3 +272,80 @@ def void_letter(
         uow.commit()
     uow.refresh(letter)
     return _out(letter)
+
+
+# ------------------------------------------------------------ editing, deleting
+INPUTS = {
+    "quotation": QuotationIn,
+    "order_confirmation": OrderConfirmationIn,
+    "purchase_receipt": PurchaseReceiptIn,
+    "completion_certificate": CompletionIn,
+}
+
+
+def _snapshot(letter: Letter) -> dict:
+    return {
+        "number": letter.number,
+        "status": letter.status,
+        "issued_on": letter.issued_on,
+        "subject": letter.subject,
+        "party_name": letter.party_name,
+        "amount": letter.amount,
+        "payload": letter.payload,
+    }
+
+
+@router.put("/{letter_id}", response_model=LetterOut)
+def edit_letter(
+    letter_id: UUID,
+    body: Dict[str, Any] = Body(
+        ..., description="The same details as when this kind of letter was issued"
+    ),
+    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Change an issued letter: send it again with the new details (the body of its own
+    kind: quotation, order confirmation, purchase receipt or completion certificate).
+    The number, the issue date and the letterhead stay, and the old wording goes to the
+    audit log. A void letter cannot be edited. Whoever may issue the kind may edit it.
+    """
+    letter = _letter(uow, user, letter_id)
+    try:
+        data = INPUTS[letter.kind].model_validate(body)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=422,
+            detail=json.loads(e.json(include_url=False, include_context=False, include_input=False)),  # fmt: skip
+        ) from None
+    with uow:
+        old = _snapshot(letter)
+        letter = letter_service.edit_letter(uow.session, user, letter, data)
+        audit.record(uow.session, user.id, "letters", letter.id, "edit", old=old, new=_snapshot(letter))  # fmt: skip
+        uow.commit()
+    uow.refresh(letter)
+    return _out(letter)
+
+
+@router.delete("/{letter_id}", status_code=204)
+def delete_letter(
+    letter_id: UUID,
+    user: User = Depends(check_role([UserRole.OWNER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Remove a void letter for good (owner). An issued letter must be voided first, with
+    a reason, so the numbers that were handed out always have a story; what the deleted
+    letter said is kept in the audit log.
+    """
+    letter = _letter(uow, user, letter_id)
+    if letter.status != "void":
+        raise HTTPException(
+            status_code=409,
+            detail="Void this letter first (with a reason); then it can be deleted",
+        )
+    with uow:
+        audit.record(uow.session, user.id, "letters", letter.id, "delete", old={**_snapshot(letter), "void_reason": letter.void_reason})  # fmt: skip
+        uow.session.delete(letter)
+        uow.commit()
+    return Response(status_code=204)

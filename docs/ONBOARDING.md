@@ -201,6 +201,12 @@ A double-entry book in its own package, `app/finance/`, with its own tables (`fi
   - The new **`accountant`** role is for your CA: it can read every finance route and report and change nothing (no sync, journal, accounts or closing). Create the user with role `accountant`. Until the shadow month is signed off these are previews; the existing reports stay official.
 - Not built yet: depreciation, GST, the small data fixes (sale collections, supplier payments, cost on sale lines).
 
+## 4i. Editing letters, and correcting ledger entries by hand
+
+- **Edit a letter** (`PUT /letters/{id}`, whoever may issue that kind): send the same details as when it was issued. The number, the issue date and the letterhead it was printed on stay; the content is rebuilt (an order confirmation picks up the order as it is now). The old wording goes to the audit log. A void letter cannot be edited.
+- **Delete a letter** (`DELETE /letters/{id}`, owner): only a void one, so every number handed out has a story. What it said is kept in the audit log.
+- **Correct a ledger entry by hand** (`PUT /finance/entries/{id}`, owner): for entries the owner typed in (`manual`). Send the corrected date, memo and lines with a reason. The old entry is reversed (on its own date, or today if that month is closed) and the corrected one posted, in one step; the ledger is never rewritten, and the new entry says what it corrects. An entry made from a sale, expense, payment or other record returns 409: correct that record and sync (typing over it would be undone by the next sync), or post an adjusting journal entry.
+
 ## 5. Running it locally
 
 To run it the way production does (Docker, Caddy, Postgres, backups), see [DEPLOY.md](DEPLOY.md). The first-login command there is the same `python -m app.cli create-owner`, run with `docker compose exec api python -m app.cli create-owner`.
