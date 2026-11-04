@@ -96,6 +96,7 @@ Every line can carry the **location** (the Shop, a plant unit) so profit and spe
 | `GET /finance/exceptions` | owner, manager, accountant | Records the ledger could not post cleanly (section 7) |
 | `POST /finance/journal` | owner | A manual, balanced entry with a required reason (opening balances, owner's drawings, corrections) |
 | `POST /finance/entries/{id}/reverse` | owner | Reverse an entry, with a reason |
+| `PUT /finance/entries/{id}` | owner | Correct a manual entry: the old one is reversed and the corrected one posted, in one step |
 | `POST /finance/sync` | owner | Run the projector now |
 
 The read-only **accountant** role for your CA (built) can use every `GET` route above and nothing else.

@@ -14,6 +14,7 @@ from app.finance.schemas import (
     BalanceSheet,
     Closing,
     ClosingIn,
+    EditIn,
     EntryOut,
     JournalIn,
     Ledger,
@@ -147,6 +148,22 @@ def post_journal(
     or inside a closed month.
     """
     return service.post_journal(db, body, current_user.id)
+
+
+@router.put("/entries/{entry_id}", response_model=EntryOut, status_code=201)
+def edit_entry(
+    entry_id: UUID,
+    body: EditIn,
+    current_user: User = Depends(check_role(WRITE)),
+    db: Session = Depends(get_db),
+):
+    """
+    Owner only. Correct an entry you typed in: send the corrected date, memo and lines
+    with a reason. The old entry is reversed and the new one posted in one step (the
+    ledger is never rewritten); the response is the new entry. An entry that came from a
+    sale, expense or other record is corrected at that record instead (409 here).
+    """
+    return service.edit_entry(db, entry_id, body, current_user.id)
 
 
 @router.post("/entries/{entry_id}/reverse", response_model=EntryOut, status_code=201)

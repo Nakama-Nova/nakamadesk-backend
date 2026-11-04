@@ -209,6 +209,11 @@ Nothing that touched money is erased. "Delete" means: undo what it did, and keep
 - **Edit a bill** (`PATCH /sales/{id}`, owner or manager): the customer, and the payment status and method of a counter bill. What was sold and the prices are fixed: cancel the bill and make a new one. A bill made from an order follows the payments on its order.
 - **Orders**: `PATCH /orders/{id}/payments/{pid}` corrects a payment (owner); `POST /orders/{id}/payments/{pid}/void` takes a wrong one off with a reason (owner). It stays on record, and the order's paid total, its bill and the ledger follow. `DELETE /orders/{id}` removes an order that never went anywhere; one with a bill, payments, production jobs or letters returns 409 (cancel it instead).
 - Run `python -m app.cli finance-sync` (or `POST /finance/sync`) to bring the ledger up to date after any of these.
+## 4i. Editing letters, and correcting ledger entries by hand
+
+- **Edit a letter** (`PUT /letters/{id}`, whoever may issue that kind): send the same details as when it was issued. The number, the issue date and the letterhead it was printed on stay; the content is rebuilt (an order confirmation picks up the order as it is now). The old wording goes to the audit log. A void letter cannot be edited.
+- **Delete a letter** (`DELETE /letters/{id}`, owner): only a void one, so every number handed out has a story. What it said is kept in the audit log.
+- **Correct a ledger entry by hand** (`PUT /finance/entries/{id}`, owner): for entries the owner typed in (`manual`). Send the corrected date, memo and lines with a reason. The old entry is reversed (on its own date, or today if that month is closed) and the corrected one posted, in one step; the ledger is never rewritten, and the new entry says what it corrects. An entry made from a sale, expense, payment or other record returns 409: correct that record and sync (typing over it would be undone by the next sync), or post an adjusting journal entry.
 
 ## 5. Running it locally
 

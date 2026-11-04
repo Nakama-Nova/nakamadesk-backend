@@ -58,6 +58,12 @@ class JournalIn(BaseModel):
     lines: List[LineIn] = Field(min_length=2, max_length=50)
 
 
+class EditIn(JournalIn):
+    """The corrected entry, and why it was wrong."""
+
+    reason: str = Field(min_length=3, max_length=300)
+
+
 class ReverseIn(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
     # Default: today. A reversal never lands inside a closed month.

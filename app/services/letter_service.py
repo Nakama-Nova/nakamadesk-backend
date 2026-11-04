@@ -116,8 +116,27 @@ def _issue(
     party: Dict[str, Optional[str]],
     amount: Optional[Decimal],
     payload: Dict,
+    existing: Optional[Letter] = None,
     **links,
 ) -> Letter:
+    if existing is not None:
+        # An edit: the number, the issue date and the letterhead it was printed on stay.
+        if existing.status != "issued":
+            raise HTTPException(
+                status_code=409, detail="A void letter cannot be edited"
+            )
+        existing.subject = subject.strip()
+        existing.party_name = party["name"]
+        existing.amount = amount
+        existing.payload = {
+            "letterhead": existing.payload.get("letterhead") or get_profile(db),
+            "party": party,
+            **payload,
+        }
+        for field, value in links.items():
+            setattr(existing, field, value)
+        db.flush()
+        return existing
     payload = {"letterhead": get_profile(db), "party": party, **payload}
     letter = Letter(
         number=next_number(db, kind, issued_on),
@@ -179,7 +198,7 @@ def _order_rows(order: Order):
     ]
 
 
-def issue_quotation(db, user, data) -> Letter:
+def issue_quotation(db, user, data, existing=None) -> Letter:
     order = _order(db, data.order_id) if data.order_id else None
     customer = _customer(db, data.customer_id or (order.customer_id if order else None))
     rows = [(x.description, x.quantity, x.unit_price) for x in data.lines]
@@ -200,6 +219,7 @@ def issue_quotation(db, user, data) -> Letter:
         db,
         user,
         "quotation",
+        existing=existing,
         issued_on=today,
         subject=data.subject or f"Quotation for {lines[0]['description']}",
         party=party,
@@ -215,7 +235,7 @@ def issue_quotation(db, user, data) -> Letter:
     )
 
 
-def issue_order_confirmation(db, user, data) -> Letter:
+def issue_order_confirmation(db, user, data, existing=None) -> Letter:
     order = _order(db, data.order_id)
     if order.status == "cancelled":
         raise HTTPException(status_code=409, detail="This order is cancelled")
@@ -241,6 +261,7 @@ def issue_order_confirmation(db, user, data) -> Letter:
         db,
         user,
         "order_confirmation",
+        existing=existing,
         issued_on=data.issued_on or date.today(),
         subject=f"Order {order.order_number}",
         party={
@@ -263,7 +284,7 @@ def issue_order_confirmation(db, user, data) -> Letter:
     )
 
 
-def issue_purchase_receipt(db, user, data) -> Letter:
+def issue_purchase_receipt(db, user, data, existing=None) -> Letter:
     supplier = db.get(Supplier, data.supplier_id) if data.supplier_id else None
     if data.supplier_id and not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -282,6 +303,7 @@ def issue_purchase_receipt(db, user, data) -> Letter:
         db,
         user,
         "purchase_receipt",
+        existing=existing,
         issued_on=paid_on,
         subject=f"Purchase of {data.description.strip()}",
         party=party,
@@ -303,7 +325,7 @@ def issue_purchase_receipt(db, user, data) -> Letter:
     )
 
 
-def issue_completion_certificate(db, user, data) -> Letter:
+def issue_completion_certificate(db, user, data, existing=None) -> Letter:
     project = db.get(RestorationProject, data.restoration_id)
     if not project:
         raise HTTPException(status_code=404, detail="Restoration not found")
@@ -322,6 +344,7 @@ def issue_completion_certificate(db, user, data) -> Letter:
         db,
         user,
         "completion_certificate",
+        existing=existing,
         issued_on=date.today(),
         subject=f"Completion of {project.title}",
         party={
@@ -345,3 +368,22 @@ def issue_completion_certificate(db, user, data) -> Letter:
         },
         restoration_id=project.id,
     )
+
+
+ISSUERS = {
+    "quotation": issue_quotation,
+    "order_confirmation": issue_order_confirmation,
+    "purchase_receipt": issue_purchase_receipt,
+    "completion_certificate": issue_completion_certificate,
+}
+
+
+def edit_letter(db: Session, user: User, letter: Letter, data) -> Letter:
+    """
+    Change an issued letter by sending it again with the new details (the same body as
+    when it was issued). The number, the issue date and the letterhead stay; the content
+    is rebuilt, so an order confirmation picks up the order as it is now.
+    """
+    if getattr(data, "issued_on", None) is None and hasattr(data, "issued_on"):
+        data.issued_on = letter.issued_on  # a quotation's validity counts from then
+    return ISSUERS[letter.kind](db, user, data, existing=letter)
