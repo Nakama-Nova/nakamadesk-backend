@@ -366,6 +366,8 @@ def test_a_bed_with_ledger_screws_dowels_and_clamps(client, people):
         line("screw", "Wood screw 4 x 50 mm", "4 * (L - 160) / 200", assembly_step=2,
              note="4 per slat ledger, one slat every 200 mm"),
         line("dowel", "Dowel 10 x 60 mm", "8", assembly_step=2, note="rail to post, 2 per joint"),
+        line("bracket", "Bed rail bracket set (plates, bolt, nut)", "4", assembly_step=2,
+             note="bolt-on bed fitting: stays in the bed, so stock, not a clamp tool"),
         line("glue", "Wood glue (PVA)", "1", assembly_step=2),
         line("clamp", "Bar clamp 1200 mm", "4", assembly_step=2),
         line("clamp", "F-clamp 300 mm", "4", assembly_step=1),
@@ -375,7 +377,7 @@ def test_a_bed_with_ledger_screws_dowels_and_clamps(client, people):
     out = r.json()
     screws = out["hardware"][0]["items"][0]
     assert screws["qty"] == 39  # 4 * 1940 / 200 = 38.8 -> 39
-    assert [g["kind"] for g in out["hardware"]] == ["screw", "dowel", "glue"]
+    assert [g["kind"] for g in out["hardware"]] == ["screw", "dowel", "bracket", "glue"]
     assert [(t["step"], [i["qty"] for i in t["items"]]) for t in out["tools"]] == [
         (1, [4]),
         (2, [4]),

@@ -37,7 +37,7 @@ const KINDS = [
   ["bolt", "Bolt"],
   ["bracket", "Bracket"],
   ["glue", "Glue"],
-  ["clamp", "Clamp (tool)"],
+  ["clamp", "Clamp (workshop tool, not stock)"],
   ["other", "Other"],
 ];
 
