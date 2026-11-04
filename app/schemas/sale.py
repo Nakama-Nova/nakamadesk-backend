@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -84,3 +84,17 @@ class SaleResponse(BaseModel):
     items: List[SaleItemResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SaleUpdate(BaseModel):
+    """Corrections to a bill's customer and payment details. Only the fields sent change."""
+
+    customer_id: Optional[UUID] = None
+    payment_status: Optional[Literal["pending", "partial", "paid"]] = None
+    payment_method: Optional[str] = Field(default=None, max_length=30)
+
+
+class SaleCancel(BaseModel):
+    """Why a bill is being cancelled (it stays in the bill history)."""
+
+    reason: str = Field(min_length=3, max_length=300)

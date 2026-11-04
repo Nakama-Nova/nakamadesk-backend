@@ -354,6 +354,54 @@ def remove_finished_goods(
     return item
 
 
+def return_finished_goods(
+    uow: AbstractUnitOfWork,
+    item_id: UUID,
+    quantity: int,
+    sale_id: UUID,
+    note: str,
+    created_by: Optional[UUID] = None,
+    location_id: Optional[UUID] = None,
+) -> Item:
+    """
+    Put units back on the shelf because the bill they were sold on was cancelled. The
+    mirror of remove_finished_goods: same item, same location, a finished_in movement
+    pointing at the same sale. The caller holds the item lock and commits.
+    """
+    if quantity <= 0:
+        raise HTTPException(
+            status_code=400, detail="Returned quantity must be positive"
+        )
+    item = uow.items.get_by_id(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    stock_before = item.current_stock or 0
+    item.current_stock = stock_before + quantity
+    uow.session.add(
+        InventoryMovement(
+            movement_type="finished_in",
+            reference_type="sale",
+            reference_id=sale_id,
+            item_id=item_id,
+            quantity=quantity,
+            unit_cost=item.selling_price,
+            notes=note,
+            created_by=created_by,
+            location_id=location_id,
+        )
+    )
+    stock_location_service.apply(uow.session, location_id, quantity, item_id=item_id)
+    logger.info(
+        "finished_in | item=%s | %d units returned (was %d -> now %d) | sale=%s",
+        item_id,
+        quantity,
+        stock_before,
+        item.current_stock,
+        sale_id,
+    )
+    return item
+
+
 # ---------------------------------------------------------------------------
 # EXISTING ITEM CRUD (unchanged from Day 1)
 # ---------------------------------------------------------------------------

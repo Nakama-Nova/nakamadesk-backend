@@ -111,7 +111,7 @@ def feed(db: Session, user: User, since: datetime, limit: int = 50) -> List[Dict
         payments = (
             db.query(OrderPayment, Order)
             .join(Order, Order.id == OrderPayment.order_id)
-            .filter(OrderPayment.created_at > since)
+            .filter(OrderPayment.created_at > since, OrderPayment.voided_at.is_(None))
             .order_by(OrderPayment.created_at)
             .limit(limit)
             .all()

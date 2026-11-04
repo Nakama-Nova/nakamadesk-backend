@@ -26,6 +26,8 @@ from app.schemas.order import (
     OrderStatusUpdate,
     OrderUpdate,
     PaymentCreate,
+    PaymentUpdate,
+    PaymentVoid,
 )
 from app.schemas.sale import SaleResponse
 from app.services import order_invoice_service, order_service
@@ -221,3 +223,47 @@ def invoice_order(
     if not created:
         response.status_code = 200
     return sale
+
+
+@router.patch("/{order_id}/payments/{payment_id}", response_model=OrderResponse)
+def edit_order_payment(
+    order_id: UUID,
+    payment_id: UUID,
+    data: PaymentUpdate,
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Correct a payment's amount, method, reference, note or date. RBAC: OWNER."""
+    return order_service.update_payment(uow, order_id, payment_id, data)
+
+
+@router.post("/{order_id}/payments/{payment_id}/void", response_model=OrderResponse)
+def void_order_payment(
+    order_id: UUID,
+    payment_id: UUID,
+    data: PaymentVoid,
+    current_user: User = Depends(check_role([UserRole.OWNER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Take a wrong payment off the order. It stays on record with the reason; the order's
+    paid total, its bill and the finance ledger follow. RBAC: OWNER.
+    """
+    return order_service.void_payment(
+        uow, order_id, payment_id, data.reason, current_user.id
+    )
+
+
+@router.delete("/{order_id}", status_code=204)
+def delete_order(
+    order_id: UUID,
+    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Delete an order that never went anywhere. One with a bill, payments, production jobs
+    or letters is kept (409): cancel it instead. Stock held for it is released.
+    RBAC: OWNER, MANAGER.
+    """
+    order_service.delete_order(uow, order_id)
+    return Response(status_code=204)

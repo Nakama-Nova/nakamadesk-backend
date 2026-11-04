@@ -9,11 +9,19 @@ from sqlalchemy.exc import IntegrityError, InternalError
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.models.customer import Customer
+from app.models.item import Item
+from app.models.order import Order
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sale import SaleCreate
-from app.services import inventory_service, stock_location_service
+from app.services import (
+    audit,
+    inventory_service,
+    reservation_service,
+    stock_location_service,
+)
 from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
 
@@ -314,3 +322,121 @@ def get_sale_items_by_id(uow: AbstractUnitOfWork, sale_id: UUID) -> List[SaleIte
         .filter(SaleItem.sale_id == sale_id)
         .all()
     )
+
+
+def cancel_sale(
+    uow: AbstractUnitOfWork, sale_id: UUID, reason: str, user_id: Optional[UUID]
+) -> Sale:
+    """
+    Cancel a bill and undo what it did, in one transaction:
+
+      * every catalogue piece goes back on the shelf (and to the location it left),
+        each with a stock movement pointing at the bill;
+      * the bill stays in the bill history, marked cancelled, with who and why in the
+        audit log. Sales reports and the profit report leave cancelled bills out, and
+        the finance ledger reverses its entries on the next sync;
+      * if the bill was made from an order, the order is freed to be billed again and
+        its stock hold is set aside once more. The customer's payments on the order
+        are not touched: that money is still the order's.
+
+    Money the customer paid across the counter is treated as given back.
+    """
+    with uow:
+        sale = (
+            uow.session.query(Sale).filter(Sale.id == sale_id).with_for_update().first()
+        )
+        if not sale:
+            raise HTTPException(status_code=404, detail="Sale not found")
+        if (sale.order_status or "completed") == "cancelled":
+            raise HTTPException(
+                status_code=409, detail="This bill is already cancelled"
+            )
+
+        lines = [(ln.item_id, ln.quantity) for ln in sale.items if ln.item_id]
+        item_ids = sorted({item_id for item_id, _ in lines})
+        if item_ids:  # lock in a fixed order so two cancellations cannot deadlock
+            uow.session.query(Item).filter(Item.id.in_(item_ids)).order_by(
+                Item.id
+            ).with_for_update().all()
+        for item_id, qty in lines:
+            inventory_service.return_finished_goods(
+                uow,
+                item_id,
+                qty,
+                sale.id,
+                f"Returned: bill {sale.invoice_number} cancelled",
+                created_by=user_id,
+                location_id=sale.location_id,
+            )
+
+        was = {
+            "order_status": sale.order_status,
+            "payment_status": sale.payment_status,
+            "total_amount": sale.total_amount,
+        }
+        sale.order_status = "cancelled"
+
+        order = (
+            uow.session.query(Order)
+            .filter(Order.sale_id == sale.id)
+            .with_for_update()
+            .first()
+        )
+        if order is not None:
+            order.sale_id = None
+            sale.client_id = None  # the order's id; frees it for a new bill
+            if order.status in ("confirmed", "in_production", "ready"):
+                reservation_service.set_aside(uow.session, order)
+
+        audit.record(
+            uow.session,
+            user_id,
+            "sales",
+            sale.id,
+            "cancel",
+            old=was,
+            new={"order_status": "cancelled", "reason": reason.strip()},
+        )
+        uow.commit()
+    logger.info("Sale %s cancelled: %s", sale.invoice_number, reason)
+    return uow.sales.get_by_id_eager(sale_id)
+
+
+def update_sale(
+    uow: AbstractUnitOfWork, sale_id: UUID, data, user_id: Optional[UUID]
+) -> Sale:
+    """
+    Correct a bill's customer or payment details. What was sold, the prices and the
+    stock taken off are fixed; to change those, cancel the bill and make a new one.
+    The ledger picks the change up on the next sync (old entry reversed, new posted).
+    """
+    changes = data.model_dump(exclude_unset=True)
+    with uow:
+        sale = (
+            uow.session.query(Sale).filter(Sale.id == sale_id).with_for_update().first()
+        )
+        if not sale:
+            raise HTTPException(status_code=404, detail="Sale not found")
+        if (sale.order_status or "completed") == "cancelled":
+            raise HTTPException(
+                status_code=409, detail="A cancelled bill cannot be edited"
+            )
+        if sale.order_type == "order" and (
+            {"payment_status", "payment_method"} & set(changes)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="This bill follows the payments recorded on its order; "
+                "correct them there",
+            )
+        if "customer_id" in changes and changes["customer_id"] is not None:
+            if not uow.session.get(Customer, changes["customer_id"]):
+                raise HTTPException(status_code=404, detail="Customer not found")
+        old = {k: getattr(sale, k) for k in changes}
+        for key, value in changes.items():
+            setattr(sale, key, value)
+        audit.record(
+            uow.session, user_id, "sales", sale.id, "update", old=old, new=changes
+        )
+        uow.commit()
+    return uow.sales.get_by_id_eager(sale_id)
