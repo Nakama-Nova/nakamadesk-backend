@@ -323,8 +323,11 @@ Overall size L 2100 (head to foot), W 1600, H 1000. Parts: four posts, head rail
 |---|---|---|---|---|---|
 | screw | Wood screw 4 x 50 mm | `4 * (L - 160) / 200` (4 per slat ledger, a slat every 200 mm) | 2 | 39 (38.8 up) | 37 (36.8 up) |
 | dowel | Dowel 10 x 60 mm | `8` (2 per rail-to-post joint, 4 joints) | 2 | 8 | 8 |
+| bracket | Bed rail bracket set (plates, bolt, nut) | `4` (one set per rail corner) | 2 | 4 | 4 |
 | glue | Wood glue (PVA) | `1` | 2 | 1 | 1 |
 | clamp | Bar clamp 1200 mm | `4` | 2 | tools, step 2: 4 | 4 |
 | clamp | F-clamp 300 mm | `4` | 1 | tools, step 1: 4 | 4 |
 
-The viewer then shows "Screws: 39 × Wood screw 4 x 50 mm", "Dowels: 8 × ...", "Glue: 1 × ...", and under "Hold with": step 1 four F-clamps, step 2 four bar clamps. The same example runs as a test (`test_a_bed_with_ledger_screws_dowels_and_clamps`); nothing is written to any real database.
+Bolt-on bed fittings (the gold-plated rail brackets with hex bolts, often sold as "bed clamps") stay in the bed, so they are kind `bracket` (or `bolt`) and are counted as stock. Kind `clamp` is only for workshop clamps that are taken off again.
+
+The viewer then shows "Screws: 39 × Wood screw 4 x 50 mm", "Dowels: 8 × ...", "Brackets: 4 × ...", "Glue: 1 × ...", and under "Hold with": step 1 four F-clamps, step 2 four bar clamps. The same example runs as a test (`test_a_bed_with_ledger_screws_dowels_and_clamps`); nothing is written to any real database.
