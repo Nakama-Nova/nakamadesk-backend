@@ -4,6 +4,7 @@ from typing import List
 from fastapi import HTTPException
 from passlib import exc
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.enums import UserRole
@@ -15,6 +16,22 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Checked against when the username does not exist, so the answer takes as long.
 DUMMY_HASH = pwd_context.hash("not-a-real-password")
+
+
+def find_by_username(db: Session, username: str) -> User | None:
+    """The account for a typed username. An exact match wins; otherwise the name matches whatever
+    its capitals (a phone capitalises the first letter, a desk does not), unless two accounts
+    differ only by case, in which case nobody is guessed."""
+    exact = db.query(User).filter(User.username == username).first()
+    if exact:
+        return exact
+    loose = (
+        db.query(User)
+        .filter(func.lower(User.username) == username.strip().lower())
+        .limit(2)
+        .all()
+    )
+    return loose[0] if len(loose) == 1 else None
 
 
 def hash_password(password: str) -> str:
@@ -64,7 +81,11 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
     Raises:
         HTTPException: If the username is already taken.
     """
-    existing_user = db.query(User).filter(User.username == user.username).first()
+    existing_user = (
+        db.query(User)
+        .filter(func.lower(User.username) == user.username.strip().lower())
+        .first()
+    )  # "Swapnac" and "swapnac" are one name: people type either
     if existing_user:
         raise HTTPException(status_code=400, detail="Username already exists")
     if db.query(User).filter(User.email == user.email).first():
