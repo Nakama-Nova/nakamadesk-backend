@@ -382,3 +382,19 @@ The idea: furniture carries carved designs. Scan a carving, turn it into a **fur
 - No change to the scan worker (`vriksha-scan`): it already uploads the depth picture and the G-code.
 
 **Not built yet** (next steps, in this order): showing the design on the made-to-order production job, so the carver is told which design to carve and gets its files; and finding and cropping the carved design out of a photo of a whole bed with an image model, instead of scanning the carving by itself.
+
+## 16. As built: mark a carved area on a photo (Step 3a)
+
+No migration: a marked area is an ordinary flat-carving scan (section 15) whose `params` carry the marks. It needs the worker change in `vriksha-scan` (PR "Flat carving: read one marked area of a photo").
+
+The problem: furniture photos are slanted and cluttered, and one bed has many separate designs (a border, a lattice panel, a medallion, a shaped crown). So the owner marks **one area at a time** on a photo, and each area becomes its own design.
+
+- **Editor** ("Mark a carved area on a photo"): pick a JPG or PNG photo (25 MB at most), click the four corners clockwise from the top-left (or type them in the table, for keyboard use), optionally click points around a non-rectangular shape (an outline, for a crown), name it, enter the real width (and height) in mm, and send. Corners are in the pixels of the photo as it looks on screen (a phone's sideways turn is applied).
+- `POST /lab/items/{id}/areas` (owner, manager; multipart: `photo`, `quad`, `outline`, `label`, `real_width_mm`, `real_height_mm`, `gcode`; cookie writes need `X-Lab-Client: 1`) checks the photo is a real JPG or PNG, the corners are clockwise, four-sided, uncrossed, inside the photo, and not tiny, then stores the photo privately and queues a scan (`status uploaded`, `params.shape = relief`, `params.crop = {quad, outline, real_height_mm}`, `params.label`). 503 if file storage is not set up.
+- `GET /lab/items/{id}/scans` and `definition.scans` list the item's flat-carving scans with `status`, `progress`, `note`, `error`, `label` and `area`; the editor refreshes them every 10 s while one is waiting or being read. A finished one gets the **Make a design** button from section 15 (the label becomes the design's name).
+- **Worker** (`relief.rectify_area`, `flatten`): straightens the four corners into a rectangle (a slanted photo reads as if straight-on), enlarges a small area to at least 1500 px (the depth model blurs a small repeating pattern: a 600 px tufted lattice came out as a blur and is crisp at 1500 px), reads the depth, takes out the overall slope a slanted photo adds, and, with an outline, makes everything outside it background and transparent in the picture, so a shaped design keeps its shape when it is placed on a part. The shape of the area is the real width and height if both are given, else the shape of the corners.
+- **Which account runs the worker:** furniture scans are processed by an owner or manager account (an artisan account only processes restoration and sculpture scans).
+
+Checked on real photos of slanted bed headboards: the border, the lattice and the footboard medallion come out flat, in proportion, and with the relief readable. The depth is still a model's estimate (relative, front face only); check it in millimetres on scrap before cutting.
+
+**Not built yet:** finding the carved areas in a photo automatically (Step 3b), cancelling a marked area from the editor (use `POST /scans/{id}/cancel`), and showing the design on the made-to-order production job.

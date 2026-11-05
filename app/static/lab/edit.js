@@ -122,7 +122,13 @@ function readRow(tr) {
 }
 
 async function call(method, path, body) {
-  const res = await fetch(path, { method, headers: HEADERS, credentials: "same-origin", body: body ? JSON.stringify(body) : undefined });
+  const form = body instanceof FormData; // a photo upload: the browser sets the content type
+  const res = await fetch(path, {
+    method,
+    headers: form ? { "X-Lab-Client": "1" } : HEADERS,
+    credentials: "same-origin",
+    body: body ? (form ? body : JSON.stringify(body)) : undefined,
+  });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = json.detail;
@@ -395,13 +401,23 @@ function refreshPartSelects() {
 }
 
 // ---------------------------------------------------------------- designs from scans
+function scanState(s) {
+  if (s.status === "uploaded") return "waiting for the workshop PC";
+  if (s.status === "processing") return `being read: ${s.progress}%${s.note ? ` (${s.note})` : ""}`;
+  return `failed: ${s.error || "no reason given"}`;
+}
+
 function scanRow(s) {
   const tr = document.createElement("tr");
   const when = new Date(s.created_at).toLocaleDateString();
-  const bits = [when, s.real_width_mm ? `${s.real_width_mm} mm wide` : "size not set", s.gcode ? "with G-code" : "no G-code"];
+  const bits = [s.label || (s.area ? "Marked area" : "Flat carving"), when, s.real_width_mm ? `${s.real_width_mm} mm wide` : "size not set", s.gcode ? "with G-code" : "no G-code"];
   tr.insertCell().textContent = bits.join(" · ");
   const design = tr.insertCell();
   const action = tr.insertCell();
+  if (s.status !== "done") {
+    design.textContent = scanState(s);
+    return tr;
+  }
   const show = (d) => {
     design.textContent = `${d.sku} · ${d.name}`;
     action.replaceChildren();
@@ -436,6 +452,201 @@ function scanRow(s) {
   return tr;
 }
 
+// The list of scans is redrawn only when it changed (so a name being typed is not wiped),
+// and refreshed every 10 s while a marked area waits for or is on the workshop PC.
+let scansJson = "";
+let scanTimer = null;
+function renderScans(list) {
+  const json = JSON.stringify(list);
+  if (json === scansJson) return;
+  scansJson = json;
+  $("scans").tBodies[0].replaceChildren(...list.map(scanRow));
+  $("scans").hidden = !list.length;
+  $("noScans").hidden = !!list.length;
+  clearInterval(scanTimer);
+  if (list.some((s) => s.status === "uploaded" || s.status === "processing")) scanTimer = setInterval(refreshScans, 10000);
+}
+async function refreshScans() {
+  try {
+    renderScans(await call("GET", `/lab/items/${itemId}/scans`));
+  } catch {
+    /* try again at the next tick */
+  }
+}
+
+// ---------------------------------------------------------------- mark an area on a photo
+const CORNER_NAMES = ["top-left", "top-right", "bottom-right", "bottom-left"];
+const area = { img: null, file: null, corners: [null, null, null, null], outline: [] };
+
+function areaHelp() {
+  const set = area.corners.filter(Boolean).length;
+  $("areaHelp").textContent =
+    set < 4
+      ? `Click the ${CORNER_NAMES[area.corners.findIndex((c) => !c)]} corner (${set + 1} of 4), or type the corners below.`
+      : `Corners set. If the shape is not a rectangle, click points around it (${area.outline.length} so far); otherwise press Send.`;
+}
+
+function drawArea() {
+  const c = $("areaCanvas");
+  const ctx = c.getContext("2d");
+  const k = c.width / area.img.naturalWidth;
+  ctx.drawImage(area.img, 0, 0, c.width, c.height);
+  const trace = (pts, colour, closed) => {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    pts.forEach((p, i) => (i ? ctx.lineTo(p.x * k, p.y * k) : ctx.moveTo(p.x * k, p.y * k)));
+    if (closed) ctx.closePath();
+    ctx.stroke();
+  };
+  const placed = area.corners.filter(Boolean);
+  if (placed.length > 1) trace(placed, "#e02020", placed.length === 4);
+  if (area.outline.length > 1) trace(area.outline, "#1f6feb", area.outline.length > 2);
+  const dot = (p, colour, text) => {
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.arc(p.x * k, p.y * k, text ? 7 : 4, 0, Math.PI * 2);
+    ctx.fill();
+    if (text) {
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 10px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(text, p.x * k, p.y * k);
+    }
+  };
+  area.corners.forEach((p, i) => p && dot(p, "#e02020", String(i + 1)));
+  area.outline.forEach((p) => dot(p, "#1f6feb"));
+  areaHelp();
+}
+
+function fillCornerInputs() {
+  [...$("areaCorners").tBodies[0].rows].forEach((tr, i) => {
+    const [x, y] = tr.querySelectorAll("input");
+    x.value = area.corners[i] ? Math.round(area.corners[i].x) : "";
+    y.value = area.corners[i] ? Math.round(area.corners[i].y) : "";
+  });
+}
+
+function resetArea() {
+  area.corners = [null, null, null, null];
+  area.outline = [];
+  fillCornerInputs();
+  if (area.img) drawArea();
+}
+
+function buildCornerTable() {
+  const body = $("areaCorners").tBodies[0];
+  CORNER_NAMES.forEach((name, i) => {
+    const tr = body.insertRow();
+    tr.insertCell().textContent = `${i + 1}. ${name}`;
+    for (const axis of ["x", "y"]) {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.min = "0";
+      input.setAttribute("aria-label", `${name} corner ${axis}`);
+      input.addEventListener("change", () => {
+        const [x, y] = tr.querySelectorAll("input");
+        area.corners[i] = x.value !== "" && y.value !== "" ? { x: Number(x.value), y: Number(y.value) } : null;
+        if (area.img) drawArea();
+      });
+      tr.insertCell().append(input);
+    }
+  });
+}
+
+$("areaPhoto").addEventListener("change", () => {
+  const file = $("areaPhoto").files[0];
+  $("areaError").textContent = "";
+  $("areaOk").textContent = "";
+  if (!file) return;
+  if (!["image/jpeg", "image/png"].includes(file.type)) {
+    $("areaError").textContent = "Pick a JPG or PNG photo.";
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    $("areaError").textContent = "That photo is over 25 MB. Pick a smaller one.";
+    return;
+  }
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = () => {
+    URL.revokeObjectURL(url);
+    area.img = img; // naturalWidth/Height are the photo as it looks on screen (phone turn applied)
+    area.file = file;
+    const c = $("areaCanvas");
+    c.width = Math.min(img.naturalWidth, 900);
+    c.height = Math.round((img.naturalHeight * c.width) / img.naturalWidth);
+    $("areaWork").hidden = false;
+    resetArea();
+  };
+  img.onerror = () => {
+    $("areaError").textContent = "Could not open that photo.";
+  };
+  img.src = url;
+});
+
+$("areaCanvas").addEventListener("click", (e) => {
+  const r = e.target.getBoundingClientRect();
+  const p = { x: ((e.clientX - r.left) / r.width) * area.img.naturalWidth, y: ((e.clientY - r.top) / r.height) * area.img.naturalHeight };
+  const next = area.corners.findIndex((c) => !c);
+  if (next >= 0) {
+    area.corners[next] = p;
+    fillCornerInputs();
+  } else {
+    area.outline.push(p);
+  }
+  drawArea();
+});
+$("areaUndo").addEventListener("click", () => {
+  if (area.outline.length) area.outline.pop();
+  else {
+    const last = area.corners.map((c) => !!c).lastIndexOf(true);
+    if (last >= 0) area.corners[last] = null;
+    fillCornerInputs();
+  }
+  drawArea();
+});
+$("areaClearOutline").addEventListener("click", () => {
+  area.outline = [];
+  drawArea();
+});
+$("areaReset").addEventListener("click", resetArea);
+
+$("areaSend").addEventListener("click", async () => {
+  $("areaError").textContent = "";
+  $("areaOk").textContent = "";
+  if (!area.file || area.corners.some((c) => !c)) {
+    $("areaError").textContent = "Pick a photo and mark all four corners first.";
+    return;
+  }
+  if (area.outline.length && area.outline.length < 3) {
+    $("areaError").textContent = "An outline needs at least three points. Add more, or clear it.";
+    return;
+  }
+  const pts = (list) => JSON.stringify(list.map((p) => [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]));
+  const form = new FormData();
+  form.append("photo", area.file);
+  form.append("quad", pts(area.corners));
+  if (area.outline.length) form.append("outline", pts(area.outline));
+  for (const [field, id] of [["label", "areaLabel"], ["real_width_mm", "areaW"], ["real_height_mm", "areaH"]]) {
+    if ($(id).value.trim() !== "") form.append(field, $(id).value.trim());
+  }
+  form.append("gcode", $("areaGcode").checked ? "true" : "false");
+  $("areaSend").disabled = true;
+  try {
+    await call("POST", `/lab/items/${itemId}/areas`, form);
+    $("areaOk").textContent = "Sent. It appears below while the workshop PC reads it.";
+    $("areaLabel").value = "";
+    resetArea();
+    await refreshScans();
+  } catch (e) {
+    $("areaError").textContent = e.message;
+  } finally {
+    $("areaSend").disabled = false;
+  }
+});
+
 // After saving parts: read the saved ids back and keep them on the rows.
 async function syncPartIds() {
   const def = await call("GET", `/lab/items/${itemId}/definition`);
@@ -469,6 +680,7 @@ $("saveCarvings").addEventListener("click", async () => {
 });
 
 async function init() {
+  buildCornerTable();
   $("viewLink").href = `/lab/view/${itemId}`;
   sizeInputs();
   try {
@@ -483,9 +695,7 @@ async function init() {
     partChoices = partLabels(def.parts);
     designChoices = (def.designs || []).map((d) => [d.id, `${d.sku} · ${d.name}`, d.has_image]);
     (def.carvings || []).forEach((c) => $("carvings").tBodies[0].append(addCarvingRow(c)));
-    (def.scans || []).forEach((s) => $("scans").tBodies[0].append(scanRow(s)));
-    $("scans").hidden = !(def.scans || []).length;
-    $("noScans").hidden = !!(def.scans || []).length;
+    renderScans(def.scans || []);
   } catch (e) {
     $("partsError").textContent = e.message;
   }

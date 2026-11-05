@@ -6,15 +6,29 @@ owner and managers can change part definitions. Viewing never changes data:
 picking Small/Medium/Large or typing a custom size just recalculates.
 """
 
+import io
+import json
 import re
+import uuid as uuidlib
 from pathlib import Path
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, RedirectResponse
+from PIL import Image, ImageOps
 from sqlalchemy import func
 
+from app.api.scans import Crop
 from app.core.security import create_scoped_token, verify_token
 from app.db.deps import (
     LAB_COOKIE,
@@ -49,7 +63,7 @@ from app.schemas.lab import (
     PresetsIn,
     SizeIn,
 )
-from app.services import design_service, lab_service, media_service
+from app.services import crop_service, design_service, lab_service, media_service
 from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/lab", tags=["3D Lab"])
@@ -120,12 +134,15 @@ def _designs(uow: AbstractUnitOfWork, ids) -> Dict[UUID, Design]:
 
 
 def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
-    """Finished flat-carving scans of this item that have a depth picture, newest first."""
+    """
+    Flat-carving scans of this item, newest first: finished ones that have a depth
+    picture, and marked areas still waiting for (or on) the workshop PC, or failed.
+    """
     scans = (
         uow.session.query(ScanJob)
         .filter(
             ScanJob.item_id == item_id,
-            ScanJob.status == "done",
+            ScanJob.status.in_(("uploaded", "processing", "failed", "done")),
             ScanJob.params["shape"].astext == "relief",
         )
         .order_by(ScanJob.created_at.desc())
@@ -148,6 +165,14 @@ def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
     return [
         {
             "id": str(s.id),
+            "status": s.status,
+            "progress": s.progress,
+            "note": s.note,
+            "error": s.error,
+            "label": (s.params or {}).get("label"),
+            "area": bool(
+                (s.params or {}).get("crop")
+            ),  # a marked area, not a whole photo
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "real_width_mm": (s.params or {}).get("real_width_mm"),
             "gcode": bool((s.params or {}).get("gcode")),
@@ -162,7 +187,7 @@ def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
             ),
         }
         for s in scans
-        if s.id in with_picture
+        if s.status != "done" or s.id in with_picture
     ]
 
 
@@ -472,6 +497,108 @@ def replace_carvings(
         uow.commit()
     uow.session.expire_all()
     return _solved(uow, item)
+
+
+AREA_PHOTO_MAX = 25 * 1024 * 1024
+AREA_PHOTO_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}  # what the worker reads
+
+
+def _json_field(text: Optional[str], what: str):
+    if text in (None, ""):
+        return None
+    try:
+        return json.loads(text)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"{what} is not valid") from None
+
+
+@router.get("/items/{item_id}/scans")
+def design_scans(
+    item_id: UUID,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """The editor refreshes this while a marked area waits for the workshop PC."""
+    _item(uow, item_id)
+    return _design_scans(uow, item_id)
+
+
+@router.post("/items/{item_id}/areas", status_code=201)
+async def send_area(
+    item_id: UUID,
+    photo: UploadFile = File(...),
+    quad: str = Form(
+        ..., description="[[x,y] x4] top-left, top-right, bottom-right, bottom-left"
+    ),
+    outline: Optional[str] = Form(
+        None, description="[[x,y], ...] cuts the design out of the area"
+    ),
+    label: Optional[str] = Form(None, max_length=80),
+    real_width_mm: Optional[float] = Form(None, gt=0, le=5000),
+    real_height_mm: Optional[float] = Form(None, gt=0, le=5000),
+    gcode: bool = Form(False),
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    Mark one carved area on a photo of the piece and send it to the workshop PC. The
+    worker straightens the area, reads its depth and finishes the job; the editor then
+    offers it under "Designs from scans". A marked area is an ordinary flat-carving scan.
+    """
+    item = _item(uow, item_id)
+    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Sculpture scans are for the owner and artisans"
+        )
+    if store is None:
+        raise HTTPException(status_code=503, detail="File storage is not set up yet")
+    data = await photo.read(AREA_PHOTO_MAX + 1)
+    if photo.content_type not in AREA_PHOTO_TYPES:
+        raise HTTPException(status_code=415, detail="Send a JPG or PNG photo")
+    if len(data) > AREA_PHOTO_MAX:
+        raise HTTPException(status_code=413, detail="The photo is larger than 25 MB")
+    media_service.validate(photo.content_type, data)  # really an image of that type
+    with Image.open(io.BytesIO(data)) as img:
+        size = ImageOps.exif_transpose(img).size  # as it looks on screen
+    points = _json_field(quad, "The corners")
+    cut = _json_field(outline, "The outline")
+    try:
+        crop = {
+            "quad": points,
+            "outline": cut,
+            "real_height_mm": real_height_mm,
+        }
+        Crop.model_validate(crop)  # the shape of the points
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="Mark four corners and, if you like, an outline of at least three points",
+        ) from None
+    crop_service.check_crop(points, cut, size)
+
+    job = ScanJob(
+        item_id=item_id,
+        artisan_only=item.item_type == "sculpture",
+        created_by=user.id,
+        source_kind="photos",
+        status="created",
+        params={
+            "shape": "relief",
+            "quality": "normal",
+            "gcode": gcode,
+            "real_width_mm": real_width_mm,
+            "label": label.strip() if label and label.strip() else None,
+            "crop": crop,
+        },
+    )
+    uow.session.add(job)
+    uow.session.flush()
+    key = f"scans/{job.id}/src/{uuidlib.uuid4().hex}{AREA_PHOTO_TYPES[photo.content_type]}"
+    store.put_bytes(key, data, photo.content_type)
+    job.source_keys, job.source_bytes, job.status = [key], len(data), "uploaded"
+    uow.commit()
+    return {"id": str(job.id), "status": job.status}
 
 
 @router.post("/scans/{scan_id}/design")
