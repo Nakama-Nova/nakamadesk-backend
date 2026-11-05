@@ -1,0 +1,184 @@
+{
+ "id": "door-panelled",
+ "name": "Panelled door (one leaf, two panels)",
+ "description": "A single door leaf: two 100 mm stiles, a top, a lock and a bottom rail, and two 20 mm panels (upper and lower) for carving. L is the width, W the thickness, H the height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 900,
+  "w": 45,
+  "h": 2100
+ },
+ "typical_sizes": [
+  {
+   "name": "Standard",
+   "l": 900,
+   "w": 45,
+   "h": 2100
+  },
+  {
+   "name": "Narrow",
+   "l": 800,
+   "w": 40,
+   "h": 1980
+  },
+  {
+   "name": "Wide",
+   "l": 1050,
+   "w": 50,
+   "h": 2200
+  }
+ ],
+ "carve": [
+  "Upper panel and lower panel: face 'front' and, if both sides are carved, 'back'"
+ ],
+ "parts": [
+  {
+   "name": "Stile (left)",
+   "l_expr": "H",
+   "w_expr": "100",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the three rails."
+  },
+  {
+   "name": "Stile (right)",
+   "l_expr": "H",
+   "w_expr": "100",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "L - 100",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the three rails."
+  },
+  {
+   "name": "Top rail",
+   "l_expr": "L - 200",
+   "w_expr": "W",
+   "t_expr": "130",
+   "axis": "x",
+   "x_expr": "100",
+   "y_expr": "H - 130",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both stiles."
+  },
+  {
+   "name": "Lock rail",
+   "l_expr": "L - 200",
+   "w_expr": "W",
+   "t_expr": "150",
+   "axis": "x",
+   "x_expr": "100",
+   "y_expr": "H * 0.48 - 75",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both stiles. The lock goes here."
+  },
+  {
+   "name": "Bottom rail",
+   "l_expr": "L - 200",
+   "w_expr": "W",
+   "t_expr": "220",
+   "axis": "x",
+   "x_expr": "100",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both stiles."
+  },
+  {
+   "name": "Upper panel",
+   "l_expr": "H * 0.52 - 205",
+   "w_expr": "L - 200",
+   "t_expr": "20",
+   "axis": "y",
+   "x_expr": "100",
+   "y_expr": "H * 0.48 + 75",
+   "z_expr": "(W - 20) / 2",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Carved. Floats in the groove of the frame."
+  },
+  {
+   "name": "Lower panel",
+   "l_expr": "H * 0.48 - 295",
+   "w_expr": "L - 200",
+   "t_expr": "20",
+   "axis": "y",
+   "x_expr": "100",
+   "y_expr": "220",
+   "z_expr": "(W - 20) / 2",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Carved. Floats in the groove of the frame."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Door hinge 100 mm",
+   "qty_expr": "3",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Mortise lock",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Door handle set",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "18",
+   "assembly_step": 3,
+   "note": "Hinges"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 10 x 80 mm",
+   "qty_expr": "12",
+   "assembly_step": 1,
+   "note": "Reinforces the rail joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1200 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Frame glue-up"
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 2200 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Frame glue-up, along the stiles"
+  }
+ ]
+}

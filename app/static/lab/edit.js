@@ -416,6 +416,7 @@ function showTemplate() {
   };
   add(`${t.description}`);
   add(`${t.parts} parts, ${t.hardware} hardware lines. Sized for ${t.size_hint.l} × ${t.size_hint.w} × ${t.size_hint.h} mm, and it follows the size you give the piece.`);
+  if (t.typical_sizes?.length) add(`Typical sizes (mm): ${t.typical_sizes.map((s) => `${s.name} ${s.l} × ${s.w} × ${s.h}`).join(" · ")}`);
   for (const c of t.carve || []) add(`Carve: ${c}`);
 }
 

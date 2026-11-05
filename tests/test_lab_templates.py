@@ -14,7 +14,19 @@ SIZES = {
     "double": {"l": 2185, "w": 1370, "h": 1200},
     "single": {"l": 2000, "w": 1000, "h": 1100},
 }
-TEMPLATE_IDS = ["bed-square-posts", "bed-crown-headboard"]
+EXPECTED = {  # template id -> number of parts
+    "bed-square-posts": 33,
+    "bed-crown-headboard": 25,
+    "table-dining": 9,
+    "chair-dining": 12,
+    "wardrobe-2-door": 12,
+    "door-panelled": 7,
+}
+CASES = [
+    (t["id"], s["name"])
+    for t in lab_templates.all_templates().values()
+    for s in t["typical_sizes"]
+]
 
 
 def new_piece(client, people, name="New bed", size=None, presets=None):
@@ -63,16 +75,17 @@ def box(solved):
 
 # ------------------------------------------------------------------ the templates themselves
 def test_the_shipped_templates_load_and_are_listed(client, people):
-    assert set(TEMPLATE_IDS) <= set(lab_templates.all_templates())
+    assert set(lab_templates.all_templates()) == set(EXPECTED)
     r = client.get("/lab/templates", headers=people["owner"]["h"])
     assert r.status_code == 200
     by_id = {t["id"]: t for t in r.json()}
+    for tid, parts in EXPECTED.items():
+        t = by_id[tid]
+        assert t["parts"] == parts and t["hardware"] >= 4, tid
+        assert t["carve"] and t["description"] and len(t["typical_sizes"]) >= 3, tid
+        assert all({"name", "l", "w", "h"} <= set(s) for s in t["typical_sizes"])
     sq = by_id["bed-square-posts"]
-    assert (
-        sq["parts"] == 33 and sq["hardware"] == 7 and sq["size_hint"] == SIZES["queen"]
-    )
-    assert sq["carve"] and "square" in sq["name"].lower()
-    assert by_id["bed-crown-headboard"]["parts"] == 25
+    assert sq["size_hint"] == SIZES["queen"] and "square" in sq["name"].lower()
     for role in ("achari", "worker", "artisan", "sales"):
         assert (
             client.get("/lab/templates", headers=people[role]["h"]).status_code == 403
@@ -83,23 +96,115 @@ def test_the_shipped_templates_load_and_are_listed(client, people):
     )
 
 
-@pytest.mark.parametrize("tid", TEMPLATE_IDS)
-@pytest.mark.parametrize("name", list(SIZES))
-def test_every_template_works_at_every_bed_size_and_fills_exactly_the_overall_box(
-    client, people, tid, name
+@pytest.mark.parametrize("tid,size_name", CASES)
+def test_every_template_fits_every_typical_size_exactly_and_no_parts_overlap(
+    client, people, tid, size_name
 ):
-    size = SIZES[name]
-    item = new_piece(client, people, size=size)
+    size = next(
+        s
+        for s in lab_templates.all_templates()[tid]["typical_sizes"]
+        if s["name"] == size_name
+    )
+    dims = {k: size[k] for k in ("l", "w", "h")}
+    item = new_piece(client, people, size=dims)
     r = apply(client, people, item, tid)
     assert r.status_code == 200, r.text
     out = r.json()
     lo, hi = box(out)
-    assert lo == [0, 0, 0] and hi == [
-        size["l"],
-        size["h"],
-        size["w"],
-    ]  # nothing sticks out, nothing is short
+    # nothing sticks out of the overall box, and nothing leaves it short
+    assert lo == [0, 0, 0] and hi == [dims["l"], dims["h"], dims["w"]]
     assert all(p["l"] > 0 and p["w"] > 0 and p["t"] > 0 for p in out["parts"])
+    boxes = [
+        (
+            p["name"],
+            [p["pos"][a] for a in "xyz"],
+            [p["pos"][a] + p["size"][a] for a in "xyz"],
+        )
+        for p in out["parts"]
+    ]
+    for n, (name1, a1, b1) in enumerate(boxes):
+        for name2, a2, b2 in boxes[n + 1 :]:
+            overlap = [min(b1[i], b2[i]) - max(a1[i], a2[i]) for i in range(3)]
+            assert not all(
+                o > 0.5 for o in overlap
+            ), f"{name1} overlaps {name2}"  # touching is fine
+
+
+def solved_template(client, people, tid, size_name=None):
+    t = lab_templates.all_templates()[tid]
+    size = next(
+        s
+        for s in t["typical_sizes"]
+        if s["name"] == (size_name or t["typical_sizes"][0]["name"])
+    )
+    item = new_piece(client, people, size={k: size[k] for k in ("l", "w", "h")})
+    out = apply(client, people, item, tid).json()
+    return {p["name"]: p for p in out["parts"]}, out, size
+
+
+def test_the_dining_table_is_a_top_on_four_legs_with_aprons(client, people):
+    parts, out, s = solved_template(client, people, "table-dining", "6 seater")
+    top = parts["Table top"]
+    assert (top["l"], top["w"], top["t"]) == (s["l"], s["w"], 40) and top["pos"][
+        "y"
+    ] == s["h"] - 40
+    legs = [p for n, p in parts.items() if n.startswith("Leg")]
+    assert len(legs) == 4 and {p["l"] for p in legs} == {
+        s["h"] - 40
+    }  # the top's upper face is H
+    assert (
+        parts["Apron (front)"]["l"] == s["l"] - 280
+        and parts["Apron (left)"]["l"] == s["w"] - 280
+    )
+    assert {t["step"] for t in out["tools"]} == {
+        1
+    }  # the clamps hold the leg and apron glue-up
+
+
+def test_the_dining_chair_has_a_450_mm_seat_and_a_back_that_reaches_the_full_height(
+    client, people
+):
+    parts, out, s = solved_template(client, people, "chair-dining")
+    seat = parts["Seat"]
+    assert seat["pos"]["y"] + seat["t"] == 450  # the seat height
+    assert (
+        parts["Front leg (left)"]["l"] == 420
+        and parts["Back leg (left)"]["l"] == s["h"]
+    )
+    rail = parts["Back top rail"]
+    assert rail["pos"]["y"] + rail["size"]["y"] == s["h"]
+    assert parts["Back splat"]["l"] == s["h"] - 550  # between the seat and the top rail
+    assert len(parts) == 12
+
+
+def test_the_wardrobe_has_two_doors_that_cover_the_front_and_a_rail_and_shelves(
+    client, people
+):
+    parts, out, s = solved_template(client, people, "wardrobe-2-door", "2 door, 1200")
+    left, right = parts["Door (left)"], parts["Door (right)"]
+    assert left["w"] == right["w"] == s["l"] / 2 - 3  # a 3 mm gap between them
+    assert (
+        left["pos"]["z"] == 0
+        and left["t"] == 25
+        and left["pos"]["x"] + left["w"] < right["pos"]["x"]
+    )
+    assert parts["Side (left)"]["size"]["y"] == s["h"] and "Hanging rail" in parts
+    assert "Shelf (lower)" in parts and "Shelf (upper)" in parts
+    stock = {i["name"]: i["qty"] for g in out["hardware"] for i in g["items"]}
+    assert stock["Door hinge 100 mm"] == 6 and stock["Door handle"] == 2
+
+
+def test_the_panelled_door_frame_and_panels_meet_exactly(client, people):
+    parts, out, s = solved_template(client, people, "door-panelled")
+    assert len(parts) == 7 and parts["Stile (left)"]["l"] == s["h"]
+    lower, upper = parts["Lower panel"], parts["Upper panel"]
+    bottom, lock, top = parts["Bottom rail"], parts["Lock rail"], parts["Top rail"]
+    top_of = lambda p: p["pos"]["y"] + p["size"]["y"]  # noqa: E731
+    assert lower["pos"]["y"] == top_of(bottom) and top_of(lower) == lock["pos"]["y"]
+    assert upper["pos"]["y"] == top_of(lock) and top_of(upper) == top["pos"]["y"]
+    assert parts["Upper panel"]["w"] == s["l"] - 200  # fills between the stiles
+    stock = {i["name"]: i["qty"] for g in out["hardware"] for i in g["items"]}
+    assert stock["Door hinge 100 mm"] == 3 and stock["Mortise lock"] == 1
 
 
 def test_the_square_post_bed_matches_the_queen_sheet(client, people):

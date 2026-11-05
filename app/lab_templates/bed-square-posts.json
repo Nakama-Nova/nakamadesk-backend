@@ -493,5 +493,31 @@
    "assembly_step": 3,
    "note": "Side rails"
   }
+ ],
+ "typical_sizes": [
+  {
+   "name": "Queen",
+   "l": 2185,
+   "w": 1675,
+   "h": 1270
+  },
+  {
+   "name": "King",
+   "l": 2185,
+   "w": 1980,
+   "h": 1300
+  },
+  {
+   "name": "Double",
+   "l": 2185,
+   "w": 1370,
+   "h": 1200
+  },
+  {
+   "name": "Single",
+   "l": 2000,
+   "w": 1000,
+   "h": 1100
+  }
  ]
 }

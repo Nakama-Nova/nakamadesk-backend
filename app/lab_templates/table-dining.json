@@ -1,0 +1,196 @@
+{
+ "id": "table-dining",
+ "name": "Dining table (rectangular, four legs)",
+ "description": "A rectangular table: a 40 mm top over four square 80 mm legs joined by 25 mm aprons. L is the length, W the depth, H the height (the top's upper face). The legs sit 60 mm in from the edges. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 1500,
+  "w": 900,
+  "h": 760
+ },
+ "typical_sizes": [
+  {
+   "name": "4 seater",
+   "l": 1200,
+   "w": 750,
+   "h": 740
+  },
+  {
+   "name": "6 seater",
+   "l": 1500,
+   "w": 900,
+   "h": 760
+  },
+  {
+   "name": "6 to 8 seater",
+   "l": 1800,
+   "w": 900,
+   "h": 760
+  },
+  {
+   "name": "8 seater",
+   "l": 2100,
+   "w": 1000,
+   "h": 760
+  }
+ ],
+ "carve": [
+  "Top: face 'top' for an inlay or a carved centre",
+  "Aprons: outer faces ('front' on the front apron, 'back' on the back apron)"
+ ],
+ "parts": [
+  {
+   "name": "Table top",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "40",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "H - 40",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Fixed to the aprons from below with table top clips."
+  },
+  {
+   "name": "Leg (front left)",
+   "l_expr": "H - 40",
+   "w_expr": "80",
+   "t_expr": "80",
+   "axis": "y",
+   "x_expr": "60",
+   "y_expr": "0",
+   "z_expr": "60",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for both aprons."
+  },
+  {
+   "name": "Leg (front right)",
+   "l_expr": "H - 40",
+   "w_expr": "80",
+   "t_expr": "80",
+   "axis": "y",
+   "x_expr": "L - 140",
+   "y_expr": "0",
+   "z_expr": "60",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for both aprons."
+  },
+  {
+   "name": "Leg (back left)",
+   "l_expr": "H - 40",
+   "w_expr": "80",
+   "t_expr": "80",
+   "axis": "y",
+   "x_expr": "60",
+   "y_expr": "0",
+   "z_expr": "W - 140",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for both aprons."
+  },
+  {
+   "name": "Leg (back right)",
+   "l_expr": "H - 40",
+   "w_expr": "80",
+   "t_expr": "80",
+   "axis": "y",
+   "x_expr": "L - 140",
+   "y_expr": "0",
+   "z_expr": "W - 140",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for both aprons."
+  },
+  {
+   "name": "Apron (front)",
+   "l_expr": "L - 280",
+   "w_expr": "25",
+   "t_expr": "90",
+   "axis": "x",
+   "x_expr": "140",
+   "y_expr": "H - 130",
+   "z_expr": "60",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both front legs."
+  },
+  {
+   "name": "Apron (back)",
+   "l_expr": "L - 280",
+   "w_expr": "25",
+   "t_expr": "90",
+   "axis": "x",
+   "x_expr": "140",
+   "y_expr": "H - 130",
+   "z_expr": "W - 85",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both back legs."
+  },
+  {
+   "name": "Apron (left)",
+   "l_expr": "W - 280",
+   "w_expr": "25",
+   "t_expr": "90",
+   "axis": "z",
+   "x_expr": "60",
+   "y_expr": "H - 130",
+   "z_expr": "140",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the left legs."
+  },
+  {
+   "name": "Apron (right)",
+   "l_expr": "W - 280",
+   "w_expr": "25",
+   "t_expr": "90",
+   "axis": "z",
+   "x_expr": "L - 85",
+   "y_expr": "H - 130",
+   "z_expr": "140",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the right legs."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Table top clip",
+   "qty_expr": "8",
+   "assembly_step": 2,
+   "note": "Holds the top to the aprons and lets it move with the seasons"
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 2,
+   "note": "Into the clips"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Reinforces the apron joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1200 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Leg and apron glue-up"
+  }
+ ]
+}

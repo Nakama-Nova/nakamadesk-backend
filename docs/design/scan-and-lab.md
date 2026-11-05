@@ -403,7 +403,18 @@ Checked on real photos of slanted bed headboards: the border, the lattice and th
 
 No migration. Defining 25 to 33 parts by hand for every product is too much work, and the parts are formulas of the overall size (L, W, H), so one set fits every size of the same kind of piece. Two ways to start a piece:
 
-- **Built-in templates** (`app/lab_templates/*.json`, shipped with the app and checked when loaded): `bed-square-posts` (square 4 inch posts, a flat headboard with a plain board, a floral border and a tufted lattice panel, a low footboard with an oval medallion and corner panels, side rails, ledgers, a centre beam and 12 slats; built from the queen bed sheet) and `bed-crown-headboard` (a shaped crown with a shell crest; from the king bed definition). Both come with the usual hardware: bed rail bracket sets (stock, not clamps), screws, dowels, glue, and clamps as tools.
+- **Built-in templates** (`app/lab_templates/*.json`, shipped with the app and checked when loaded). Axes: L is left to right, W front to back, H up (for a bed, L is its length and W its width). Sizes are in mm; every template lists its typical sizes.
+
+  | Template | Parts | Typical sizes (L x W x H) |
+  |---|---|---|
+  | `bed-square-posts`: square 4 inch posts, flat headboard (plain board, floral border, tufted lattice), low footboard with an oval medallion, rails, ledgers, centre beam, 12 slats. From the queen bed sheet. | 33 | queen 2185 x 1675 x 1270, king, double, single |
+  | `bed-crown-headboard`: a shaped crown with a shell crest. From the king bed definition. | 25 | king 2185 x 1980 x 1300, queen, double, single |
+  | `table-dining`: 40 mm top, four 80 mm legs, 25 mm aprons. H is the top's upper face. | 9 | 1200 x 750 x 740 up to 2100 x 1000 x 760 |
+  | `chair-dining`: 450 mm seat, 40 mm legs, seat rails, top rail, carved back splat. | 12 | 450 x 480 x 950, small, large |
+  | `wardrobe-2-door`: 25 mm carcass, 100 mm plinth, 10 mm back, centre divider, two shelves, a hanging rail, two 25 mm doors. W includes the doors. | 12 | 1000 x 550 x 1800 up to 1500 x 600 x 2100 |
+  | `door-panelled`: two stiles, top, lock and bottom rails, an upper and a lower carved panel. W is the thickness. | 7 | 900 x 45 x 2100, narrow, wide |
+
+  Each comes with the usual hardware (beds: bed rail bracket sets, which are stock; doors and wardrobes: hinges, handles, locks; all: screws, dowels, glue) and clamps as tools.
 - **Copy from another piece**: the parts of any piece that has some, and optionally its hardware and carvings.
 
 Either way the piece gets **its own copy** with new ids; the template or the other piece is never changed, and later edits do not flow back. Carvings keep their design (stored once) and hardware links move to the copied parts. A copied piece's 3D model file for a part is not carried over.
@@ -417,6 +428,6 @@ Both return the solved piece. The piece needs its standard size first (422 other
 
 In the editor a "Start from a template or another piece" section sits above the parts table: pick a template (it shows what it is and where to carve), enter the wood, press the button; or pick a piece to copy from. The page reloads to show the new parts.
 
-**What a template is not:** an exact model. The thicknesses of the square-post bed are estimates from the pictures (the sheet gives only L, W, H, the footboard height and the mattress space): check them with the achari. At its sheet size the template reproduces the sheet's numbers: head post 1270, footboard 530, mattress space 1981 x 1524 mm (a queen mattress, 78 x 60 inches), and the parts fill exactly the overall box at queen, king, double and single sizes (tested). The slat count is fixed at 12; a longer bed spaces them wider. A new kind of piece (a wardrobe, a table) needs its template written once: add a JSON file next to the beds.
+**What a template is not:** an exact model. Every thickness and position is a standard estimate (for the square-post bed, from the pictures: the sheet gives only L, W, H, the footboard height and the mattress space): check them with the achari. Only the six kinds above exist; a new kind of piece needs its template written once. At its sheet size the square-post bed reproduces the sheet's numbers: head post 1270, footboard 530, mattress space 1981 x 1524 mm (a queen mattress, 78 x 60 inches). **Every template is tested at each of its typical sizes: the parts fill exactly the overall box, no size is zero or negative, and no two parts overlap.** The slat count is fixed at 12; a longer bed spaces them wider. To add a kind, add a JSON file next to the others (see an existing one for the fields); the tests then check it automatically.
 
 Carved areas are separate thin parts in the templates (each border strip, the lattice panel, the medallion), because a design is placed centred on one face of one part. Mark each area on a photo (section 16) and place its design on the matching part.

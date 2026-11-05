@@ -1,0 +1,222 @@
+{
+ "id": "chair-dining",
+ "name": "Dining chair (four legs, back splat)",
+ "description": "A chair with a 450 mm seat height, four 40 mm legs (the back legs run up to carry the back), seat rails, a 30 mm seat (with a strip between the back legs), a top rail and a carved back splat. L is the width, W the depth, H the overall height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 450,
+  "w": 480,
+  "h": 950
+ },
+ "typical_sizes": [
+  {
+   "name": "Standard",
+   "l": 450,
+   "w": 480,
+   "h": 950
+  },
+  {
+   "name": "Small",
+   "l": 420,
+   "w": 440,
+   "h": 880
+  },
+  {
+   "name": "Large",
+   "l": 500,
+   "w": 520,
+   "h": 1050
+  }
+ ],
+ "carve": [
+  "Back splat: face 'front' (it faces the sitter)",
+  "Top rail: face 'front'"
+ ],
+ "parts": [
+  {
+   "name": "Front leg (left)",
+   "l_expr": "420",
+   "w_expr": "40",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the seat rails."
+  },
+  {
+   "name": "Front leg (right)",
+   "l_expr": "420",
+   "w_expr": "40",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "L - 40",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the seat rails."
+  },
+  {
+   "name": "Back leg (left)",
+   "l_expr": "H",
+   "w_expr": "40",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "W - 40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the seat rails and the back rails."
+  },
+  {
+   "name": "Back leg (right)",
+   "l_expr": "H",
+   "w_expr": "40",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "L - 40",
+   "y_expr": "0",
+   "z_expr": "W - 40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the seat rails and the back rails."
+  },
+  {
+   "name": "Seat rail (front)",
+   "l_expr": "L - 80",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "x",
+   "x_expr": "40",
+   "y_expr": "360",
+   "z_expr": "10",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the front legs."
+  },
+  {
+   "name": "Seat rail (back)",
+   "l_expr": "L - 80",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "x",
+   "x_expr": "40",
+   "y_expr": "360",
+   "z_expr": "W - 30",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the back legs."
+  },
+  {
+   "name": "Seat rail (left)",
+   "l_expr": "W - 80",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "z",
+   "x_expr": "10",
+   "y_expr": "360",
+   "z_expr": "40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the left legs."
+  },
+  {
+   "name": "Seat rail (right)",
+   "l_expr": "W - 80",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "z",
+   "x_expr": "L - 30",
+   "y_expr": "360",
+   "z_expr": "40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the right legs."
+  },
+  {
+   "name": "Seat",
+   "l_expr": "L",
+   "w_expr": "W - 40",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "420",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Screwed to the seat rails from below. Ends at the back legs."
+  },
+  {
+   "name": "Seat (rear strip)",
+   "l_expr": "L - 80",
+   "w_expr": "40",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "40",
+   "y_expr": "420",
+   "z_expr": "W - 40",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Fills the gap between the back legs."
+  },
+  {
+   "name": "Back top rail",
+   "l_expr": "L - 80",
+   "w_expr": "30",
+   "t_expr": "80",
+   "axis": "x",
+   "x_expr": "40",
+   "y_expr": "H - 80",
+   "z_expr": "W - 35",
+   "assembly_step": 2,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the back legs."
+  },
+  {
+   "name": "Back splat",
+   "l_expr": "H - 550",
+   "w_expr": "L - 160",
+   "t_expr": "20",
+   "axis": "y",
+   "x_expr": "80",
+   "y_expr": "470",
+   "z_expr": "W - 30",
+   "assembly_step": 2,
+   "joint_type": "dowel",
+   "joinery_note": "Carved. Doweled into the top rail and the seat."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "8",
+   "assembly_step": 2,
+   "note": "Seat to the rails"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "12",
+   "assembly_step": 2,
+   "note": "Back splat and rails"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 600 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Leg and rail glue-up"
+  }
+ ]
+}

@@ -37,6 +37,7 @@ def summary(t: Dict[str, Any]) -> Dict[str, Any]:
         "name": t["name"],
         "description": t["description"],
         "size_hint": t["size_hint"],
+        "typical_sizes": t.get("typical_sizes", []),
         "carve": t.get("carve", []),
         "parts": len(t["parts"]),
         "hardware": len(t["hardware"]),
