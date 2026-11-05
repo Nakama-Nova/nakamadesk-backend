@@ -126,7 +126,8 @@ def test_designs_have_a_category_and_default_to_general(client, people):
     assert fur["category"] == "furniture"
     h = people["artisan"]["h"]
     listed = client.get("/designs", headers=h, params={"category": "furniture"}).json()
-    assert [d["id"] for d in listed] == [fur["id"]]
+    ids = [d["id"] for d in listed]
+    assert fur["id"] in ids and plain["id"] not in ids  # others may exist too
     r = client.patch(
         f"/designs/{plain['id']}", headers=h, json={"category": "furniture"}
     )

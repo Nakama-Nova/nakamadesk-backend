@@ -88,6 +88,23 @@
       <div class="error" id="hwError" role="alert"></div>
     </section>
 
+    <section class="card" aria-labelledby="h-scans">
+      <h2 id="h-scans">Designs from scans</h2>
+      <p class="small muted" style="margin:0 0 8px">
+        A finished <b>flat-carving scan</b> of this piece has a depth picture. Press <b>Make a design</b> to file it
+        under CNC designs as a <i>furniture</i> design (its picture, and the G-code if the scan made it), ready to
+        carve below and to cut later. It only happens when you press the button. Pressing it again, or for a scan
+        whose picture is already a design, gives that design back instead of a copy. Owner only.
+      </p>
+      <table id="scans" style="max-width:760px">
+        <thead><tr><th>Scan</th><th>Design</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="small muted" id="noScans">No finished flat-carving scans of this piece yet.</div>
+      <div class="ok" id="scansOk" aria-live="polite"></div>
+      <div class="error" id="scansError" role="alert"></div>
+    </section>
+
     <section class="card" aria-labelledby="h-carv">
       <h2 id="h-carv">Carvings</h2>
       <p class="small muted" style="margin:0 0 8px">

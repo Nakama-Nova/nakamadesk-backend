@@ -325,23 +325,28 @@ function fillPartSelect(sel, value) {
   sel.value = value || "";
 }
 
-function addCarvingRow(c = {}) {
-  const tr = document.createElement("tr");
-  const part = document.createElement("select");
-  fillPartSelect(part, c.part_id);
-  const design = document.createElement("select");
+function fillDesignSelect(sel, value) {
+  sel.replaceChildren();
   const none = document.createElement("option");
   none.value = "";
   none.textContent = "choose a design";
-  design.append(none);
+  sel.append(none);
   for (const [id, label, has] of designChoices) {
     const o = document.createElement("option");
     o.value = id;
     o.textContent = has ? label : `${label} (no picture yet)`;
     o.disabled = !has;
-    design.append(o);
+    sel.append(o);
   }
-  design.value = c.design_id || "";
+  sel.value = value || "";
+}
+
+function addCarvingRow(c = {}) {
+  const tr = document.createElement("tr");
+  const part = document.createElement("select");
+  fillPartSelect(part, c.part_id);
+  const design = document.createElement("select");
+  fillDesignSelect(design, c.design_id);
   const face = select(FACE_OPTIONS, c.face || "front");
   const margin = document.createElement("input");
   margin.type = "number";
@@ -387,6 +392,48 @@ function readCarvingRow(tr) {
 }
 function refreshPartSelects() {
   for (const sel of $("carvings").querySelectorAll("select[data-field=part_id]")) fillPartSelect(sel, sel.value);
+}
+
+// ---------------------------------------------------------------- designs from scans
+function scanRow(s) {
+  const tr = document.createElement("tr");
+  const when = new Date(s.created_at).toLocaleDateString();
+  const bits = [when, s.real_width_mm ? `${s.real_width_mm} mm wide` : "size not set", s.gcode ? "with G-code" : "no G-code"];
+  tr.insertCell().textContent = bits.join(" · ");
+  const design = tr.insertCell();
+  const action = tr.insertCell();
+  const show = (d) => {
+    design.textContent = `${d.sku} · ${d.name}`;
+    action.replaceChildren();
+  };
+  if (s.design) {
+    show(s.design);
+    return tr;
+  }
+  design.textContent = "not a design yet";
+  const name = textInput("", "name (optional)", 120);
+  name.setAttribute("aria-label", "design name");
+  const make = document.createElement("button");
+  make.type = "button";
+  make.textContent = "Make a design";
+  make.addEventListener("click", async () => {
+    $("scansError").textContent = "";
+    $("scansOk").textContent = "";
+    make.disabled = true;
+    try {
+      const r = await call("POST", `/lab/scans/${s.id}/design`, name.value.trim() ? { name: name.value.trim() } : {});
+      show(r.design);
+      if (!designChoices.some(([id]) => id === r.design.id)) designChoices.push([r.design.id, `${r.design.sku} · ${r.design.name}`, r.design.has_image]);
+      for (const sel of $("carvings").querySelectorAll("select[data-field=design_id]")) fillDesignSelect(sel, sel.value);
+      $("scansOk").textContent = r.created ? `Made ${r.design.sku}. You can carve it below.` : `That picture already is ${r.design.sku}.`;
+    } catch (e) {
+      make.disabled = false;
+      $("scansError").textContent = e.message;
+    }
+  });
+  action.style.whiteSpace = "nowrap";
+  action.append(name, make);
+  return tr;
 }
 
 // After saving parts: read the saved ids back and keep them on the rows.
@@ -436,6 +483,9 @@ async function init() {
     partChoices = partLabels(def.parts);
     designChoices = (def.designs || []).map((d) => [d.id, `${d.sku} · ${d.name}`, d.has_image]);
     (def.carvings || []).forEach((c) => $("carvings").tBodies[0].append(addCarvingRow(c)));
+    (def.scans || []).forEach((s) => $("scans").tBodies[0].append(scanRow(s)));
+    $("scans").hidden = !(def.scans || []).length;
+    $("noScans").hidden = !!(def.scans || []).length;
   } catch (e) {
     $("partsError").textContent = e.message;
   }

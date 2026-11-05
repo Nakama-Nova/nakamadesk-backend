@@ -19,6 +19,7 @@ from app.core.security import create_scoped_token, verify_token
 from app.db.deps import (
     LAB_COOKIE,
     LAB_EDIT_ROLES,
+    RESTORATION_ROLES,
     check_token_version,
     get_lab_editor,
     get_lab_user,
@@ -31,11 +32,13 @@ from app.models.furniture_part import FurniturePart
 from app.models.item import Item
 from app.models.product_asset import ProductAsset
 from app.models.raw_material import RawMaterial
+from app.models.scan_job import ScanJob
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.lab import (
     CarvingListIn,
     CarvingOut,
+    DesignFromScanIn,
     FurnitureIn,
     HardwareListIn,
     HardwareOut,
@@ -114,6 +117,53 @@ def _designs(uow: AbstractUnitOfWork, ids) -> Dict[UUID, Design]:
     if not ids:
         return {}
     return {d.id: d for d in uow.session.query(Design).filter(Design.id.in_(ids)).all()}
+
+
+def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
+    """Finished flat-carving scans of this item that have a depth picture, newest first."""
+    scans = (
+        uow.session.query(ScanJob)
+        .filter(
+            ScanJob.item_id == item_id,
+            ScanJob.status == "done",
+            ScanJob.params["shape"].astext == "relief",
+        )
+        .order_by(ScanJob.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    ids = [s.id for s in scans]
+    if not ids:
+        return []
+    with_picture = {
+        r[0]
+        for r in uow.session.query(ProductAsset.scan_id)
+        .filter(ProductAsset.scan_id.in_(ids), ProductAsset.kind == "render")
+        .all()
+    }
+    made = {
+        d.scan_id: d
+        for d in uow.session.query(Design).filter(Design.scan_id.in_(ids)).all()
+    }
+    return [
+        {
+            "id": str(s.id),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "real_width_mm": (s.params or {}).get("real_width_mm"),
+            "gcode": bool((s.params or {}).get("gcode")),
+            "design": (
+                {
+                    "id": str(made[s.id].id),
+                    "sku": made[s.id].sku,
+                    "name": made[s.id].name,
+                }
+                if s.id in made
+                else None
+            ),
+        }
+        for s in scans
+        if s.id in with_picture
+    ]
 
 
 def _check_all(uow: AbstractUnitOfWork, item: Item) -> None:
@@ -257,6 +307,8 @@ def get_definition(
             CarvingOut.model_validate(c).model_dump(mode="json")
             for c in _carvings(uow, item_id)
         ],
+        # finished flat-carving scans of this piece, and the design each already became
+        "scans": _design_scans(uow, item_id),
         # the CNC designs an editor may carve (code and name only; designs stay owner/artisan)
         "designs": [
             {
@@ -420,6 +472,38 @@ def replace_carvings(
         uow.commit()
     uow.session.expire_all()
     return _solved(uow, item)
+
+
+@router.post("/scans/{scan_id}/design")
+def design_from_scan(
+    scan_id: UUID,
+    body: DesignFromScanIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    On request, from the editor: make a furniture design from a finished flat-carving
+    scan of a piece. Designs are owner and artisan only, so here that means the owner.
+    """
+    if user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Only the owner can make a design from a scan"
+        )
+    job = uow.session.get(ScanJob, scan_id)
+    if not job or not job.item_id:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    design, created = design_service.design_from_scan(uow, job, user, body.name, store)
+    return {
+        "created": created,
+        "design": {
+            "id": str(design.id),
+            "sku": design.sku,
+            "name": design.name,
+            "category": design.category,
+            "has_image": bool(design.image_key),
+        },
+    }
 
 
 @router.put("/items/{item_id}/presets")

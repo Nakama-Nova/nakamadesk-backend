@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 
+from app.api import scans as scans_api
 from app.api.restorations import FileOut
 from app.db.deps import RESTORATION_ROLES, check_role, get_uow
 from app.models.design import (
@@ -27,6 +28,7 @@ from app.models.design import (
 from app.models.furniture_carving import FurnitureCarving
 from app.models.furniture_part import FurniturePart
 from app.models.item import Item
+from app.models.product_asset import ProductAsset
 from app.models.restoration import RestorationFile, RestorationProject
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -82,6 +84,7 @@ class DesignOut(BaseModel):
     status: str
     category: str
     has_image: bool
+    scan_id: Optional[UUID]  # the flat-carving scan it was made from, if any
     restoration_id: Optional[UUID]
     restoration_title: Optional[str]
     product_count: int
@@ -98,11 +101,34 @@ class FurnitureUse(BaseModel):
     face: str
 
 
+class ScanFileOut(BaseModel):
+    """A result of the scan a design was made from (G-code, 3D files, depth picture)."""
+
+    id: UUID
+    kind: str
+    content_type: str
+    bytes: int
+    alt: Optional[str]
+    download_path: (
+        str  # GET it with the same sign-in: it answers with a short-lived link
+    )
+
+
+class FromScan(BaseModel):
+    scan_id: UUID
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
+class FromScanOut(DesignOut):
+    created: bool  # False when the scan (or its picture) already was a design
+
+
 class DesignDetail(DesignOut):
     restoration: Optional[RestorationRef]
     products: List[ProductRef]
     files: List[FileOut]  # the 3D files and G-code of the restoration it came from
     furniture: List[FurnitureUse]  # the furniture parts it is carved on (3D Lab)
+    scan_files: List[ScanFileOut]  # files of the scan it was made from
 
 
 class ProductLink(BaseModel):
@@ -149,6 +175,7 @@ def _out(uow: AbstractUnitOfWork, d: Design) -> dict:
         "status": d.status,
         "category": d.category,
         "has_image": bool(d.image_key),
+        "scan_id": d.scan_id,
         "restoration_id": d.restoration_id,
         "restoration_title": source.title if source else None,
         "product_count": count,
@@ -165,6 +192,28 @@ def _products(uow: AbstractUnitOfWork, design_id: UUID) -> List[Item]:
         .order_by(Item.sku)
         .all()
     )
+
+
+def _scan_files(uow: AbstractUnitOfWork, design: Design) -> List[ScanFileOut]:
+    if not design.scan_id:
+        return []
+    rows = (
+        uow.session.query(ProductAsset)
+        .filter(ProductAsset.scan_id == design.scan_id)
+        .order_by(ProductAsset.sort, ProductAsset.created_at)
+        .all()
+    )
+    return [
+        ScanFileOut(
+            id=a.id,
+            kind=a.kind,
+            content_type=a.content_type,
+            bytes=a.bytes,
+            alt=a.alt,
+            download_path=f"/items/{a.item_id}/assets/{a.id}/download",
+        )
+        for a in rows
+    ]
 
 
 def _furniture_use(uow: AbstractUnitOfWork, design_id: UUID) -> List[FurnitureUse]:
@@ -292,6 +341,7 @@ def get_design(
         "products": [_ref(i) for i in _products(uow, design.id)],
         "files": [FileOut.model_validate(f, from_attributes=True) for f in files],
         "furniture": _furniture_use(uow, design.id),
+        "scan_files": _scan_files(uow, design),
     }
 
 
@@ -314,6 +364,26 @@ def update_design(
     uow.commit()
     uow.refresh(design)
     return _out(uow, design)
+
+
+@router.post("/from-scan", response_model=FromScanOut)
+def create_design_from_scan(
+    req: FromScan,
+    user: User = Depends(check_role(RESTORATION_ROLES)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    On request: make a furniture design from a finished flat-carving scan. The scan's
+    depth picture becomes the design's picture, and its G-code and 3D files stay linked
+    (GET /designs/{id} lists them). Asking again for the same scan, or for a scan whose
+    picture is already a design, returns that design with created = false.
+    """
+    job = scans_api._get(uow, req.scan_id)
+    scans_api._visible(job, user)
+    design, created = design_service.design_from_scan(uow, job, user, req.name, store)
+    uow.refresh(design)
+    return {**_out(uow, design), "created": created}
 
 
 @router.put("/{design_id}/image", response_model=DesignOut)
