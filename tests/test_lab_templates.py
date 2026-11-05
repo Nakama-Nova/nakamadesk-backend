@@ -21,6 +21,9 @@ EXPECTED = {  # template id -> number of parts
     "chair-dining": 12,
     "wardrobe-2-door": 12,
     "door-panelled": 7,
+    "door-traditional-frame": 17,
+    "tv-unit-2-door": 11,
+    "bookshelf-open": 9,
 }
 CASES = [
     (t["id"], s["name"])
@@ -192,6 +195,85 @@ def test_the_wardrobe_has_two_doors_that_cover_the_front_and_a_rail_and_shelves(
     assert "Shelf (lower)" in parts and "Shelf (upper)" in parts
     stock = {i["name"]: i["qty"] for g in out["hardware"] for i in g["items"]}
     assert stock["Door hinge 100 mm"] == 6 and stock["Door handle"] == 2
+
+
+def test_the_table_template_also_covers_coffee_and_side_tables(client, people):
+    for name, height in (("Coffee table", 450), ("Side table", 550)):
+        parts, out, s = solved_template(client, people, "table-dining", name)
+        assert (
+            parts["Table top"]["pos"]["y"] + parts["Table top"]["t"] == height == s["h"]
+        )
+
+
+def test_the_traditional_door_set_the_leaf_sits_in_the_frame_and_the_panels_meet_the_rails(
+    client, people
+):
+    parts, out, s = solved_template(client, people, "door-traditional-frame")
+    L, H = s["l"], s["h"]
+    top_of = lambda p: p["pos"]["y"] + p["size"]["y"]  # noqa: E731
+    right_of = lambda p: p["pos"]["x"] + p["size"]["x"]  # noqa: E731
+    assert len(parts) == 17 and parts["Crown"]["pos"]["y"] + parts["Crown"]["t"] == H
+    left, right = parts["Door stile (left)"], parts["Door stile (right)"]
+    assert (
+        left["pos"]["x"] == parts["Frame jamb (left)"]["w"] == 300
+    )  # the leaf starts where the jamb ends
+    assert right_of(right) == L - 300  # and ends where the right jamb begins
+    leaf_top = top_of(left)
+    assert (
+        leaf_top == H - 700 and parts["Carved frieze"]["pos"]["y"] == leaf_top
+    )  # the frieze sits on the leaf
+    assert top_of(parts["Door bottom rail"]) == parts["Lower panel (left)"]["pos"]["y"]
+    assert top_of(parts["Lower panel (left)"]) == parts["Door middle rail"]["pos"]["y"]
+    assert top_of(parts["Door middle rail"]) == parts["Upper panel (left)"]["pos"]["y"]
+    assert top_of(parts["Upper panel (left)"]) == parts["Door top rail"]["pos"]["y"]
+    assert (
+        right_of(parts["Upper panel (left)"])
+        == parts["Door muntin (upper)"]["pos"]["x"]
+    )  # panels meet the muntin
+    assert (
+        parts["Door muntin (upper)"]["pos"]["x"] + 80
+        == parts["Upper panel (right)"]["pos"]["x"]
+    )
+    assert right_of(parts["Upper panel (right)"]) == right["pos"]["x"]
+    stock = {i["name"]: i["qty"] for g in out["hardware"] for i in g["items"]}
+    assert stock["Brass stud (large)"] == 9 and stock["Heavy door hinge 150 mm"] == 4
+
+
+def test_the_tv_unit_has_an_open_middle_bay_between_two_doors(client, people):
+    parts, out, s = solved_template(client, people, "tv-unit-2-door")
+    L = s["l"]
+    left, right = parts["Door (left)"], parts["Door (right)"]
+    assert (
+        left["w"] == right["w"] and left["pos"]["x"] + left["w"] < right["pos"]["x"]
+    )  # a gap between the doors
+    assert right["pos"]["x"] + right["w"] <= L and left["pos"]["z"] == 0
+    shelf = parts["Shelf (middle bay)"]
+    d1, d2 = parts["Divider (left)"], parts["Divider (right)"]
+    assert (
+        shelf["pos"]["x"] == d1["pos"]["x"] + d1["size"]["x"]
+    )  # the shelf fits between the dividers
+    assert shelf["pos"]["x"] + shelf["size"]["x"] == d2["pos"]["x"]
+    assert len(parts) == 11
+
+
+def test_the_bookshelf_shelves_are_evenly_spaced(client, people):
+    for size_name in ("Low", "Standard", "Tall and wide"):
+        parts, out, s = solved_template(client, people, "bookshelf-open", size_name)
+        ys = [
+            parts[n]["pos"]["y"]
+            for n in ("Shelf (lowest)", "Shelf (middle)", "Shelf (highest)")
+        ]
+        bottom, top = parts["Bottom shelf"], parts["Top"]
+        gaps = [
+            ys[0] - (bottom["pos"]["y"] + bottom["t"]),
+            ys[1] - ys[0] - 22,
+            ys[2] - ys[1] - 22,
+            top["pos"]["y"] - ys[2] - 22,
+        ]
+        assert max(gaps) - min(gaps) < 0.1 and min(gaps) > 100, (
+            size_name,
+            gaps,
+        )  # four equal openings
 
 
 def test_the_panelled_door_frame_and_panels_meet_exactly(client, people):

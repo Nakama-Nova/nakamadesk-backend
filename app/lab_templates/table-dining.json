@@ -1,7 +1,7 @@
 {
  "id": "table-dining",
- "name": "Dining table (rectangular, four legs)",
- "description": "A rectangular table: a 40 mm top over four square 80 mm legs joined by 25 mm aprons. L is the length, W the depth, H the height (the top's upper face). The legs sit 60 mm in from the edges. Thicknesses are standard estimates: check them with the achari.",
+ "name": "Table (rectangular, four legs): dining, coffee or side",
+ "description": "A rectangular table (dining, coffee or side; change the size): a 40 mm top over four square 80 mm legs joined by 25 mm aprons. L is the length, W the depth, H the height (the top's upper face). The legs sit 60 mm in from the edges. Thicknesses are standard estimates: check them with the achari.",
  "size_hint": {
   "l": 1500,
   "w": 900,
@@ -31,6 +31,18 @@
    "l": 2100,
    "w": 1000,
    "h": 760
+  },
+  {
+   "name": "Coffee table",
+   "l": 1000,
+   "w": 600,
+   "h": 450
+  },
+  {
+   "name": "Side table",
+   "l": 500,
+   "w": 500,
+   "h": 550
   }
  ],
  "carve": [

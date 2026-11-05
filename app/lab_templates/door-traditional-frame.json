@@ -1,0 +1,323 @@
+{
+ "id": "door-traditional-frame",
+ "name": "Traditional carved door with frame (stepped crown, stud rails, arched panels)",
+ "description": "A Chettinad-style door set: two carved jambs 300 mm wide, a threshold, a carved cornice, a stepped crown over the middle (for the temple tower and peacocks), a carved frieze above the door, and the door leaf with two stiles, three stud rails, a centre muntin and four panels (two arched ones above, two plain ones below). L is the overall width of the frame, W its depth, H the overall height including the crown; the leaf is L - 600 wide and H - 800 high. Thicknesses and positions are estimates from a photo: check them with the achari.",
+ "size_hint": {
+  "l": 1500,
+  "w": 150,
+  "h": 2600
+ },
+ "typical_sizes": [
+  {
+   "name": "Standard",
+   "l": 1500,
+   "w": 150,
+   "h": 2600
+  },
+  {
+   "name": "Narrow",
+   "l": 1300,
+   "w": 140,
+   "h": 2400
+  },
+  {
+   "name": "Grand",
+   "l": 1700,
+   "w": 170,
+   "h": 2800
+  }
+ ],
+ "carve": [
+  "Jambs, cornice, frieze and crown: face 'front' (and 'back' if both sides are carved)",
+  "Upper panels (the arches): face 'front', with an outline so the arch keeps its shape",
+  "Deep sculpture (the tower, the peacocks, stacked mouldings) is better as its own scanned piece than as a flat picture"
+ ],
+ "parts": [
+  {
+   "name": "Frame jamb (left)",
+   "l_expr": "H - 400",
+   "w_expr": "300",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Carved bands. Tenons into the threshold and the cornice."
+  },
+  {
+   "name": "Frame jamb (right)",
+   "l_expr": "H - 400",
+   "w_expr": "300",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "L - 300",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Carved bands. Tenons into the threshold and the cornice."
+  },
+  {
+   "name": "Threshold",
+   "l_expr": "L - 600",
+   "w_expr": "W",
+   "t_expr": "100",
+   "axis": "x",
+   "x_expr": "300",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both jambs."
+  },
+  {
+   "name": "Cornice beam",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "150",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "H - 400",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Carved leaf band. Sits on both jambs."
+  },
+  {
+   "name": "Crown",
+   "l_expr": "L / 2",
+   "w_expr": "W",
+   "t_expr": "250",
+   "axis": "x",
+   "x_expr": "L / 4",
+   "y_expr": "H - 250",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "dowel",
+   "joinery_note": "Stepped crown. Carved temple tower and peacocks."
+  },
+  {
+   "name": "Carved frieze",
+   "l_expr": "L - 600",
+   "w_expr": "60",
+   "t_expr": "300",
+   "axis": "x",
+   "x_expr": "300",
+   "y_expr": "H - 700",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 2,
+   "joint_type": "dowel",
+   "joinery_note": "Carved panel between the jambs, above the door."
+  },
+  {
+   "name": "Door stile (left)",
+   "l_expr": "H - 800",
+   "w_expr": "90",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "300",
+   "y_expr": "100",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the three rails."
+  },
+  {
+   "name": "Door stile (right)",
+   "l_expr": "H - 800",
+   "w_expr": "90",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L - 390",
+   "y_expr": "100",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the three rails."
+  },
+  {
+   "name": "Door top rail",
+   "l_expr": "L - 780",
+   "w_expr": "60",
+   "t_expr": "170",
+   "axis": "x",
+   "x_expr": "390",
+   "y_expr": "H - 870",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Stud rail. Tenons into both stiles."
+  },
+  {
+   "name": "Door middle rail",
+   "l_expr": "L - 780",
+   "w_expr": "60",
+   "t_expr": "200",
+   "axis": "x",
+   "x_expr": "390",
+   "y_expr": "100 + (H - 800) * 0.42",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Stud rail. Tenons into both stiles."
+  },
+  {
+   "name": "Door bottom rail",
+   "l_expr": "L - 780",
+   "w_expr": "60",
+   "t_expr": "230",
+   "axis": "x",
+   "x_expr": "390",
+   "y_expr": "100",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Stud rail. Tenons into both stiles."
+  },
+  {
+   "name": "Door muntin (upper)",
+   "l_expr": "(H - 800) * 0.58 - 370",
+   "w_expr": "80",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L / 2 - 40",
+   "y_expr": "300 + (H - 800) * 0.42",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Between the top and middle rails."
+  },
+  {
+   "name": "Door muntin (lower)",
+   "l_expr": "(H - 800) * 0.42 - 230",
+   "w_expr": "80",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L / 2 - 40",
+   "y_expr": "330",
+   "z_expr": "(W - 60) / 2",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Between the middle and bottom rails."
+  },
+  {
+   "name": "Upper panel (left)",
+   "l_expr": "(H - 800) * 0.58 - 370",
+   "w_expr": "(L - 860) / 2",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "390",
+   "y_expr": "300 + (H - 800) * 0.42",
+   "z_expr": "(W - 25) / 2",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Arched. Floats in the groove of the frame."
+  },
+  {
+   "name": "Upper panel (right)",
+   "l_expr": "(H - 800) * 0.58 - 370",
+   "w_expr": "(L - 860) / 2",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "L / 2 + 40",
+   "y_expr": "300 + (H - 800) * 0.42",
+   "z_expr": "(W - 25) / 2",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Arched. Floats in the groove of the frame."
+  },
+  {
+   "name": "Lower panel (left)",
+   "l_expr": "(H - 800) * 0.42 - 230",
+   "w_expr": "(L - 860) / 2",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "390",
+   "y_expr": "330",
+   "z_expr": "(W - 25) / 2",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Plain raised panel. Floats in the groove."
+  },
+  {
+   "name": "Lower panel (right)",
+   "l_expr": "(H - 800) * 0.42 - 230",
+   "w_expr": "(L - 860) / 2",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "L / 2 + 40",
+   "y_expr": "330",
+   "z_expr": "(W - 25) / 2",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Plain raised panel. Floats in the groove."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Brass stud (large)",
+   "qty_expr": "9",
+   "assembly_step": 3,
+   "note": "Three on each stud rail"
+  },
+  {
+   "kind": "other",
+   "name": "Brass ring handle or knocker",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Heavy door hinge 150 mm",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Door bolt",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 5 x 50 mm",
+   "qty_expr": "40",
+   "assembly_step": 3,
+   "note": "Hinges and fittings"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 12 x 100 mm",
+   "qty_expr": "24",
+   "assembly_step": 1,
+   "note": "Frame and leaf joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "3",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1200 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Leaf glue-up"
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 2400 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Frame glue-up"
+  }
+ ]
+}
