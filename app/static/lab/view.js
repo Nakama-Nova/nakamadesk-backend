@@ -426,6 +426,7 @@ async function load(params = {}) {
   data = body;
   $("title").textContent = data.item.name;
   document.title = `${data.item.name} · 3D Lab`;
+  $("editParts").hidden = !data.can_edit;
   renderPresets();
   renderCutting();
   renderHardware();
@@ -439,6 +440,24 @@ async function load(params = {}) {
   buildParts(data.parts);
   select(null);
 }
+
+// owner/manager: a fresh 10-minute link to the editor (parts, templates, hardware, carvings)
+$("editParts").addEventListener("click", async () => {
+  $("sizeError").textContent = "";
+  try {
+    const res = await fetch("/lab/links", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Lab-Client": "1" },
+      body: JSON.stringify({ item_id: itemId, mode: "edit" }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Could not open the editor.");
+    location.href = body.path;
+  } catch (e) {
+    $("sizeError").textContent = e.message || "Cannot reach the shop server.";
+  }
+});
 
 $("custom").addEventListener("submit", (e) => {
   e.preventDefault();
