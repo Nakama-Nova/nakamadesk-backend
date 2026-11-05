@@ -1,0 +1,186 @@
+{
+ "id": "jhula-swing",
+ "name": "Jhula (wooden swing seat)",
+ "description": "A hanging swing seat: two carved side panels, a 35 mm seat board at a quarter of the height on a front and a rear rail, a carved back panel and a crest. It hangs on chains from eye bolts through the side panels. L is the width, W the depth, H the overall height. The chains and hooks are hardware lines. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 1500,
+  "w": 600,
+  "h": 1000
+ },
+ "typical_sizes": [
+  {
+   "name": "2 seater",
+   "l": 1200,
+   "w": 550,
+   "h": 950
+  },
+  {
+   "name": "3 seater",
+   "l": 1500,
+   "w": 600,
+   "h": 1000
+  },
+  {
+   "name": "4 seater",
+   "l": 1800,
+   "w": 650,
+   "h": 1050
+  }
+ ],
+ "carve": [
+  "Side panels: faces 'left' and 'right'",
+  "Back panel: face 'front' (it faces the sitter)",
+  "Crest: face 'front'"
+ ],
+ "parts": [
+  {
+   "name": "Side panel (left)",
+   "l_expr": "H * 0.6",
+   "w_expr": "50",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carved side. Eye bolts through it carry the chains."
+  },
+  {
+   "name": "Side panel (right)",
+   "l_expr": "H * 0.6",
+   "w_expr": "50",
+   "t_expr": "W",
+   "axis": "y",
+   "x_expr": "L - 50",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carved side. Eye bolts through it carry the chains."
+  },
+  {
+   "name": "Front rail",
+   "l_expr": "L - 100",
+   "w_expr": "35",
+   "t_expr": "100",
+   "axis": "x",
+   "x_expr": "50",
+   "y_expr": "H * 0.25 - 100",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both side panels."
+  },
+  {
+   "name": "Rear rail",
+   "l_expr": "L - 100",
+   "w_expr": "35",
+   "t_expr": "100",
+   "axis": "x",
+   "x_expr": "50",
+   "y_expr": "H * 0.25 - 100",
+   "z_expr": "W - 75",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both side panels."
+  },
+  {
+   "name": "Seat board",
+   "l_expr": "L - 100",
+   "w_expr": "W - 40",
+   "t_expr": "35",
+   "axis": "x",
+   "x_expr": "50",
+   "y_expr": "H * 0.25",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on the rails. Boards or slats."
+  },
+  {
+   "name": "Back panel",
+   "l_expr": "H * 0.75 - 155",
+   "w_expr": "L - 100",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "50",
+   "y_expr": "H * 0.25 + 35",
+   "z_expr": "W - 40",
+   "assembly_step": 2,
+   "joint_type": "dowel",
+   "joinery_note": "Carved. Doweled into the side panels and the crest."
+  },
+  {
+   "name": "Back crest",
+   "l_expr": "L - 100",
+   "w_expr": "60",
+   "t_expr": "120",
+   "axis": "x",
+   "x_expr": "50",
+   "y_expr": "H - 120",
+   "z_expr": "W - 60",
+   "assembly_step": 2,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Carved. Sits on the back panel."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Swing chain set (four chains)",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": "Rated for the weight of the seat and the people"
+  },
+  {
+   "kind": "bolt",
+   "name": "Eye bolt 12 mm",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": "Through the side panels, with washers and nuts"
+  },
+  {
+   "kind": "bolt",
+   "name": "Heavy ceiling hook 16 mm",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": "Into a beam, not into plaster"
+  },
+  {
+   "kind": "other",
+   "name": "Chain ring or S-hook",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 5 x 50 mm",
+   "qty_expr": "24",
+   "assembly_step": 2,
+   "note": null
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 10 x 60 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Panels and rails"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1600 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Frame glue-up"
+  }
+ ]
+}

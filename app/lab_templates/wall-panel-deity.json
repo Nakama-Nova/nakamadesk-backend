@@ -1,0 +1,163 @@
+{
+ "id": "wall-panel-deity",
+ "name": "Wall panel for a carved deity (framed)",
+ "description": "A wall-hanging panel: a 25 mm back board, a 70 mm frame on four sides and a carved insert filling the frame. L is the width, W the total thickness, H the height. The carved face is the front. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 600,
+  "w": 60,
+  "h": 900
+ },
+ "typical_sizes": [
+  {
+   "name": "Small",
+   "l": 450,
+   "w": 60,
+   "h": 600
+  },
+  {
+   "name": "Standard",
+   "l": 600,
+   "w": 60,
+   "h": 900
+  },
+  {
+   "name": "Large",
+   "l": 900,
+   "w": 70,
+   "h": 1200
+  },
+  {
+   "name": "Big",
+   "l": 1200,
+   "w": 80,
+   "h": 1800
+  }
+ ],
+ "carve": [
+  "Carved insert: face 'front' (one design centred on it: the deity, made from a photo of the real carving)"
+ ],
+ "parts": [
+  {
+   "name": "Back board",
+   "l_expr": "H",
+   "w_expr": "L",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "W - 25",
+   "assembly_step": 1,
+   "joint_type": "other",
+   "joinery_note": "Screwed and glued to the frame from behind."
+  },
+  {
+   "name": "Frame (left)",
+   "l_expr": "H",
+   "w_expr": "70",
+   "t_expr": "W - 25",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mitred or tenoned at the corners."
+  },
+  {
+   "name": "Frame (right)",
+   "l_expr": "H",
+   "w_expr": "70",
+   "t_expr": "W - 25",
+   "axis": "y",
+   "x_expr": "L - 70",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mitred or tenoned at the corners."
+  },
+  {
+   "name": "Frame (top)",
+   "l_expr": "L - 140",
+   "w_expr": "W - 25",
+   "t_expr": "70",
+   "axis": "x",
+   "x_expr": "70",
+   "y_expr": "H - 70",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Between the two sides."
+  },
+  {
+   "name": "Frame (bottom)",
+   "l_expr": "L - 140",
+   "w_expr": "W - 25",
+   "t_expr": "70",
+   "axis": "x",
+   "x_expr": "70",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Between the two sides."
+  },
+  {
+   "name": "Carved insert",
+   "l_expr": "H - 140",
+   "w_expr": "L - 140",
+   "t_expr": "W - 25",
+   "axis": "y",
+   "x_expr": "70",
+   "y_expr": "70",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "The carved deity. Glued into the frame."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "bracket",
+   "name": "Wall hanging bracket",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wall screw and plug",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 30 mm",
+   "qty_expr": "12",
+   "assembly_step": 2,
+   "note": "Back board"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "8",
+   "assembly_step": 1,
+   "note": "Frame corners"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1000 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Frame glue-up"
+  }
+ ]
+}

@@ -454,12 +454,33 @@ $("cpUse").addEventListener("click", () => {
   startFrom(`/lab/items/${itemId}/copy-parts`, { source_item_id: sel.value, hardware: $("cpHw").checked, carvings: $("cpCv").checked }, `a copy of ${sel.selectedOptions[0].textContent}`);
 });
 
-async function loadStarts() {
+// The product's category has a template that fits: pick it, say so, and offer its typical size if the piece has none.
+function suggest(sg, hasSize) {
+  if (!sg) return;
+  $("tplPick").value = sg.template;
+  showTemplate();
+  const note = document.createElement("div");
+  note.textContent = `Suggested for the category "${sg.category}"${sg.size ? `, typical size: ${sg.size.name} ${sg.size.l} × ${sg.size.w} × ${sg.size.h} mm` : ""}.`;
+  note.style.fontWeight = "600";
+  $("tplInfo").prepend(note);
+  if (!hasSize && sg.size) {
+    const b = $("tplSize");
+    b.hidden = false;
+    b.onclick = () => {
+      const tr = $("sizes").querySelector('tr[data-key="dim"]');
+      for (const i of tr.querySelectorAll("input")) i.value = sg.size[i.dataset.axis];
+      $("startOk").textContent = "Typical size filled in. Press Save sizes, then use the template.";
+    };
+  }
+}
+
+async function loadStarts(sg, hasSize) {
   try {
     templates = await call("GET", "/lab/templates");
     const pick = $("tplPick");
     pick.replaceChildren(...templates.map((t) => Object.assign(document.createElement("option"), { value: t.id, textContent: t.name })));
     showTemplate();
+    suggest(sg, hasSize);
     const pieces = (await call("GET", "/lab/items")).filter((p) => p.id !== itemId && p.parts > 0);
     const cp = $("cpPick");
     const none = Object.assign(document.createElement("option"), { value: "", textContent: pieces.length ? "choose a piece" : "no other piece has parts yet" });
@@ -750,7 +771,6 @@ $("saveCarvings").addEventListener("click", async () => {
 
 async function init() {
   buildCornerTable();
-  loadStarts();
   $("viewLink").href = `/lab/view/${itemId}`;
   sizeInputs();
   try {
@@ -759,6 +779,7 @@ async function init() {
     document.title = `Edit ${def.item.name} · 3D Lab`;
     $("isFurniture").checked = def.item.is_furniture;
     fillSizes(def);
+    loadStarts(def.suggestion, !!def.dimensions_mm);
     const body = $("parts").tBodies[0];
     def.parts.forEach((p) => body.append(addRow(p)));
     (def.hardware || []).forEach((h) => $("hardware").tBodies[0].append(addHwRow(h)));

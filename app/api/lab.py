@@ -39,6 +39,7 @@ from app.db.deps import (
     get_lab_user,
     get_uow,
 )
+from app.models.category import Category
 from app.models.design import Design
 from app.models.furniture_carving import FurnitureCarving
 from app.models.furniture_hardware import FurnitureHardware
@@ -358,12 +359,16 @@ def get_definition(
 ):
     """The raw formulas, for the editor page."""
     item = _item(uow, item_id)
+    category = uow.session.get(Category, item.category_id) if item.category_id else None
     return {
         "item": {
             "id": str(item.id),
             "name": item.name,
             "is_furniture": item.is_furniture,
         },
+        # the shop's category of this product and the template that fits it (or None)
+        "category": category.name if category else None,
+        "suggestion": lab_templates.suggestion(category.name if category else None),
         "dimensions_mm": item.dimensions_mm,
         "presets": lab_service.presets(item),
         "parts": [

@@ -1,0 +1,66 @@
+{
+ "Chest": {
+  "template": "chest-box",
+  "size": "Standard"
+ },
+ "Dining Table": {
+  "template": "table-dining",
+  "size": "6 seater"
+ },
+ "Diwana Set": {
+  "template": "diwan-couch",
+  "size": "3 seater"
+ },
+ "Dressing Table": {
+  "template": "dressing-table",
+  "size": "Standard"
+ },
+ "King Size Bed": {
+  "template": "bed-crown-headboard",
+  "size": "King"
+ },
+ "Queen Size bed": {
+  "template": "bed-square-posts",
+  "size": "Queen"
+ },
+ "Simha Dwaram": {
+  "template": "door-traditional-frame",
+  "size": "Standard"
+ },
+ "Single Deity": {
+  "template": "wall-panel-deity",
+  "size": "Standard"
+ },
+ "Stools": {
+  "template": "stool-4-leg",
+  "size": "Standard"
+ },
+ "Study Tables": {
+  "template": "table-dining",
+  "size": "Study table"
+ },
+ "Teapoi": {
+  "template": "table-dining",
+  "size": "Teapoy"
+ },
+ "Wooden Chair": {
+  "template": "chair-dining",
+  "size": "Standard"
+ },
+ "Wooden Jhula": {
+  "template": "jhula-swing",
+  "size": "3 seater"
+ },
+ "Wooden pillars": {
+  "template": "pillar-carved",
+  "size": "Standard"
+ },
+ "Wooden Shelves": {
+  "template": "bookshelf-open",
+  "size": "Standard"
+ },
+ "Wood Pannel": {
+  "template": "wall-panel-deity",
+  "size": "Standard"
+ }
+}

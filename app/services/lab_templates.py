@@ -24,6 +24,10 @@ def all_templates() -> Dict[str, Dict[str, Any]]:
     """Every template, checked against the same schemas the editor's saves use."""
     out: Dict[str, Dict[str, Any]] = {}
     for path in sorted(FOLDER.glob("*.json")):
+        if path.name.startswith(
+            "_"
+        ):  # _categories.json is the category map, not a template
+            continue
         t = json.loads(path.read_text(encoding="utf-8"))
         t["parts"] = [PartIn(**p).model_dump(exclude={"id"}) for p in t["parts"]]
         t["hardware"] = [HardwareIn(**h).model_dump() for h in t.get("hardware", [])]
@@ -69,3 +73,26 @@ def build(
         else []
     )
     return parts, hardware
+
+
+@lru_cache(maxsize=1)
+def category_map() -> Dict[str, Dict[str, str]]:
+    """The shop's category names -> the template that fits and the typical size to start from."""
+    raw = json.loads((FOLDER / "_categories.json").read_text(encoding="utf-8"))
+    return {_key(name): {"name": name, **v} for name, v in raw.items()}
+
+
+def _key(name: str) -> str:
+    return " ".join((name or "").lower().split())
+
+
+def suggestion(category_name: Optional[str]) -> Optional[Dict[str, Any]]:
+    """The template and typical size that fit a category (matched ignoring capitals and spacing), or None."""
+    hit = category_map().get(_key(category_name or ""))
+    template = all_templates().get(hit["template"]) if hit else None
+    if not hit or template is None:
+        return None
+    sized = next(
+        (s for s in template.get("typical_sizes", []) if s["name"] == hit["size"]), None
+    )
+    return {"category": hit["name"], "template": template["id"], "size": sized}

@@ -1,0 +1,277 @@
+{
+ "id": "dressing-table",
+ "name": "Dressing table (two drawers, mirror frame)",
+ "description": "A dressing table: a 30 mm top at 750 mm on four 60 mm legs with aprons and two drawer fronts, and a mirror frame (two uprights and two rails) standing on the top at the back. L is the width, W the depth, H the overall height including the mirror frame. The mirror glass is a hardware line. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 900,
+  "w": 450,
+  "h": 1500
+ },
+ "typical_sizes": [
+  {
+   "name": "Small",
+   "l": 750,
+   "w": 420,
+   "h": 1400
+  },
+  {
+   "name": "Standard",
+   "l": 900,
+   "w": 450,
+   "h": 1500
+  },
+  {
+   "name": "Wide",
+   "l": 1100,
+   "w": 480,
+   "h": 1600
+  }
+ ],
+ "carve": [
+  "Drawer fronts: face 'front'",
+  "Mirror frame uprights and top rail: face 'front'",
+  "Top: face 'top'"
+ ],
+ "parts": [
+  {
+   "name": "Top",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "720",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Fixed to the aprons from below."
+  },
+  {
+   "name": "Leg (front left)",
+   "l_expr": "720",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "20",
+   "y_expr": "0",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons."
+  },
+  {
+   "name": "Leg (front right)",
+   "l_expr": "720",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L - 80",
+   "y_expr": "0",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons."
+  },
+  {
+   "name": "Leg (back left)",
+   "l_expr": "720",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "20",
+   "y_expr": "0",
+   "z_expr": "W - 80",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons."
+  },
+  {
+   "name": "Leg (back right)",
+   "l_expr": "720",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L - 80",
+   "y_expr": "0",
+   "z_expr": "W - 80",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons."
+  },
+  {
+   "name": "Back apron",
+   "l_expr": "L - 160",
+   "w_expr": "25",
+   "t_expr": "110",
+   "axis": "x",
+   "x_expr": "80",
+   "y_expr": "610",
+   "z_expr": "W - 45",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both back legs."
+  },
+  {
+   "name": "Side apron (left)",
+   "l_expr": "W - 160",
+   "w_expr": "25",
+   "t_expr": "110",
+   "axis": "z",
+   "x_expr": "20",
+   "y_expr": "610",
+   "z_expr": "80",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the left legs."
+  },
+  {
+   "name": "Side apron (right)",
+   "l_expr": "W - 160",
+   "w_expr": "25",
+   "t_expr": "110",
+   "axis": "z",
+   "x_expr": "L - 45",
+   "y_expr": "610",
+   "z_expr": "80",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the right legs."
+  },
+  {
+   "name": "Drawer front (left)",
+   "l_expr": "(L - 160) / 2 - 1.5",
+   "w_expr": "20",
+   "t_expr": "120",
+   "axis": "x",
+   "x_expr": "80",
+   "y_expr": "600",
+   "z_expr": "20",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Carved front. The drawer box runs on side runners."
+  },
+  {
+   "name": "Drawer front (right)",
+   "l_expr": "(L - 160) / 2 - 1.5",
+   "w_expr": "20",
+   "t_expr": "120",
+   "axis": "x",
+   "x_expr": "80 + (L - 160) / 2 + 1.5",
+   "y_expr": "600",
+   "z_expr": "20",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Carved front. The drawer box runs on side runners."
+  },
+  {
+   "name": "Mirror upright (left)",
+   "l_expr": "H - 750",
+   "w_expr": "60",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "60",
+   "y_expr": "750",
+   "z_expr": "W - 60",
+   "assembly_step": 3,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled into the top."
+  },
+  {
+   "name": "Mirror upright (right)",
+   "l_expr": "H - 750",
+   "w_expr": "60",
+   "t_expr": "40",
+   "axis": "y",
+   "x_expr": "L - 120",
+   "y_expr": "750",
+   "z_expr": "W - 60",
+   "assembly_step": 3,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled into the top."
+  },
+  {
+   "name": "Mirror top rail",
+   "l_expr": "L - 240",
+   "w_expr": "40",
+   "t_expr": "90",
+   "axis": "x",
+   "x_expr": "120",
+   "y_expr": "H - 90",
+   "z_expr": "W - 60",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Carved crest. Tenons into both uprights."
+  },
+  {
+   "name": "Mirror bottom rail",
+   "l_expr": "L - 240",
+   "w_expr": "40",
+   "t_expr": "90",
+   "axis": "x",
+   "x_expr": "120",
+   "y_expr": "750",
+   "z_expr": "W - 60",
+   "assembly_step": 3,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into both uprights."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Mirror glass",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": "Fits between the rails and uprights: (L - 240) wide, (H - 750 - 180) high"
+  },
+  {
+   "kind": "other",
+   "name": "Mirror clip",
+   "qty_expr": "6",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Drawer runner pair",
+   "qty_expr": "2",
+   "assembly_step": 2,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Drawer knob",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "20",
+   "assembly_step": 2,
+   "note": "Top, runners, clips"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Aprons and mirror frame"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1000 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Table glue-up"
+  }
+ ]
+}

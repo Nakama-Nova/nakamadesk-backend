@@ -1,6 +1,6 @@
 {
  "id": "table-dining",
- "name": "Table (rectangular, four legs): dining, coffee or side",
+ "name": "Table (rectangular, four legs): dining, study, coffee, side or teapoy",
  "description": "A rectangular table (dining, coffee or side; change the size): a 40 mm top over four square 80 mm legs joined by 25 mm aprons. L is the length, W the depth, H the height (the top's upper face). The legs sit 60 mm in from the edges. Thicknesses are standard estimates: check them with the achari.",
  "size_hint": {
   "l": 1500,
@@ -42,6 +42,18 @@
    "name": "Side table",
    "l": 500,
    "w": 500,
+   "h": 550
+  },
+  {
+   "name": "Study table",
+   "l": 1200,
+   "w": 600,
+   "h": 750
+  },
+  {
+   "name": "Teapoy",
+   "l": 450,
+   "w": 450,
    "h": 550
   }
  ],

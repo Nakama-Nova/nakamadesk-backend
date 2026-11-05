@@ -24,7 +24,22 @@ EXPECTED = {  # template id -> number of parts
     "door-traditional-frame": 17,
     "tv-unit-2-door": 11,
     "bookshelf-open": 9,
+    "chest-box": 10,
+    "stool-4-leg": 13,
+    "dressing-table": 14,
+    "diwan-couch": 15,
+    "wall-panel-deity": 6,
+    "jhula-swing": 7,
+    "pillar-carved": 5,
 }
+
+# the categories in the shop's desktop app (Stock, Categories) and what has no template
+SHOP_CATEGORIES = [
+    "Chest", "Dining Table", "Diwana Set", "Dressing Table", "King Size Bed", "Queen Size bed",
+    "Simha Dwaram", "Single Deity", "Stools", "Study Tables", "Teapoi", "Wooden Chair",
+    "Wooden Jhula", "Wooden pillars", "Wooden Shelves", "Wood Pannel",
+]  # fmt: skip
+NO_TEMPLATE = ["Raja Rani Dolls"]  # carved figures: a scanned sculpture, not parts
 CASES = [
     (t["id"], s["name"])
     for t in lab_templates.all_templates().values()
@@ -274,6 +289,188 @@ def test_the_bookshelf_shelves_are_evenly_spaced(client, people):
             size_name,
             gaps,
         )  # four equal openings
+
+
+def _category(db, name):
+    from app.models.category import Category
+
+    found = db.query(Category).filter(Category.name == name).first()
+    if not found:
+        found = Category(name=name)
+        db.add(found)
+        db.commit()
+        db.refresh(found)
+    return found
+
+
+def test_every_shop_category_has_a_template_and_a_typical_size_that_exist():
+    templates = lab_templates.all_templates()
+    for name in SHOP_CATEGORIES:
+        sg = lab_templates.suggestion(name)
+        assert sg is not None, name
+        assert (
+            sg["template"] in templates and sg["size"] is not None
+        ), name  # a size by that name exists
+        assert set(sg["size"]) == {"name", "l", "w", "h"}
+    for name in NO_TEMPLATE:
+        assert lab_templates.suggestion(name) is None, name
+    assert (
+        lab_templates.suggestion(None) is None
+        and lab_templates.suggestion("Spaceship") is None
+    )
+    # matched ignoring capitals and extra spaces
+    assert (
+        lab_templates.suggestion("  queen   SIZE bed ")["template"]
+        == "bed-square-posts"
+    )
+    assert (
+        lab_templates.suggestion("King Size Bed")["template"] == "bed-crown-headboard"
+    )
+    assert (
+        lab_templates.suggestion("Simha Dwaram")["template"] == "door-traditional-frame"
+    )
+    assert lab_templates.suggestion("Teapoi")["size"]["name"] == "Teapoy"
+
+
+def test_the_editor_is_told_which_template_fits_the_products_category(
+    client, people, db
+):
+    owner = people["owner"]["h"]
+    cat = _category(db, "King Size Bed")
+    item = client.post(
+        "/items/", headers=owner,
+        json={"sku": f"K-{uuid.uuid4().hex[:6]}", "name": "King", "is_furniture": True, "category_id": str(cat.id)},
+    ).json()  # fmt: skip
+    d = definition(client, people, item)
+    assert d["category"] == "King Size Bed"
+    sg = d["suggestion"]
+    assert sg["template"] == "bed-crown-headboard" and sg["size"] == {
+        "name": "King",
+        "l": 2185,
+        "w": 1980,
+        "h": 1300,
+    }
+    # no category, or one with no template (the dolls): no suggestion
+    plain = new_piece(client, people, size=SIZES["queen"])
+    assert definition(client, people, plain)["suggestion"] is None
+    dolls = client.post(
+        "/items/", headers=owner,
+        json={"sku": f"D-{uuid.uuid4().hex[:6]}", "name": "Dolls", "is_furniture": True, "category_id": str(_category(db, "Raja Rani Dolls").id)},
+    ).json()  # fmt: skip
+    d2 = definition(client, people, dolls)
+    assert d2["category"] == "Raja Rani Dolls" and d2["suggestion"] is None
+
+
+def top_of(p):
+    return p["pos"]["y"] + p["size"]["y"]
+
+
+def test_the_chest_lid_sits_on_the_walls_and_the_walls_on_the_bottom(client, people):
+    parts, out, s = solved_template(client, people, "chest-box")
+    assert top_of(parts["Lid"]) == s["h"] and parts["Lid"]["pos"]["y"] == top_of(
+        parts["Front wall"]
+    )
+    assert (
+        parts["Front wall"]["pos"]["y"] == top_of(parts["Bottom"])
+        and top_of(parts["Bottom"]) == 85
+    )
+    assert (
+        len([n for n in parts if n.startswith("Foot")]) == 4
+        and parts["Foot (front left)"]["l"] == 60
+    )
+
+
+def test_the_stool_seat_is_at_the_full_height_on_four_legs(client, people):
+    parts, out, s = solved_template(client, people, "stool-4-leg", "Tall")
+    assert top_of(parts["Seat"]) == s["h"] == 600
+    legs = [p for n, p in parts.items() if n.startswith("Leg")]
+    assert len(legs) == 4 and {p["l"] for p in legs} == {s["h"] - 30}
+
+
+def test_the_dressing_table_top_is_at_750_and_the_mirror_frame_reaches_the_full_height(
+    client, people
+):
+    parts, out, s = solved_template(client, people, "dressing-table", "Wide")
+    assert top_of(parts["Top"]) == 750 and top_of(parts["Mirror top rail"]) == s["h"]
+    assert (
+        parts["Mirror upright (left)"]["pos"]["y"] == 750
+        and top_of(parts["Mirror upright (left)"]) == s["h"]
+    )
+    glass = [
+        i for g in out["hardware"] for i in g["items"] if i["name"] == "Mirror glass"
+    ]
+    assert glass and glass[0]["qty"] == 1
+
+
+def test_the_diwan_seat_platform_back_and_arms_stack_correctly(client, people):
+    parts, out, s = solved_template(client, people, "diwan-couch", "4 seater")
+    assert (
+        parts["Seat platform"]["pos"]["y"] == 320
+        and top_of(parts["Back top rail"]) == s["h"]
+    )
+    assert (
+        top_of(parts["Back panel"]) == parts["Back top rail"]["pos"]["y"]
+    )  # the panel runs up to the top rail
+    assert (
+        parts["Back panel"]["pos"]["y"] == top_of(parts["Seat platform"]) == 350
+    )  # the back starts at the seat
+    assert (
+        top_of(parts["Arm panel (left)"]) == parts["Arm cap (left)"]["pos"]["y"] == 600
+    )  # the arm cap sits on the arm
+    assert (
+        parts["Front post (left)"]["l"] == 600
+        and parts["Back post (left)"]["l"] == s["h"]
+    )
+    stock = {i["name"] for g in out["hardware"] for i in g["items"]}
+    assert {"Seat cushion (foam)", "Back cushion (foam)", "Bolster"} <= stock
+
+
+def test_the_deity_panel_has_a_carved_insert_that_fills_the_frame_in_front_of_the_back_board(
+    client, people
+):
+    for name in ("Small", "Standard", "Big"):
+        parts, out, s = solved_template(client, people, "wall-panel-deity", name)
+        insert, back = parts["Carved insert"], parts["Back board"]
+        left, right = parts["Frame (left)"], parts["Frame (right)"]
+        assert (
+            insert["pos"]["x"] == left["w"]
+            and insert["pos"]["x"] + insert["w"] == right["pos"]["x"]
+        )
+        assert insert["pos"]["y"] == parts["Frame (bottom)"]["size"]["y"]
+        assert top_of(insert) == parts["Frame (top)"]["pos"]["y"]
+        assert (
+            insert["pos"]["z"] == 0
+            and insert["pos"]["z"] + insert["size"]["z"] == back["pos"]["z"]
+        )  # the front is the carved face
+
+
+def test_the_jhula_seat_sits_a_quarter_up_and_the_crest_tops_the_back(client, people):
+    for name in ("2 seater", "3 seater", "4 seater"):
+        parts, out, s = solved_template(client, people, "jhula-swing", name)
+        assert abs(parts["Seat board"]["pos"]["y"] - s["h"] * 0.25) < 0.01
+        assert (
+            top_of(parts["Back panel"]) == parts["Back crest"]["pos"]["y"]
+            and top_of(parts["Back crest"]) == s["h"]
+        )
+        assert parts["Back panel"]["pos"]["y"] == top_of(parts["Seat board"])
+    stock = {i["name"]: i["qty"] for g in out["hardware"] for i in g["items"]}
+    assert stock["Eye bolt 12 mm"] == 4 and stock["Swing chain set (four chains)"] == 1
+
+
+def test_the_pillar_sections_stack_without_gaps(client, people):
+    for name in ("House pillar", "Standard", "Large"):
+        parts, out, s = solved_template(client, people, "pillar-carved", name)
+        assert top_of(parts["Base"]) == parts["Lower shaft"]["pos"]["y"]
+        assert (
+            abs(top_of(parts["Lower shaft"]) - parts["Collar ring"]["pos"]["y"]) < 0.02
+        )
+        assert (
+            abs(top_of(parts["Collar ring"]) - parts["Upper shaft"]["pos"]["y"]) < 0.02
+        )
+        assert (
+            abs(top_of(parts["Upper shaft"]) - parts["Capital"]["pos"]["y"]) < 0.02
+            and top_of(parts["Capital"]) == s["h"]
+        )
 
 
 def test_the_panelled_door_frame_and_panels_meet_exactly(client, people):
