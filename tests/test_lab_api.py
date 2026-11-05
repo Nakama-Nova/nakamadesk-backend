@@ -298,3 +298,10 @@ def test_editor_and_viewer_pages_are_served(client, people, chair):
         "/lab/static/vendor/three.module.js", headers={"Accept-Encoding": "gzip"}
     )
     assert js.status_code == 200 and js.headers.get("content-encoding") == "gzip"
+
+
+def test_the_viewer_is_told_who_may_edit(client, people, chair):
+    assert get(client, people, chair, role="owner").json()["can_edit"] is True
+    assert get(client, people, chair, role="manager").json()["can_edit"] is True
+    assert get(client, people, chair, role="achari").json()["can_edit"] is False
+    assert get(client, people, chair, role="worker").json()["can_edit"] is False

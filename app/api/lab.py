@@ -301,7 +301,11 @@ def solve_item(
 ):
     """The parts, positions and cutting list for a size. Read-only: nothing is saved."""
     item = _furniture(uow, item_id)
-    return _solved(uow, item, size=size, l=l, w=w, h=h)
+    out = _solved(uow, item, size=size, l=l, w=w, h=h)
+    out["can_edit"] = (
+        user.role in LAB_EDIT_ROLES
+    )  # the viewer then offers an Edit button
+    return out
 
 
 @router.get("/designs/{design_id}/image")
