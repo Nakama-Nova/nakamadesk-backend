@@ -398,3 +398,25 @@ The problem: furniture photos are slanted and cluttered, and one bed has many se
 Checked on real photos of slanted bed headboards: the border, the lattice and the footboard medallion come out flat, in proportion, and with the relief readable. The depth is still a model's estimate (relative, front face only); check it in millimetres on scrap before cutting.
 
 **Not built yet:** finding the carved areas in a photo automatically (Step 3b), cancelling a marked area from the editor (use `POST /scans/{id}/cancel`), and showing the design on the made-to-order production job.
+
+## 17. As built: templates and copying parts between pieces
+
+No migration. Defining 25 to 33 parts by hand for every product is too much work, and the parts are formulas of the overall size (L, W, H), so one set fits every size of the same kind of piece. Two ways to start a piece:
+
+- **Built-in templates** (`app/lab_templates/*.json`, shipped with the app and checked when loaded): `bed-square-posts` (square 4 inch posts, a flat headboard with a plain board, a floral border and a tufted lattice panel, a low footboard with an oval medallion and corner panels, side rails, ledgers, a centre beam and 12 slats; built from the queen bed sheet) and `bed-crown-headboard` (a shaped crown with a shell crest; from the king bed definition). Both come with the usual hardware: bed rail bracket sets (stock, not clamps), screws, dowels, glue, and clamps as tools.
+- **Copy from another piece**: the parts of any piece that has some, and optionally its hardware and carvings.
+
+Either way the piece gets **its own copy** with new ids; the template or the other piece is never changed, and later edits do not flow back. Carvings keep their design (stored once) and hardware links move to the copied parts. A copied piece's 3D model file for a part is not carried over.
+
+```
+GET  /lab/templates                         (owner, manager)  id, name, description, size_hint, carve hints, part and hardware counts
+POST /lab/items/{id}/apply-template         {template, wood_type?, hardware=true, replace=false}
+POST /lab/items/{id}/copy-parts             {source_item_id, hardware=true, carvings=true, replace=false}
+```
+Both return the solved piece. The piece needs its standard size first (422 otherwise), and every formula must work for the standard size and every preset (422 names the part and the size, as for any save). A piece that already has parts, hardware or carvings is **refused with 409 unless `replace` is true**, and the editor asks before sending it. `wood_type` goes on every part of a template.
+
+In the editor a "Start from a template or another piece" section sits above the parts table: pick a template (it shows what it is and where to carve), enter the wood, press the button; or pick a piece to copy from. The page reloads to show the new parts.
+
+**What a template is not:** an exact model. The thicknesses of the square-post bed are estimates from the pictures (the sheet gives only L, W, H, the footboard height and the mattress space): check them with the achari. At its sheet size the template reproduces the sheet's numbers: head post 1270, footboard 530, mattress space 1981 x 1524 mm (a queen mattress, 78 x 60 inches), and the parts fill exactly the overall box at queen, king, double and single sizes (tested). The slat count is fixed at 12; a longer bed spaces them wider. A new kind of piece (a wardrobe, a table) needs its template written once: add a JSON file next to the beds.
+
+Carved areas are separate thin parts in the templates (each border strip, the lattice panel, the medallion), because a design is placed centred on one face of one part. Mark each area on a photo (section 16) and place its design on the matching part.

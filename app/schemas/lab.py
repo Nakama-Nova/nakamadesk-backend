@@ -103,6 +103,22 @@ class DesignFromScanIn(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
 
+class TemplateApplyIn(BaseModel):
+    template: str = Field(max_length=60)
+    wood_type: Optional[str] = Field(default=None, max_length=60)  # put on every part
+    hardware: bool = True  # also bring the usual hardware lines
+    replace: bool = (
+        False  # must be true to start over on a piece that already has parts
+    )
+
+
+class CopyPartsIn(BaseModel):
+    source_item_id: UUID
+    hardware: bool = True
+    carvings: bool = True
+    replace: bool = False
+
+
 class SizeIn(BaseModel):
     l: float = Field(ge=50, le=5000)  # noqa: E741
     w: float = Field(ge=50, le=5000)

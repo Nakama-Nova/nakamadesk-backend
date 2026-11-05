@@ -44,6 +44,32 @@
       <div class="small muted">Leave a preset empty to not offer it. Saving checks that every part still works at every size.</div>
     </section>
 
+    <section class="card" aria-labelledby="h-start">
+      <h2 id="h-start">Start from a template or another piece</h2>
+      <p class="small muted" style="margin:0 0 8px">
+        Parts are formulas of the overall size, so one set of parts fits every size of the same kind of piece. Save the
+        piece's standard size above first. You get your <b>own copy</b> to edit; the template or the other piece is not
+        changed. If this piece already has parts you are asked before they are replaced.
+      </p>
+      <div class="fields">
+        <div><label for="tplPick">Built-in template</label><select id="tplPick"></select></div>
+        <div><label for="tplWood">Wood for every part</label><input id="tplWood" type="text" maxlength="60" value="Teak"></div>
+      </div>
+      <div class="small muted" id="tplInfo" aria-live="polite" style="margin:6px 0"></div>
+      <div class="row"><button type="button" class="primary" id="tplUse">Use this template</button></div>
+      <hr style="margin:14px 0">
+      <div class="fields">
+        <div><label for="cpPick">Copy from another piece</label><select id="cpPick"></select></div>
+      </div>
+      <div class="row" style="margin:6px 0">
+        <label class="row"><input type="checkbox" id="cpHw" checked style="width:auto"> also the hardware</label>
+        <label class="row"><input type="checkbox" id="cpCv" checked style="width:auto"> also the carvings</label>
+      </div>
+      <div class="row"><button type="button" id="cpUse">Copy the parts</button></div>
+      <div class="ok" id="startOk" aria-live="polite"></div>
+      <div class="error" id="startError" role="alert"></div>
+    </section>
+
     <section class="card" aria-labelledby="h-parts">
       <h2 id="h-parts">Parts</h2>
       <div class="parts">

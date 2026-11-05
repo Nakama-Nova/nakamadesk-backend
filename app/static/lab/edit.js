@@ -400,6 +400,74 @@ function refreshPartSelects() {
   for (const sel of $("carvings").querySelectorAll("select[data-field=part_id]")) fillPartSelect(sel, sel.value);
 }
 
+// ---------------------------------------------------------------- start from a template or another piece
+let templates = [];
+const hasAnything = () => $("parts").tBodies[0].rows.length + $("hardware").tBodies[0].rows.length + $("carvings").tBodies[0].rows.length > 0;
+
+function showTemplate() {
+  const t = templates.find((x) => x.id === $("tplPick").value);
+  const info = $("tplInfo");
+  info.replaceChildren();
+  if (!t) return;
+  const add = (text) => {
+    const d = document.createElement("div");
+    d.textContent = text;
+    info.append(d);
+  };
+  add(`${t.description}`);
+  add(`${t.parts} parts, ${t.hardware} hardware lines. Sized for ${t.size_hint.l} × ${t.size_hint.w} × ${t.size_hint.h} mm, and it follows the size you give the piece.`);
+  for (const c of t.carve || []) add(`Carve: ${c}`);
+}
+
+async function startFrom(path, body, what) {
+  $("startError").textContent = "";
+  $("startOk").textContent = "";
+  let replace = false;
+  if (hasAnything()) {
+    if (!confirm(`This piece already has parts, hardware or carvings. Replace them with ${what}? This cannot be undone.`)) return;
+    replace = true;
+  }
+  $("tplUse").disabled = $("cpUse").disabled = true;
+  try {
+    await call("POST", path, { ...body, replace });
+    $("startOk").textContent = "Done. Loading the parts...";
+    location.reload(); // show the new parts in the tables
+  } catch (e) {
+    $("startError").textContent = e.message;
+    $("tplUse").disabled = $("cpUse").disabled = false;
+  }
+}
+
+$("tplPick").addEventListener("change", showTemplate);
+$("tplUse").addEventListener("click", () => {
+  const t = templates.find((x) => x.id === $("tplPick").value);
+  if (!t) return;
+  startFrom(`/lab/items/${itemId}/apply-template`, { template: t.id, wood_type: $("tplWood").value.trim() || null }, `the template "${t.name}"`);
+});
+$("cpUse").addEventListener("click", () => {
+  const sel = $("cpPick");
+  if (!sel.value) {
+    $("startError").textContent = "Choose a piece to copy from.";
+    return;
+  }
+  startFrom(`/lab/items/${itemId}/copy-parts`, { source_item_id: sel.value, hardware: $("cpHw").checked, carvings: $("cpCv").checked }, `a copy of ${sel.selectedOptions[0].textContent}`);
+});
+
+async function loadStarts() {
+  try {
+    templates = await call("GET", "/lab/templates");
+    const pick = $("tplPick");
+    pick.replaceChildren(...templates.map((t) => Object.assign(document.createElement("option"), { value: t.id, textContent: t.name })));
+    showTemplate();
+    const pieces = (await call("GET", "/lab/items")).filter((p) => p.id !== itemId && p.parts > 0);
+    const cp = $("cpPick");
+    const none = Object.assign(document.createElement("option"), { value: "", textContent: pieces.length ? "choose a piece" : "no other piece has parts yet" });
+    cp.replaceChildren(none, ...pieces.map((p) => Object.assign(document.createElement("option"), { value: p.id, textContent: `${p.name} (${p.parts} parts)` })));
+  } catch (e) {
+    $("startError").textContent = e.message;
+  }
+}
+
 // ---------------------------------------------------------------- designs from scans
 function scanState(s) {
   if (s.status === "uploaded") return "waiting for the workshop PC";
@@ -681,6 +749,7 @@ $("saveCarvings").addEventListener("click", async () => {
 
 async function init() {
   buildCornerTable();
+  loadStarts();
   $("viewLink").href = `/lab/view/${itemId}`;
   sizeInputs();
   try {
