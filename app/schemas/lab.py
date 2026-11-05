@@ -99,6 +99,10 @@ class CarvingListIn(BaseModel):
     carvings: List[CarvingIn] = Field(max_length=60)
 
 
+class DesignFromScanIn(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
 class SizeIn(BaseModel):
     l: float = Field(ge=50, le=5000)  # noqa: E741
     w: float = Field(ge=50, le=5000)

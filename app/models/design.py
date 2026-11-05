@@ -55,6 +55,14 @@ class Design(Base):
     image_key = Column(String, nullable=True)
     image_type = Column(String, nullable=True)
     image_sha256 = Column(String(64), nullable=True)
+    # the flat-carving scan this design was made from (its depth picture is the design's
+    # picture, and its G-code and 3D files are the files to carve from)
+    scan_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("scan_jobs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     created_by = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

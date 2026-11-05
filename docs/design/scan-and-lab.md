@@ -368,3 +368,17 @@ GET /lab/designs/{id}/image    (everyone who can view the Lab) the picture, but 
 The editor has a Carvings table (part, design, face, margin, mirror, note; Add, Copy, Delete). To carve the second panel: Copy the row, change the part, tick Mirror. Save the parts first; only saved parts can be picked, and saving parts reads their ids back so nothing is lost. The viewer draws each picture on its face (fetched once per design and shared by every place), shows "Carving" in the Selected part panel, and has a "Carvings" list under "Hold with" with a thumbnail per design and each place it is carved with its size. It prints with the rest.
 
 Not built: creating a design or uploading its picture from inside the Lab (use CNC designs), picture offset or rotation on the face, carving depth in the 3D view (the picture is flat), and the desktop app's designs screen does not show the picture or category yet.
+
+## 15. As built: a scan becomes a furniture design, on request
+
+Migration `c6f9e3a1d8b4` (additive, has a downgrade, follows `b5e8d2f0c3a7`): `designs.scan_id` (nullable, ON DELETE SET NULL).
+
+The idea: furniture carries carved designs. Scan a carving, turn it into a **furniture design** (its depth picture, and the G-code if the scan made it), place it on the 3D model in the Lab (section 14), and keep it in CNC designs for future cutting. **It only happens when someone asks**, so test scans do not fill the designs library.
+
+- `POST /designs/from-scan` `{scan_id, name?}` (owner, artisan; an artisan sees only their own product scans, as everywhere). The scan must be finished and be a **flat carving** (`params.shape = relief`) with a depth picture (the `render` file the worker uploads). The depth picture becomes the design's picture (same checks as any design picture), the design is filed under `furniture`, named `<piece> carving` unless `name` is given, linked to the piece that was scanned (`design_products`), and keeps `scan_id`.
+- **Never a copy:** asking again for the same scan, or for a scan whose picture is already stored under another design, returns that design with `created: false`.
+- `GET /designs/{id}` adds `scan_files`: the scan's results (depth picture, G-code, 3D files) with a `download_path` for each, which is where a future CNC print gets its files. `DesignOut` adds `scan_id`. For a restoration scan the existing `files` list already shows them.
+- **In the Lab editor**, a "Designs from scans" section lists the finished flat-carving scans of the piece (newest first, only those with a depth picture) with a **Make a design** button and an optional name. The new design is offered in Carvings at once. `GET .../definition` adds `scans`; `POST /lab/scans/{id}/design` is owner only (designs are owner and artisan only, and artisans cannot open the editor), and a cookie write needs `X-Lab-Client: 1`.
+- No change to the scan worker (`vriksha-scan`): it already uploads the depth picture and the G-code.
+
+**Not built yet** (next steps, in this order): showing the design on the made-to-order production job, so the carver is told which design to carve and gets its files; and finding and cropping the carved design out of a photo of a whole bed with an image model, instead of scanning the carving by itself.
