@@ -165,10 +165,14 @@ def design_from_scan(
         if job.restoration_id
         else None
     )
-    base = name or (
-        f"{item.name} carving"
-        if item
-        else f"{project.title} carving" if project else "Scanned carving"
+    base = (
+        name
+        or (job.params or {}).get("label")
+        or (
+            f"{item.name} carving"
+            if item
+            else f"{project.title} carving" if project else "Scanned carving"
+        )
     )
     width = (job.params or {}).get("real_width_mm")
     design = Design(

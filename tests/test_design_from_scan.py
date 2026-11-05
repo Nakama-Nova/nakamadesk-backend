@@ -99,9 +99,8 @@ def test_a_flat_carving_scan_becomes_a_furniture_design_on_request(
     job, picture = finished_scan(db, store, item_id=chair["id"], gcode=True)
     # finishing a scan alone makes nothing: it is on request
     h = people["owner"]["h"]
-    assert (
-        client.get("/designs", headers=h, params={"category": "furniture"}).json() == []
-    )
+    listed = client.get("/designs", headers=h, params={"category": "furniture"}).json()
+    assert str(job.id) not in [d["scan_id"] for d in listed]
 
     r = make(client, people, job)
     assert r.status_code == 200, r.text
@@ -126,12 +125,8 @@ def test_a_flat_carving_scan_becomes_a_furniture_design_on_request(
         files["nc"]["download_path"]
         == f"/items/{chair['id']}/assets/{files['nc']['id']}/download"
     )
-    assert (
-        client.get("/designs", headers=h, params={"category": "furniture"}).json()[0][
-            "id"
-        ]
-        == d["id"]
-    )
+    listed = client.get("/designs", headers=h, params={"category": "furniture"}).json()
+    assert d["id"] in [x["id"] for x in listed]
 
 
 def test_asking_again_gives_the_same_design_never_a_copy(

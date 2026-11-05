@@ -88,6 +88,47 @@
       <div class="error" id="hwError" role="alert"></div>
     </section>
 
+    <section class="card" aria-labelledby="h-area">
+      <h2 id="h-area">Mark a carved area on a photo</h2>
+      <p class="small muted" style="margin:0 0 8px">
+        Pick a photo of the piece and mark <b>one</b> carved area: click its four corners in order (top-left, top-right,
+        bottom-right, bottom-left), or type them below. Then, if the shape is not a rectangle (a crown, say), click points
+        around it to cut it out. The workshop PC straightens the area, reads its depth, and it appears under
+        <i>Designs from scans</i> when ready. Mark the border, the lattice and the medallion one at a time. A photo taken
+        straight on is best; the closer the area fills the photo, the better.
+      </p>
+      <div class="row" style="margin-bottom:8px">
+        <label for="areaPhoto" class="small">Photo (JPG or PNG)</label>
+        <input type="file" id="areaPhoto" accept="image/jpeg,image/png">
+      </div>
+      <div id="areaWork" hidden>
+        <canvas id="areaCanvas" tabindex="0" style="max-width:100%;height:auto;cursor:crosshair;border:1px solid var(--line, #c9b08f)"
+                aria-label="The photo. Click the four corners of the carved area in order: top-left, top-right, bottom-right, bottom-left. You can also type the corners in the table below."></canvas>
+        <div class="small" id="areaHelp" aria-live="polite" style="margin:6px 0"></div>
+        <div class="row" style="margin-bottom:8px">
+          <button type="button" id="areaUndo">Undo last point</button>
+          <button type="button" id="areaClearOutline">Clear outline</button>
+          <button type="button" id="areaReset">Start over</button>
+        </div>
+        <table id="areaCorners" style="max-width:420px">
+          <thead><tr><th>Corner</th><th>x (px)</th><th>y (px)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="fields" style="margin-top:10px">
+          <div><label for="areaLabel">What it shows</label><input id="areaLabel" type="text" maxlength="80" placeholder="Headboard border"></div>
+          <div><label for="areaW">Real width (mm)</label><input id="areaW" type="number" min="1" max="5000" inputmode="numeric"></div>
+          <div><label for="areaH">Real height (mm), optional</label><input id="areaH" type="number" min="1" max="5000" inputmode="numeric"></div>
+        </div>
+        <label class="row" style="margin:8px 0"><input type="checkbox" id="areaGcode" style="width:auto"> Also make the CNC G-code</label>
+        <div class="row">
+          <button type="button" class="primary" id="areaSend">Send to the workshop PC</button>
+          <span class="ok" id="areaOk" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="error" id="areaError" role="alert"></div>
+      <div class="small muted">Needs the workshop PC worker to be running (it checks every 30 seconds). Measure the real width of the area for the right size on the machine.</div>
+    </section>
+
     <section class="card" aria-labelledby="h-scans">
       <h2 id="h-scans">Designs from scans</h2>
       <p class="small muted" style="margin:0 0 8px">

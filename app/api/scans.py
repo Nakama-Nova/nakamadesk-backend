@@ -15,7 +15,7 @@ Neither side holds cloud keys: the server only signs URLs and checks objects.
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -58,6 +58,26 @@ OPEN = ("created", "uploaded")
 
 
 # ------------------------------------------------------------------ schemas
+Point = Annotated[
+    List[float], Field(min_length=2, max_length=2)
+]  # [x, y] in photo pixels
+
+
+class Crop(BaseModel):
+    """
+    One carved area marked on a photo (flat carving only). The worker straightens
+    `quad` into a rectangle and reads its depth; `outline`, if given, cuts the
+    design out of that rectangle (a shaped crown, say). Pixels are those of the
+    photo as it looks on screen (phone photos are stored sideways; the EXIF turn is applied).
+    """
+
+    quad: List[Point] = Field(
+        min_length=4, max_length=4
+    )  # top-left, top-right, bottom-right, bottom-left
+    outline: Optional[List[Point]] = Field(default=None, min_length=3, max_length=80)
+    real_height_mm: Optional[float] = Field(default=None, gt=0, le=5000)
+
+
 class ScanParams(BaseModel):
     real_width_mm: Optional[float] = Field(default=None, gt=0, le=5000)
     quality: Literal["fast", "normal", "high"] = "normal"
@@ -65,6 +85,10 @@ class ScanParams(BaseModel):
     # full = a 3D object photographed all the way around (needs a GPU worker);
     # relief = a flat carving read from one straight-on photo (any PC can do it)
     shape: Literal["full", "relief"] = "full"
+    label: Optional[str] = Field(
+        default=None, max_length=80
+    )  # what it shows, e.g. "Headboard border"
+    crop: Optional[Crop] = None  # a marked area of one photo (see Crop)
 
 
 class ScanCreate(BaseModel):
