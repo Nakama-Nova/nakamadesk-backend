@@ -39,6 +39,7 @@ from app.db.deps import (
     get_lab_user,
     get_uow,
 )
+from app.models.category import Category
 from app.models.design import Design
 from app.models.furniture_carving import FurnitureCarving
 from app.models.furniture_hardware import FurnitureHardware
@@ -52,6 +53,7 @@ from app.repositories.base import AbstractUnitOfWork
 from app.schemas.lab import (
     CarvingListIn,
     CarvingOut,
+    CopyPartsIn,
     DesignFromScanIn,
     FurnitureIn,
     HardwareListIn,
@@ -62,8 +64,15 @@ from app.schemas.lab import (
     PartsIn,
     PresetsIn,
     SizeIn,
+    TemplateApplyIn,
 )
-from app.services import crop_service, design_service, lab_service, media_service
+from app.services import (
+    crop_service,
+    design_service,
+    lab_service,
+    lab_templates,
+    media_service,
+)
 from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/lab", tags=["3D Lab"])
@@ -191,6 +200,45 @@ def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
     ]
 
 
+def _install(
+    uow: AbstractUnitOfWork,
+    item: Item,
+    parts: List[FurniturePart],
+    hardware: List[FurnitureHardware],
+    carvings: List[FurnitureCarving],
+    replace: bool,
+) -> dict:
+    """
+    Give a piece this new set of parts (and hardware and carvings), replacing what it has. Refused
+    unless `replace` when it already has something, and unless every formula works for the
+    piece's own sizes (the 422 names the part and the size, as for any save).
+    """
+    have = (
+        len(_parts(uow, item.id)),
+        len(_hardware(uow, item.id)),
+        len(_carvings(uow, item.id)),
+    )
+    if any(have) and not replace:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{item.name} already has {have[0]} parts, {have[1]} hardware lines and "
+            f"{have[2]} carvings. Choose to replace them to start over",
+        )
+    lab_service.check_definition(item, parts)
+    lab_service.check_hardware(item, hardware, parts)
+    designs = _designs(uow, {c.design_id for c in carvings})
+    lab_service.check_carvings(item, carvings, parts, designs)
+    with uow:
+        for model in (FurnitureCarving, FurnitureHardware, FurniturePart):
+            uow.session.query(model).filter(model.item_id == item.id).delete()
+        uow.session.add_all(parts)
+        uow.session.flush()  # the parts first: hardware and carvings point at them
+        uow.session.add_all(hardware + carvings)
+        uow.commit()
+    uow.session.expire_all()
+    return _solved(uow, item)
+
+
 def _check_all(uow: AbstractUnitOfWork, item: Item) -> None:
     """After a size change: parts, hardware AND carving margins must still work at every size."""
     parts = _parts(uow, item.id)
@@ -311,12 +359,16 @@ def get_definition(
 ):
     """The raw formulas, for the editor page."""
     item = _item(uow, item_id)
+    category = uow.session.get(Category, item.category_id) if item.category_id else None
     return {
         "item": {
             "id": str(item.id),
             "name": item.name,
             "is_furniture": item.is_furniture,
         },
+        # the shop's category of this product and the template that fits it (or None)
+        "category": category.name if category else None,
+        "suggestion": lab_templates.suggestion(category.name if category else None),
         "dimensions_mm": item.dimensions_mm,
         "presets": lab_service.presets(item),
         "parts": [
@@ -631,6 +683,117 @@ def design_from_scan(
             "has_image": bool(design.image_key),
         },
     }
+
+
+@router.get("/templates")
+def list_templates(user: User = Depends(get_lab_editor)):
+    """The built-in starting points (a bed with a crown headboard, a bed with square posts...)."""
+    return [lab_templates.summary(t) for t in lab_templates.all_templates().values()]
+
+
+@router.post("/items/{item_id}/apply-template")
+def apply_template(
+    item_id: UUID,
+    body: TemplateApplyIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Start a piece from a built-in template: its own copy of the parts (and the usual hardware),
+    written as formulas of the piece's overall size, to edit like any other. The piece needs its
+    standard size first. Returns the solved piece.
+    """
+    item = _item(uow, item_id)
+    template = lab_templates.all_templates().get(body.template)
+    if template is None:
+        raise HTTPException(status_code=404, detail="No such template")
+    parts, hardware = lab_templates.build(
+        template, item_id, body.wood_type, body.hardware
+    )
+    return _install(uow, item, parts, hardware, [], body.replace)
+
+
+@router.post("/items/{item_id}/copy-parts")
+def copy_parts(
+    item_id: UUID,
+    body: CopyPartsIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Copy the parts of another piece (and, if asked, its hardware and carvings) onto this one. The
+    formulas come across as they are, so they fit this piece's own size; the copy is separate and
+    the other piece is not touched. Returns the solved piece.
+    """
+    item = _item(uow, item_id)
+    if body.source_item_id == item_id:
+        raise HTTPException(status_code=422, detail="Choose another piece to copy from")
+    source = _item(uow, body.source_item_id)
+    source_parts = _parts(uow, source.id)
+    if not source_parts:
+        raise HTTPException(
+            status_code=422, detail=f"{source.name} has no parts to copy"
+        )
+    new_ids = {p.id: uuidlib.uuid4() for p in source_parts}
+    parts = [
+        FurniturePart(
+            id=new_ids[p.id],
+            item_id=item_id,
+            name=p.name,
+            wood_type=p.wood_type,
+            raw_material_id=p.raw_material_id,
+            l_expr=p.l_expr,
+            w_expr=p.w_expr,
+            t_expr=p.t_expr,
+            axis=p.axis,
+            x_expr=p.x_expr,
+            y_expr=p.y_expr,
+            z_expr=p.z_expr,
+            assembly_step=p.assembly_step,
+            joint_type=p.joint_type,
+            joinery_note=p.joinery_note,
+            sort=p.sort,  # another piece's 3D model file is not carried over
+        )
+        for p in source_parts
+    ]
+    hardware = (
+        [
+            FurnitureHardware(
+                id=uuidlib.uuid4(),
+                item_id=item_id,
+                kind=h.kind,
+                name=h.name,
+                qty_expr=h.qty_expr,
+                part_id=new_ids.get(h.part_id),
+                assembly_step=h.assembly_step,
+                note=h.note,
+                sort=h.sort,
+            )
+            for h in _hardware(uow, source.id)
+        ]
+        if body.hardware
+        else []
+    )
+    carvings = (
+        [
+            FurnitureCarving(
+                id=uuidlib.uuid4(),
+                item_id=item_id,
+                part_id=new_ids[c.part_id],
+                design_id=c.design_id,
+                face=c.face,
+                margin_mm=c.margin_mm,
+                mirror=c.mirror,
+                note=c.note,
+                sort=c.sort,
+            )
+            for c in _carvings(uow, source.id)
+            if c.part_id in new_ids
+        ]
+        if body.carvings
+        else []
+    )
+    return _install(uow, item, parts, hardware, carvings, body.replace)
 
 
 @router.put("/items/{item_id}/presets")

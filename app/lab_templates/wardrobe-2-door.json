@@ -1,0 +1,250 @@
+{
+ "id": "wardrobe-2-door",
+ "name": "Wardrobe with two doors",
+ "description": "A solid-wood wardrobe: 25 mm sides, top and bottom, a 100 mm plinth, a 10 mm back, a centre divider, two shelves on the left and a hanging rail on the right, and two 25 mm doors. L is the width, W the depth including the doors, H the height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 1200,
+  "w": 560,
+  "h": 2000
+ },
+ "typical_sizes": [
+  {
+   "name": "2 door, 1000",
+   "l": 1000,
+   "w": 550,
+   "h": 1800
+  },
+  {
+   "name": "2 door, 1200",
+   "l": 1200,
+   "w": 560,
+   "h": 2000
+  },
+  {
+   "name": "2 door, 1500",
+   "l": 1500,
+   "w": 600,
+   "h": 2100
+  }
+ ],
+ "carve": [
+  "Each door: face 'front' (one design centred on the door, or a carved panel)",
+  "Side panels: faces 'left' and 'right'"
+ ],
+ "parts": [
+  {
+   "name": "Side (left)",
+   "l_expr": "H",
+   "w_expr": "25",
+   "t_expr": "W - 35",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "25",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side. Dowels and glue to the top and bottom."
+  },
+  {
+   "name": "Side (right)",
+   "l_expr": "H",
+   "w_expr": "25",
+   "t_expr": "W - 35",
+   "axis": "y",
+   "x_expr": "L - 25",
+   "y_expr": "0",
+   "z_expr": "25",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side. Dowels and glue to the top and bottom."
+  },
+  {
+   "name": "Top",
+   "l_expr": "L - 50",
+   "w_expr": "W - 35",
+   "t_expr": "25",
+   "axis": "x",
+   "x_expr": "25",
+   "y_expr": "H - 25",
+   "z_expr": "25",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides."
+  },
+  {
+   "name": "Bottom",
+   "l_expr": "L - 50",
+   "w_expr": "W - 35",
+   "t_expr": "25",
+   "axis": "x",
+   "x_expr": "25",
+   "y_expr": "100",
+   "z_expr": "25",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides, above the plinth."
+  },
+  {
+   "name": "Plinth (front)",
+   "l_expr": "L - 50",
+   "w_expr": "25",
+   "t_expr": "100",
+   "axis": "x",
+   "x_expr": "25",
+   "y_expr": "0",
+   "z_expr": "65",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Recessed 40 mm behind the doors."
+  },
+  {
+   "name": "Back panel",
+   "l_expr": "H - 150",
+   "w_expr": "L - 50",
+   "t_expr": "10",
+   "axis": "y",
+   "x_expr": "25",
+   "y_expr": "125",
+   "z_expr": "W - 10",
+   "assembly_step": 1,
+   "joint_type": "other",
+   "joinery_note": "Thin panel in a groove, or screwed to the rear edges."
+  },
+  {
+   "name": "Centre divider",
+   "l_expr": "H - 150",
+   "w_expr": "25",
+   "t_expr": "W - 35",
+   "axis": "y",
+   "x_expr": "L / 2 - 12.5",
+   "y_expr": "125",
+   "z_expr": "25",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the top and bottom."
+  },
+  {
+   "name": "Shelf (lower)",
+   "l_expr": "L / 2 - 37.5",
+   "w_expr": "W - 55",
+   "t_expr": "20",
+   "axis": "x",
+   "x_expr": "25",
+   "y_expr": "125 + (H - 150) / 3",
+   "z_expr": "45",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins or cleats."
+  },
+  {
+   "name": "Shelf (upper)",
+   "l_expr": "L / 2 - 37.5",
+   "w_expr": "W - 55",
+   "t_expr": "20",
+   "axis": "x",
+   "x_expr": "25",
+   "y_expr": "125 + (H - 150) * 2 / 3",
+   "z_expr": "45",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins or cleats."
+  },
+  {
+   "name": "Hanging rail",
+   "l_expr": "L / 2 - 37.5",
+   "w_expr": "30",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "L / 2 + 12.5",
+   "y_expr": "H - 250",
+   "z_expr": "(W - 35) / 2 + 10",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Held in rail sockets on the divider and the right side."
+  },
+  {
+   "name": "Door (left)",
+   "l_expr": "H - 115",
+   "w_expr": "L / 2 - 3",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "1.5",
+   "y_expr": "105",
+   "z_expr": "0",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Hinged on the left side. Carved front."
+  },
+  {
+   "name": "Door (right)",
+   "l_expr": "H - 115",
+   "w_expr": "L / 2 - 3",
+   "t_expr": "25",
+   "axis": "y",
+   "x_expr": "L / 2 + 1.5",
+   "y_expr": "105",
+   "z_expr": "0",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Hinged on the right side. Carved front."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Door hinge 100 mm",
+   "qty_expr": "6",
+   "assembly_step": 3,
+   "note": "Three per door"
+  },
+  {
+   "kind": "other",
+   "name": "Door handle",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Magnetic door catch",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "40",
+   "assembly_step": 3,
+   "note": "Hinges, catches, back panel"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "32",
+   "assembly_step": 1,
+   "note": "Carcass joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1500 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Carcass glue-up"
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 2200 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Carcass glue-up, across the height"
+  }
+ ]
+}

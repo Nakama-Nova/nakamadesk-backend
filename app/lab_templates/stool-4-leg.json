@@ -1,0 +1,235 @@
+{
+ "id": "stool-4-leg",
+ "name": "Stool (four legs)",
+ "description": "A stool: a 30 mm seat, four 45 mm legs, aprons under the seat and stretchers near the floor. L is the width, W the depth, H the height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 350,
+  "w": 350,
+  "h": 450
+ },
+ "typical_sizes": [
+  {
+   "name": "Small",
+   "l": 300,
+   "w": 300,
+   "h": 380
+  },
+  {
+   "name": "Standard",
+   "l": 350,
+   "w": 350,
+   "h": 450
+  },
+  {
+   "name": "Tall",
+   "l": 400,
+   "w": 400,
+   "h": 600
+  }
+ ],
+ "carve": [
+  "Seat: face 'top'",
+  "Aprons: outer faces"
+ ],
+ "parts": [
+  {
+   "name": "Seat",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "H - 30",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Screwed to the aprons from below."
+  },
+  {
+   "name": "Leg (front left)",
+   "l_expr": "H - 30",
+   "w_expr": "45",
+   "t_expr": "45",
+   "axis": "y",
+   "x_expr": "20",
+   "y_expr": "0",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons and stretchers."
+  },
+  {
+   "name": "Leg (front right)",
+   "l_expr": "H - 30",
+   "w_expr": "45",
+   "t_expr": "45",
+   "axis": "y",
+   "x_expr": "L - 65",
+   "y_expr": "0",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons and stretchers."
+  },
+  {
+   "name": "Leg (back left)",
+   "l_expr": "H - 30",
+   "w_expr": "45",
+   "t_expr": "45",
+   "axis": "y",
+   "x_expr": "20",
+   "y_expr": "0",
+   "z_expr": "W - 65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons and stretchers."
+  },
+  {
+   "name": "Leg (back right)",
+   "l_expr": "H - 30",
+   "w_expr": "45",
+   "t_expr": "45",
+   "axis": "y",
+   "x_expr": "L - 65",
+   "y_expr": "0",
+   "z_expr": "W - 65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Mortises for the aprons and stretchers."
+  },
+  {
+   "name": "Apron (front)",
+   "l_expr": "L - 130",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "x",
+   "x_expr": "65",
+   "y_expr": "H - 90",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the front legs."
+  },
+  {
+   "name": "Apron (back)",
+   "l_expr": "L - 130",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "x",
+   "x_expr": "65",
+   "y_expr": "H - 90",
+   "z_expr": "W - 40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the back legs."
+  },
+  {
+   "name": "Apron (left)",
+   "l_expr": "W - 130",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "z",
+   "x_expr": "20",
+   "y_expr": "H - 90",
+   "z_expr": "65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the left legs."
+  },
+  {
+   "name": "Apron (right)",
+   "l_expr": "W - 130",
+   "w_expr": "20",
+   "t_expr": "60",
+   "axis": "z",
+   "x_expr": "L - 40",
+   "y_expr": "H - 90",
+   "z_expr": "65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the right legs."
+  },
+  {
+   "name": "Stretcher (front)",
+   "l_expr": "L - 130",
+   "w_expr": "20",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "65",
+   "y_expr": "150",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the front legs."
+  },
+  {
+   "name": "Stretcher (back)",
+   "l_expr": "L - 130",
+   "w_expr": "20",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "65",
+   "y_expr": "150",
+   "z_expr": "W - 40",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the back legs."
+  },
+  {
+   "name": "Stretcher (left)",
+   "l_expr": "W - 130",
+   "w_expr": "20",
+   "t_expr": "30",
+   "axis": "z",
+   "x_expr": "20",
+   "y_expr": "150",
+   "z_expr": "65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the left legs."
+  },
+  {
+   "name": "Stretcher (right)",
+   "l_expr": "W - 130",
+   "w_expr": "20",
+   "t_expr": "30",
+   "axis": "z",
+   "x_expr": "L - 40",
+   "y_expr": "150",
+   "z_expr": "65",
+   "assembly_step": 1,
+   "joint_type": "mortise_tenon",
+   "joinery_note": "Tenons into the right legs."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 30 mm",
+   "qty_expr": "8",
+   "assembly_step": 2,
+   "note": "Seat to the aprons"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Reinforces the joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 600 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Leg glue-up"
+  }
+ ]
+}

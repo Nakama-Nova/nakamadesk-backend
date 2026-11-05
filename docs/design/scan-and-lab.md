@@ -398,3 +398,68 @@ The problem: furniture photos are slanted and cluttered, and one bed has many se
 Checked on real photos of slanted bed headboards: the border, the lattice and the footboard medallion come out flat, in proportion, and with the relief readable. The depth is still a model's estimate (relative, front face only); check it in millimetres on scrap before cutting.
 
 **Not built yet:** finding the carved areas in a photo automatically (Step 3b), cancelling a marked area from the editor (use `POST /scans/{id}/cancel`), and showing the design on the made-to-order production job.
+
+## 17. As built: templates and copying parts between pieces
+
+No migration. Defining 25 to 33 parts by hand for every product is too much work, and the parts are formulas of the overall size (L, W, H), so one set fits every size of the same kind of piece. Two ways to start a piece:
+
+- **Built-in templates** (`app/lab_templates/*.json`, shipped with the app and checked when loaded). Axes: L is left to right, W front to back, H up (for a bed, L is its length and W its width). Sizes are in mm; every template lists its typical sizes.
+
+  | Template | Parts | Typical sizes (L x W x H) |
+  |---|---|---|
+  | `bed-square-posts`: square 4 inch posts, flat headboard (plain board, floral border, tufted lattice), low footboard with an oval medallion, rails, ledgers, centre beam, 12 slats. From the queen bed sheet. | 33 | queen 2185 x 1675 x 1270, king, double, single |
+  | `bed-crown-headboard`: a shaped crown with a shell crest. From the king bed definition. | 25 | king 2185 x 1980 x 1300, queen, double, single |
+  | `table-dining`: 40 mm top, four 80 mm legs, 25 mm aprons. H is the top's upper face. Also used for a coffee table and a side table. | 9 | dining 1200 x 750 x 740 up to 2100 x 1000 x 760; coffee 1000 x 600 x 450; side 500 x 500 x 550 |
+  | `chair-dining`: 450 mm seat, 40 mm legs, seat rails, top rail, carved back splat. | 12 | 450 x 480 x 950, small, large |
+  | `wardrobe-2-door`: 25 mm carcass, 100 mm plinth, 10 mm back, centre divider, two shelves, a hanging rail, two 25 mm doors. W includes the doors. | 12 | 1000 x 550 x 1800 up to 1500 x 600 x 2100 |
+  | `door-panelled`: two stiles, top, lock and bottom rails, an upper and a lower carved panel. W is the thickness. | 7 | 900 x 45 x 2100, narrow, wide |
+  | `door-traditional-frame`: a Chettinad-style door set from a photo: two carved jambs, threshold, carved cornice, stepped crown, carved frieze, and the leaf with three stud rails, a centre muntin, two upper (arched) and two lower panels. L, W, H are the frame's overall width, depth and height; the leaf is L - 600 wide and H - 800 high. | 17 | 1500 x 150 x 2600, narrow, grand |
+  | `tv-unit-2-door`: low unit with an open middle bay (30/40/30 percent), one shelf and a door over each side bay. | 11 | 1500 x 400 x 450 up to 2100 x 450 x 550 |
+  | `bookshelf-open`: sides, top, bottom shelf, plinth, back and three shelves with four equal openings. | 9 | 800 x 300 x 1200 up to 1200 x 350 x 2100 |
+  | `chest-box`: feet, bottom, four dovetailed walls, hinged lid. | 10 | 600 x 400 x 400, 900 x 450 x 450, 1200 x 550 x 550 |
+  | `stool-4-leg`: seat, four legs, aprons and stretchers. | 13 | 300 x 300 x 380, 350 x 350 x 450, 400 x 400 x 600 |
+  | `dressing-table`: top at 750 mm, four legs, aprons, two drawer fronts, a mirror frame (the glass is a hardware line). | 14 | 750 x 420 x 1400 up to 1100 x 480 x 1600 |
+  | `diwan-couch`: the diwan of a diwan set: four posts, base frame, seat platform, carved back and arm panels (cushions are hardware lines). | 15 | 2 seater 1400, 3 seater 1800, 4 seater 2100 wide |
+  | `wall-panel-deity`: a framed wall panel with a carved insert (the deity) and a back board; the carved face is the front. | 6 | 450 x 60 x 600 up to 1200 x 80 x 1800 |
+  | `jhula-swing`: a hanging swing seat: two carved side panels, seat on rails, carved back and crest; chains and hooks are hardware lines. | 7 | 2 seater 1200, 3 seater 1500, 4 seater 1800 wide |
+  | `pillar-carved`: square pillar: base, lower shaft, collar ring, upper shaft, capital. | 5 | 150 x 150 x 2100 up to 250 x 250 x 3000 |
+
+  Each comes with the usual hardware (beds: bed rail bracket sets, which are stock; doors and wardrobes: hinges, handles, locks; all: screws, dowels, glue) and clamps as tools.
+- **Copy from another piece**: the parts of any piece that has some, and optionally its hardware and carvings.
+
+Either way the piece gets **its own copy** with new ids; the template or the other piece is never changed, and later edits do not flow back. Carvings keep their design (stored once) and hardware links move to the copied parts. A copied piece's 3D model file for a part is not carried over.
+
+```
+GET  /lab/templates                         (owner, manager)  id, name, description, size_hint, carve hints, part and hardware counts
+POST /lab/items/{id}/apply-template         {template, wood_type?, hardware=true, replace=false}
+POST /lab/items/{id}/copy-parts             {source_item_id, hardware=true, carvings=true, replace=false}
+```
+Both return the solved piece. The piece needs its standard size first (422 otherwise), and every formula must work for the standard size and every preset (422 names the part and the size, as for any save). A piece that already has parts, hardware or carvings is **refused with 409 unless `replace` is true**, and the editor asks before sending it. `wood_type` goes on every part of a template.
+
+In the editor a "Start from a template or another piece" section sits above the parts table: pick a template (it shows what it is and where to carve), enter the wood, press the button; or pick a piece to copy from. The page reloads to show the new parts.
+
+**What a template is not:** an exact model. Every thickness and position is a standard estimate (for the square-post bed, from the pictures: the sheet gives only L, W, H, the footboard height and the mattress space): check them with the achari. Only the kinds above exist (a three-door wardrobe, a round table, a sofa set other than the diwan and a table with drawers are not there yet; carved figures such as the Raja Rani dolls are scanned, not built from parts); a new kind of piece needs its template written once. **Deep sculpture is not a flat design:** the tower and peacocks of the traditional crown, and stacked mouldings, look poor as a picture on a face, so scan them as their own pieces. At its sheet size the square-post bed reproduces the sheet's numbers: head post 1270, footboard 530, mattress space 1981 x 1524 mm (a queen mattress, 78 x 60 inches). **Every template is tested at each of its typical sizes: the parts fill exactly the overall box, no size is zero or negative, and no two parts overlap.** The slat count is fixed at 12; a longer bed spaces them wider. To add a kind, add a JSON file next to the others (see an existing one for the fields); the tests then check it automatically.
+
+Carved areas are separate thin parts in the templates (each border strip, the lattice panel, the medallion), because a design is placed centred on one face of one part. Mark each area on a photo (section 16) and place its design on the matching part.
+
+### The shop's categories
+`app/lab_templates/_categories.json` maps each category of the desktop app (Stock, Categories) to the template that fits and a typical size to start from; the names are matched ignoring capitals and spacing. `GET /lab/items/{id}/definition` returns the product's `category` and a `suggestion` ({category, template, size}, or null), and the editor then pre-selects that template, says so, and, if the piece has no standard size yet, offers a button that fills in the typical size (then press Save sizes, then use the template). It is a suggestion only: any template can be chosen.
+
+| Category | Template (typical size) |
+|---|---|
+| Chest | `chest-box` (Standard) |
+| Dining Table | `table-dining` (6 seater) |
+| Diwana Set | `diwan-couch` (3 seater); the chairs use `chair-dining` and the tea table `table-dining` (Teapoy) |
+| Dressing Table | `dressing-table` (Standard) |
+| King Size Bed | `bed-crown-headboard` (King) |
+| Queen Size bed | `bed-square-posts` (Queen) |
+| Simha Dwaram | `door-traditional-frame` (Standard) |
+| Single Deity, Wood Pannel | `wall-panel-deity` (Standard) |
+| Stools | `stool-4-leg` (Standard) |
+| Study Tables | `table-dining` (Study table) |
+| Teapoi | `table-dining` (Teapoy) |
+| Wooden Chair | `chair-dining` (Standard) |
+| Wooden Jhula | `jhula-swing` (3 seater) |
+| Wooden pillars | `pillar-carved` (Standard) |
+| Wooden Shelves | `bookshelf-open` (Standard) |
+| Raja Rani Dolls | none: carved figures are scanned (full 3D route), not built from parts |

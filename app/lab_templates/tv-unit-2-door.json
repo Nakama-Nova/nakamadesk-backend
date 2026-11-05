@@ -1,0 +1,237 @@
+{
+ "id": "tv-unit-2-door",
+ "name": "TV unit (open middle bay, two doors)",
+ "description": "A low unit: 22 mm sides, top and bottom, a 60 mm plinth, a 10 mm back, two dividers that make an open middle bay (30 percent, 40 percent, 30 percent of the width) with one shelf, and a 22 mm door over each side bay. L is the width, W the depth including the doors, H the height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 1800,
+  "w": 400,
+  "h": 500
+ },
+ "typical_sizes": [
+  {
+   "name": "Small",
+   "l": 1500,
+   "w": 400,
+   "h": 450
+  },
+  {
+   "name": "Standard",
+   "l": 1800,
+   "w": 400,
+   "h": 500
+  },
+  {
+   "name": "Large",
+   "l": 2100,
+   "w": 450,
+   "h": 550
+  }
+ ],
+ "carve": [
+  "Each door: face 'front'",
+  "Sides: faces 'left' and 'right'"
+ ],
+ "parts": [
+  {
+   "name": "Side (left)",
+   "l_expr": "H",
+   "w_expr": "22",
+   "t_expr": "W - 32",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side."
+  },
+  {
+   "name": "Side (right)",
+   "l_expr": "H",
+   "w_expr": "22",
+   "t_expr": "W - 32",
+   "axis": "y",
+   "x_expr": "L - 22",
+   "y_expr": "0",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side."
+  },
+  {
+   "name": "Top",
+   "l_expr": "L - 44",
+   "w_expr": "W - 32",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "H - 22",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides."
+  },
+  {
+   "name": "Bottom",
+   "l_expr": "L - 44",
+   "w_expr": "W - 32",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "60",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides, above the plinth."
+  },
+  {
+   "name": "Plinth (front)",
+   "l_expr": "L - 44",
+   "w_expr": "22",
+   "t_expr": "60",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "0",
+   "z_expr": "52",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Recessed 30 mm behind the doors."
+  },
+  {
+   "name": "Back panel",
+   "l_expr": "H - 104",
+   "w_expr": "L - 44",
+   "t_expr": "10",
+   "axis": "y",
+   "x_expr": "22",
+   "y_expr": "82",
+   "z_expr": "W - 10",
+   "assembly_step": 1,
+   "joint_type": "other",
+   "joinery_note": "Thin panel in a groove, or screwed to the rear edges."
+  },
+  {
+   "name": "Divider (left)",
+   "l_expr": "H - 104",
+   "w_expr": "22",
+   "t_expr": "W - 32",
+   "axis": "y",
+   "x_expr": "L * 0.3 - 11",
+   "y_expr": "82",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the top and bottom."
+  },
+  {
+   "name": "Divider (right)",
+   "l_expr": "H - 104",
+   "w_expr": "22",
+   "t_expr": "W - 32",
+   "axis": "y",
+   "x_expr": "L * 0.7 - 11",
+   "y_expr": "82",
+   "z_expr": "22",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the top and bottom."
+  },
+  {
+   "name": "Shelf (middle bay)",
+   "l_expr": "L * 0.4 - 22",
+   "w_expr": "W - 32",
+   "t_expr": "20",
+   "axis": "x",
+   "x_expr": "L * 0.3 + 11",
+   "y_expr": "82 + (H - 104) / 2",
+   "z_expr": "22",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins."
+  },
+  {
+   "name": "Door (left)",
+   "l_expr": "H - 64",
+   "w_expr": "L * 0.3 + 8",
+   "t_expr": "22",
+   "axis": "y",
+   "x_expr": "1.5",
+   "y_expr": "62",
+   "z_expr": "0",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Hinged on the left side. Carved front."
+  },
+  {
+   "name": "Door (right)",
+   "l_expr": "H - 64",
+   "w_expr": "L * 0.3 + 8",
+   "t_expr": "22",
+   "axis": "y",
+   "x_expr": "L * 0.7 - 9.5",
+   "y_expr": "62",
+   "z_expr": "0",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Hinged on the right side. Carved front."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Door hinge 80 mm",
+   "qty_expr": "4",
+   "assembly_step": 3,
+   "note": "Two per door"
+  },
+  {
+   "kind": "other",
+   "name": "Door handle",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Magnetic door catch",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "24",
+   "assembly_step": 3,
+   "note": "Hinges, catches, back panel"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "24",
+   "assembly_step": 1,
+   "note": "Carcass joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1800 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Carcass glue-up"
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 600 mm",
+   "qty_expr": "4",
+   "assembly_step": 1,
+   "note": "Carcass glue-up"
+  }
+ ]
+}

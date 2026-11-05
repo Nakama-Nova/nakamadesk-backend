@@ -1,0 +1,197 @@
+{
+ "id": "bookshelf-open",
+ "name": "Bookshelf (open, three shelves)",
+ "description": "An open bookcase: 22 mm sides, top and bottom shelf, an 80 mm plinth, a 10 mm back and three shelves with four equal openings between the bottom shelf and the top. L is the width, W the depth, H the height. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 900,
+  "w": 300,
+  "h": 1800
+ },
+ "typical_sizes": [
+  {
+   "name": "Low",
+   "l": 800,
+   "w": 300,
+   "h": 1200
+  },
+  {
+   "name": "Standard",
+   "l": 900,
+   "w": 300,
+   "h": 1800
+  },
+  {
+   "name": "Tall and wide",
+   "l": 1200,
+   "w": 350,
+   "h": 2100
+  }
+ ],
+ "carve": [
+  "Sides: faces 'left' and 'right'",
+  "Top: face 'top'"
+ ],
+ "parts": [
+  {
+   "name": "Side (left)",
+   "l_expr": "H",
+   "w_expr": "22",
+   "t_expr": "W - 10",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side."
+  },
+  {
+   "name": "Side (right)",
+   "l_expr": "H",
+   "w_expr": "22",
+   "t_expr": "W - 10",
+   "axis": "y",
+   "x_expr": "L - 22",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Carcass side."
+  },
+  {
+   "name": "Top",
+   "l_expr": "L - 44",
+   "w_expr": "W - 10",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "H - 22",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides."
+  },
+  {
+   "name": "Bottom shelf",
+   "l_expr": "L - 44",
+   "w_expr": "W - 10",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "80",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Between the sides, above the plinth."
+  },
+  {
+   "name": "Plinth (front)",
+   "l_expr": "L - 44",
+   "w_expr": "22",
+   "t_expr": "80",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "0",
+   "z_expr": "20",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Recessed 20 mm."
+  },
+  {
+   "name": "Back panel",
+   "l_expr": "H - 124",
+   "w_expr": "L - 44",
+   "t_expr": "10",
+   "axis": "y",
+   "x_expr": "22",
+   "y_expr": "102",
+   "z_expr": "W - 10",
+   "assembly_step": 1,
+   "joint_type": "other",
+   "joinery_note": "Thin panel in a groove, or screwed to the rear edges."
+  },
+  {
+   "name": "Shelf (lowest)",
+   "l_expr": "L - 44",
+   "w_expr": "W - 10",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "102 + (H - 190) / 4",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins."
+  },
+  {
+   "name": "Shelf (middle)",
+   "l_expr": "L - 44",
+   "w_expr": "W - 10",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "124 + (H - 190) / 2",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins."
+  },
+  {
+   "name": "Shelf (highest)",
+   "l_expr": "L - 44",
+   "w_expr": "W - 10",
+   "t_expr": "22",
+   "axis": "x",
+   "x_expr": "22",
+   "y_expr": "146 + (H - 190) * 3 / 4",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "other",
+   "joinery_note": "Rests on shelf pins."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Shelf pin",
+   "qty_expr": "12",
+   "assembly_step": 2,
+   "note": "Four per shelf"
+  },
+  {
+   "kind": "other",
+   "name": "Wall fixing bracket",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": "Stops it tipping"
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 3,
+   "note": "Back panel and brackets"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Carcass joints"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 1,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1800 mm",
+   "qty_expr": "2",
+   "assembly_step": 1,
+   "note": "Carcass glue-up"
+  }
+ ]
+}

@@ -1,0 +1,225 @@
+{
+ "id": "chest-box",
+ "name": "Chest (storage box with a lid)",
+ "description": "A storage chest: four 60 mm feet, a 25 mm bottom, four 25 mm walls and a 30 mm lid. L is the width, W the depth, H the overall height including the lid. Thicknesses are standard estimates: check them with the achari.",
+ "size_hint": {
+  "l": 900,
+  "w": 450,
+  "h": 450
+ },
+ "typical_sizes": [
+  {
+   "name": "Small",
+   "l": 600,
+   "w": 400,
+   "h": 400
+  },
+  {
+   "name": "Standard",
+   "l": 900,
+   "w": 450,
+   "h": 450
+  },
+  {
+   "name": "Large",
+   "l": 1200,
+   "w": 550,
+   "h": 550
+  }
+ ],
+ "carve": [
+  "Front wall: face 'front'",
+  "Lid: face 'top'",
+  "Side walls: faces 'left' and 'right'"
+ ],
+ "parts": [
+  {
+   "name": "Foot (front left)",
+   "l_expr": "60",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled to the bottom."
+  },
+  {
+   "name": "Foot (front right)",
+   "l_expr": "60",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L - 60",
+   "y_expr": "0",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled to the bottom."
+  },
+  {
+   "name": "Foot (back left)",
+   "l_expr": "60",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "0",
+   "y_expr": "0",
+   "z_expr": "W - 60",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled to the bottom."
+  },
+  {
+   "name": "Foot (back right)",
+   "l_expr": "60",
+   "w_expr": "60",
+   "t_expr": "60",
+   "axis": "y",
+   "x_expr": "L - 60",
+   "y_expr": "0",
+   "z_expr": "W - 60",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "Doweled to the bottom."
+  },
+  {
+   "name": "Bottom",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "25",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "60",
+   "z_expr": "0",
+   "assembly_step": 1,
+   "joint_type": "dowel",
+   "joinery_note": "The walls stand on it."
+  },
+  {
+   "name": "Front wall",
+   "l_expr": "L",
+   "w_expr": "25",
+   "t_expr": "H - 115",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "85",
+   "z_expr": "0",
+   "assembly_step": 2,
+   "joint_type": "dovetail",
+   "joinery_note": "Dovetailed to both side walls."
+  },
+  {
+   "name": "Back wall",
+   "l_expr": "L",
+   "w_expr": "25",
+   "t_expr": "H - 115",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "85",
+   "z_expr": "W - 25",
+   "assembly_step": 2,
+   "joint_type": "dovetail",
+   "joinery_note": "Dovetailed to both side walls."
+  },
+  {
+   "name": "Side wall (left)",
+   "l_expr": "W - 50",
+   "w_expr": "25",
+   "t_expr": "H - 115",
+   "axis": "z",
+   "x_expr": "0",
+   "y_expr": "85",
+   "z_expr": "25",
+   "assembly_step": 2,
+   "joint_type": "dovetail",
+   "joinery_note": "Dovetailed to the front and back walls."
+  },
+  {
+   "name": "Side wall (right)",
+   "l_expr": "W - 50",
+   "w_expr": "25",
+   "t_expr": "H - 115",
+   "axis": "z",
+   "x_expr": "L - 25",
+   "y_expr": "85",
+   "z_expr": "25",
+   "assembly_step": 2,
+   "joint_type": "dovetail",
+   "joinery_note": "Dovetailed to the front and back walls."
+  },
+  {
+   "name": "Lid",
+   "l_expr": "L",
+   "w_expr": "W",
+   "t_expr": "30",
+   "axis": "x",
+   "x_expr": "0",
+   "y_expr": "H - 30",
+   "z_expr": "0",
+   "assembly_step": 3,
+   "joint_type": "other",
+   "joinery_note": "Hinged at the back."
+  }
+ ],
+ "hardware": [
+  {
+   "kind": "other",
+   "name": "Chest hinge 100 mm",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Hasp and staple lock",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Lid stay",
+   "qty_expr": "1",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "other",
+   "name": "Side handle",
+   "qty_expr": "2",
+   "assembly_step": 3,
+   "note": null
+  },
+  {
+   "kind": "screw",
+   "name": "Wood screw 4 x 40 mm",
+   "qty_expr": "24",
+   "assembly_step": 3,
+   "note": "Hinges, hasp, handles"
+  },
+  {
+   "kind": "dowel",
+   "name": "Dowel 8 x 40 mm",
+   "qty_expr": "16",
+   "assembly_step": 1,
+   "note": "Feet and bottom"
+  },
+  {
+   "kind": "glue",
+   "name": "Wood glue (PVA)",
+   "qty_expr": "1",
+   "assembly_step": 2,
+   "note": null
+  },
+  {
+   "kind": "clamp",
+   "name": "Bar clamp 1000 mm",
+   "qty_expr": "4",
+   "assembly_step": 2,
+   "note": "Box glue-up"
+  }
+ ]
+}
