@@ -204,7 +204,7 @@ def _totals(rows) -> Table:
         [
             [P(k, "bold" if i == last else "body"), P(v, "right")]
             for i, (k, v) in enumerate(rows)
-        ],  # fmt: skip
+        ],
         colWidths=[126 * mm, 40 * mm],
         hAlign="LEFT",
     )
@@ -230,7 +230,7 @@ def _lines_table(p) -> list:
             str(line["quantity"]),
             money(line["unit_price"]),
             money(line["amount"]),
-        ]  # fmt: skip
+        ]
         for i, line in enumerate(p["lines"], 1)
     ]
     return [
@@ -239,7 +239,7 @@ def _lines_table(p) -> list:
             rows,
             [10 * mm, 86 * mm, 14 * mm, 28 * mm, 28 * mm],
             right_cols=(2, 3, 4),
-        ),  # fmt: skip
+        ),
         Spacer(1, 4),
     ]
 
@@ -271,7 +271,7 @@ def _quotation(letter, p) -> list:
                 ("Date", day(letter.issued_on)),
                 ("Valid until", day(p.get("valid_until"))),
             ]
-        ),  # fmt: skip
+        ),
         Spacer(1, 8),
         *_party(p),
         P(f"<b>Subject:</b> {safe(letter.subject)}"),
@@ -293,7 +293,7 @@ def _order_confirmation(letter, p) -> list:
                 ("Order no.", safe(p.get("order_number"))),
                 ("Expected delivery", day(p.get("expected_delivery"))),
             ]
-        ),  # fmt: skip
+        ),
         Spacer(1, 8),
         *_party(p),
         P(f"<b>Subject:</b> {safe(letter.subject)}"),
@@ -305,7 +305,7 @@ def _order_confirmation(letter, p) -> list:
                 ("Advance received", money(p["advance"])),
                 ("Balance due", money(p["balance"])),
             ]
-        ),  # fmt: skip
+        ),
         Spacer(1, 8),
     ]
     if p.get("payments"):
@@ -329,7 +329,7 @@ def _purchase_receipt(letter, p) -> list:
                 ("Date", day(letter.issued_on)),
                 ("Piece code", safe(p.get("item_sku"))),
             ]
-        ),  # fmt: skip
+        ),
         Spacer(1, 8),
         *_party(p, "Bought from"),
         _grid(
@@ -337,7 +337,7 @@ def _purchase_receipt(letter, p) -> list:
             rows,
             [110 * mm, 16 * mm, 40 * mm],
             right_cols=(1, 2),
-        ),  # fmt: skip
+        ),
         Spacer(1, 4),
         _totals([("Amount paid", money(p["amount"]))]),
         Spacer(1, 4),
@@ -349,7 +349,7 @@ def _purchase_receipt(letter, p) -> list:
                 ("Method", method_word(pay["method"])),
                 ("Reference", safe(pay.get("reference"))),
             ]
-        ),  # fmt: skip
+        ),
         *_notes(p),
         Spacer(1, 10),
         KeepTogether(
