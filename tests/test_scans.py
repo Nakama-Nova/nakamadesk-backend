@@ -336,3 +336,17 @@ def test_results_are_staff_only_by_default(client, people, store):
     assert nc not in pub.text and ".nc" not in pub.text
     assets = client.get(f"/items/{item['id']}/assets", headers=owner).json()
     assert assets and all(a["visibility"] == "staff" for a in assets)
+
+
+def test_gcode_scan_needs_the_real_width(client, people):
+    h = people["owner"]["h"]
+    r = client.post(
+        "/scans", headers=h, json={"source_kind": "photos", "params": {"gcode": True}}
+    )
+    assert r.status_code == 422 and "real width" in r.text
+    ok = client.post(
+        "/scans",
+        headers=h,
+        json={"source_kind": "photos", "params": {"gcode": True, "real_width_mm": 400}},
+    )
+    assert ok.status_code in (200, 201), ok.text

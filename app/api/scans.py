@@ -19,7 +19,7 @@ from typing import Annotated, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import and_, or_, update
 
 from app.core.ratelimit import public_rate_limit
@@ -78,6 +78,11 @@ class Crop(BaseModel):
     real_height_mm: Optional[float] = Field(default=None, gt=0, le=5000)
 
 
+GCODE_NEEDS_WIDTH = (
+    "G-code needs the real width: enter the width of the carved area in mm"
+)
+
+
 class ScanParams(BaseModel):
     real_width_mm: Optional[float] = Field(default=None, gt=0, le=5000)
     quality: Literal["fast", "normal", "high"] = "normal"
@@ -89,6 +94,13 @@ class ScanParams(BaseModel):
         default=None, max_length=80
     )  # what it shows, e.g. "Headboard border"
     crop: Optional[Crop] = None  # a marked area of one photo (see Crop)
+
+    @model_validator(mode="after")
+    def _gcode_needs_width(self):
+        # the workshop PC cannot size G-code without it, and would only fail the job later
+        if self.gcode and not self.real_width_mm:
+            raise ValueError(GCODE_NEEDS_WIDTH)
+        return self
 
 
 class ScanCreate(BaseModel):

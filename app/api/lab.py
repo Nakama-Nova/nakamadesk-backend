@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from PIL import Image, ImageOps
 from sqlalchemy import func
 
-from app.api.scans import Crop
+from app.api.scans import GCODE_NEEDS_WIDTH, Crop
 from app.core.security import create_scoped_token, verify_token
 from app.db.deps import (
     LAB_COOKIE,
@@ -607,6 +607,8 @@ async def send_area(
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
+    if gcode and not real_width_mm:
+        raise HTTPException(status_code=422, detail=GCODE_NEEDS_WIDTH)
     if store is None:
         raise HTTPException(status_code=503, detail="File storage is not set up yet")
     data = await photo.read(AREA_PHOTO_MAX + 1)

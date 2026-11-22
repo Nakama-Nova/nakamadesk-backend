@@ -710,6 +710,11 @@ $("areaSend").addEventListener("click", async () => {
     $("areaError").textContent = "Pick a photo and mark all four corners first.";
     return;
   }
+  if ($("areaGcode").checked && $("areaW").value.trim() === "") {
+    $("areaError").textContent = "G-code needs the real width: enter the width of the carved area in mm.";
+    $("areaW").focus();
+    return;
+  }
   if (area.outline.length && area.outline.length < 3) {
     $("areaError").textContent = "An outline needs at least three points. Add more, or clear it.";
     return;
