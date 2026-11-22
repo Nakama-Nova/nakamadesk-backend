@@ -7,13 +7,14 @@ customers' data are never returned.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
 from app.db.deps import get_db, get_uow
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import (
+    BrevoWebhookEvent,
     CheckoutRequest,
     DeliveryCheck,
     EnquiryRequest,
@@ -134,3 +135,24 @@ def newsletter_unsubscribe(body: NewsletterToken, db: Session = Depends(get_db))
     """The link in every email: takes the address off the mailing list."""
     newsletter_service.unsubscribe(db, body.token)
     return NewsletterStatus(status="unsubscribed")
+
+
+def _brevo_webhook_auth(
+    secret: Optional[str] = Query(None, max_length=200),
+    x_webhook_secret: Optional[str] = Header(None, max_length=200),
+) -> None:
+    """The shared secret, in the `X-Webhook-Secret` header or the `?secret=` of the URL."""
+    newsletter_service.check_webhook_secret(x_webhook_secret, secret)
+
+
+# Called by Brevo's servers, not a browser: no CORS. Deliberately NOT behind
+# public_rate_limit: that limiter is per IP and Brevo sends bursts from a handful of IPs
+# (and retries), so it would answer 429 to real events. The secret is the gate instead.
+@router.post(
+    "/newsletter/brevo-webhook",
+    dependencies=[Depends(_brevo_webhook_auth)],
+)
+def newsletter_brevo_webhook(body: BrevoWebhookEvent, db: Session = Depends(get_db)):
+    """Brevo tells us someone unsubscribed, hard-bounced or marked a campaign as spam."""
+    newsletter_service.apply_brevo_event(db, body.event, body.email, body.list_id)
+    return {"status": "ok"}

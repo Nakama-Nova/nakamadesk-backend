@@ -1,5 +1,6 @@
 """Newsletter double opt-in: sign-up, confirm, unsubscribe. Brevo is faked, no network."""
 
+import logging
 import re
 import uuid
 from datetime import timedelta
@@ -9,6 +10,7 @@ import pytest
 
 from app.core import ratelimit
 from app.core.config import settings
+from app.core.middleware import HideSecretInAccessLog
 from app.models.newsletter_subscriber import NewsletterSubscriber
 from app.services import newsletter_service as svc
 
@@ -23,6 +25,7 @@ class FakeBrevo:
         self.status = None  # force this HTTP status on the next calls
         self.body = {}
         self.network_error = False
+        self.fail_method = None  # answer 500 to this HTTP method only
 
     def __call__(self, method, url, json=None, headers=None, timeout=None, **kw):
         self.calls.append(
@@ -36,7 +39,7 @@ class FakeBrevo:
         )
         if self.network_error:
             raise httpx.ConnectTimeout("boom")
-        status = self.status or 201
+        status = 500 if method == self.fail_method else (self.status or 201)
         return httpx.Response(
             status, json=self.body, request=httpx.Request(method, url)
         )
@@ -202,6 +205,10 @@ def test_confirm_marks_confirmed_and_adds_to_the_brevo_list(client, db, brevo):
         "listIds": [7],
         "updateEnabled": True,
     }
+    # and a blocklist flag left over from Brevo is cleared (see the re-subscribe tests)
+    (unblock,) = brevo.to("/contacts/meena%40example.com")
+    assert unblock["method"] == "PUT"
+    assert unblock["json"] == {"emailBlacklisted": False, "listIds": [7]}
 
 
 def test_confirming_twice_is_fine(client, db, brevo):
@@ -487,3 +494,337 @@ def test_email_text_says_who_why_and_has_both_links(client, brevo):
     assert "If this was not you" in sent["textContent"]
     assert sent["subject"]
     assert sent["htmlContent"].count("/newsletter/") == 2
+
+
+# --- Brevo's webhook: people who leave inside Brevo ---------------------------------
+
+SECRET = "hook-secret-0123456789"
+HOOK = "/public/newsletter/brevo-webhook"
+
+
+@pytest.fixture
+def hook(monkeypatch):
+    monkeypatch.setattr(settings, "BREVO_WEBHOOK_SECRET", SECRET)
+
+
+def call_hook(client, event="unsubscribe", email="meena@example.com", **over):
+    """What Brevo posts (marketing shape), with the secret in the URL."""
+    body = {
+        "event": event,
+        "email": email,
+        "id": 1,
+        "camp_id": 9,
+        "ts_event": 1790000000,
+        **over,
+    }
+    return client.post(f"{HOOK}?secret={SECRET}", json=body)
+
+
+def test_webhook_secret_in_the_url_or_in_a_header_is_accepted(client, db, brevo, hook):
+    confirmed(client, brevo)
+    assert call_hook(client).status_code == 200
+    assert row(db).status == "unsubscribed"
+
+    confirmed(client, brevo, "b@example.com")
+    r = client.post(
+        HOOK,
+        json={"event": "unsubscribe", "email": "b@example.com"},
+        headers={"X-Webhook-Secret": SECRET},
+    )
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+    assert row(db, "b@example.com").status == "unsubscribed"
+
+
+@pytest.mark.parametrize(
+    "url,headers",
+    [
+        (HOOK, {}),
+        (f"{HOOK}?secret=", {}),
+        (f"{HOOK}?secret=wrong-secret", {}),
+        (f"{HOOK}?secret={SECRET}x", {}),
+        (f"{HOOK}?secret={SECRET[:-1]}", {}),
+        (HOOK, {"X-Webhook-Secret": "wrong-secret"}),
+        (HOOK, {"X-Webhook-Secret": ""}),
+        (HOOK, {"Authorization": f"Bearer {SECRET}"}),  # not a scheme we read
+    ],
+)
+def test_webhook_with_a_bad_or_missing_secret_is_401_and_changes_nothing(
+    client, db, brevo, hook, caplog, url, headers
+):
+    confirmed(client, brevo)
+    body = {"event": "unsubscribe", "email": "meena@example.com"}
+    with caplog.at_level("DEBUG"):
+        r = client.post(url, json=body, headers=headers)
+    assert r.status_code == 401
+    logged = " ".join(x.getMessage() for x in caplog.records if x.name != "httpx")
+    assert SECRET not in r.text and SECRET not in logged  # httpx is the test client's
+    assert row(db).status == "confirmed"
+
+
+def test_webhook_checks_the_secret_before_reading_the_body(client, hook):
+    assert client.post(HOOK, json={"nonsense": True}).status_code == 401
+    assert client.post(HOOK).status_code == 401
+
+
+def test_webhook_secret_is_compared_in_constant_time(client, hook, monkeypatch):
+    seen = []
+    real = svc.hmac.compare_digest
+    monkeypatch.setattr(
+        svc.hmac, "compare_digest", lambda a, b: seen.append(1) or real(a, b)
+    )
+    client.post(f"{HOOK}?secret=wrong", json={})
+    assert seen
+
+
+@pytest.mark.parametrize("given", ["", "anything", SECRET])
+def test_webhook_refuses_everything_when_no_secret_is_set(
+    client, db, brevo, monkeypatch, given
+):
+    confirmed(client, brevo)
+    monkeypatch.setattr(settings, "BREVO_WEBHOOK_SECRET", "")
+    body = {"event": "unsubscribe", "email": "meena@example.com"}
+    assert client.post(f"{HOOK}?secret={given}", json=body).status_code == 503
+    r = client.post(HOOK, json=body, headers={"X-Webhook-Secret": given})
+    assert r.status_code == 503
+    assert client.post(HOOK, json=body).status_code == 503
+    assert row(db).status == "confirmed"
+
+
+@pytest.mark.parametrize(
+    "event,status",
+    [
+        ("unsubscribe", "unsubscribed"),  # marketing
+        ("unsubscribed", "unsubscribed"),  # transactional
+        ("hard_bounce", "bounced"),  # marketing
+        ("hardBounce", "bounced"),  # transactional
+        ("spam", "complained"),
+    ],
+)
+def test_each_event_marks_the_row_and_never_calls_brevo(
+    client, db, brevo, hook, event, status
+):
+    confirmed(client, brevo)
+    brevo.calls.clear()
+    r = call_hook(client, event)
+    assert r.status_code == 200
+    sub = row(db)
+    assert sub.status == status
+    assert sub.unsubscribed_at is not None
+    assert brevo.calls == []
+
+
+def test_a_pending_address_is_marked_too(client, db, brevo, hook):
+    subscribe(client)
+    assert call_hook(client, "hard_bounce").status_code == 200
+    assert row(db).status == "bounced"
+
+
+def test_the_address_is_matched_ignoring_case_and_spaces(client, db, brevo, hook):
+    confirmed(client, brevo)
+    assert call_hook(client, email=" Meena@Example.COM ").status_code == 200
+    assert row(db).status == "unsubscribed"
+
+
+def test_an_unknown_address_is_a_quiet_200(client, db, brevo, hook):
+    r = call_hook(client, email="nobody@example.com")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+    assert db.query(NewsletterSubscriber).count() == 0
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        "delivered",
+        "opened",
+        "click",
+        "soft_bounce",
+        "contact_deleted",
+        "list_addition",
+        "",
+    ],
+)
+def test_events_we_do_not_act_on_are_a_200_and_change_nothing(
+    client, db, brevo, hook, event
+):
+    confirmed(client, brevo)
+    assert call_hook(client, event).status_code == 200
+    assert row(db).status == "confirmed"
+
+
+@pytest.mark.parametrize("body", [{}, {"event": "unsubscribe"}, {"email": "a@b.co"}])
+def test_a_body_missing_event_or_email_is_ignored_not_an_error(
+    client, db, brevo, hook, body
+):
+    confirmed(client, brevo)
+    assert client.post(f"{HOOK}?secret={SECRET}", json=body).status_code == 200
+    assert row(db).status == "confirmed"
+
+
+def test_leaving_some_other_brevo_list_does_not_unsubscribe_here(
+    client, db, brevo, hook
+):
+    confirmed(client, brevo)  # our list id is 7
+    assert call_hook(client, list_id=[3, 4]).status_code == 200
+    assert row(db).status == "confirmed"
+    assert call_hook(client, list_id=[3, 7]).status_code == 200
+    assert row(db).status == "unsubscribed"
+
+
+def test_list_id_may_be_a_single_number(client, db, brevo, hook):
+    confirmed(client, brevo)
+    call_hook(client, list_id=3)
+    assert row(db).status == "confirmed"
+    call_hook(client, list_id=7)
+    assert row(db).status == "unsubscribed"
+
+
+def test_a_bounce_or_spam_report_counts_whatever_list_it_names(client, db, brevo, hook):
+    confirmed(client, brevo)
+    call_hook(client, "spam", list_id=[3])
+    assert row(db).status == "complained"
+
+
+def test_the_same_event_twice_changes_nothing_the_second_time(client, db, brevo, hook):
+    confirmed(client, brevo)
+    assert call_hook(client).status_code == 200
+    first = row(db).unsubscribed_at
+    assert call_hook(client).status_code == 200
+    assert row(db).status == "unsubscribed"
+    assert row(db).unsubscribed_at == first
+
+
+def test_a_stronger_reason_replaces_a_weaker_one_but_never_the_reverse(
+    client, db, brevo, hook
+):
+    confirmed(client, brevo)
+    call_hook(client, "unsubscribe")
+    first = row(db).unsubscribed_at
+    call_hook(client, "spam")  # unsubscribed -> complained
+    assert row(db).status == "complained"
+    assert row(db).unsubscribed_at == first  # the first time they left stays on record
+    call_hook(client, "hard_bounce")
+    call_hook(client, "unsubscribe")
+    assert row(db).status == "complained"
+
+
+def test_the_webhook_is_not_behind_the_per_ip_rate_limit(
+    client, db, brevo, hook, monkeypatch
+):
+    monkeypatch.setattr(settings, "PUBLIC_RATE_LIMIT", 1)
+    ratelimit.reset()
+    assert all(call_hook(client, "delivered").status_code == 200 for _ in range(10))
+
+
+def test_the_access_log_masks_the_url_secret():
+    rec = logging.LogRecord(
+        "uvicorn.access",
+        20,
+        "",
+        0,
+        '%s - "%s %s HTTP/%s" %d',
+        ("1.2.3.4:5", "POST", f"{HOOK}?a=1&secret={SECRET}&b=2", "1.1", 200),
+        None,
+    )
+    assert HideSecretInAccessLog().filter(rec)
+    assert SECRET not in rec.getMessage()
+    assert f"{HOOK}?a=1&secret=***&b=2" in rec.getMessage()
+
+
+# --- signing up again after leaving inside Brevo ------------------------------------
+
+
+def test_resubscribe_after_a_brevo_side_unsubscribe_clears_the_blocklist(
+    client, db, brevo, hook
+):
+    confirmed(client, brevo)
+    call_hook(
+        client
+    )  # left through Brevo's own link; our row said "confirmed" until now
+    brevo.calls.clear()
+
+    r = subscribe(client, source="footer")
+    assert r.status_code == 202
+    assert row(db).status == "pending"
+    assert len(brevo.to("/smtp/email")) == 1  # a new confirmation, not a silent return
+    assert (
+        brevo.to("/contacts") == []
+    )  # nothing is added or unblocked before they confirm
+
+    c, _ = tokens(brevo)
+    assert (
+        client.post("/public/newsletter/confirm", json={"token": c}).status_code == 200
+    )
+    sub = row(db)
+    assert sub.status == "confirmed" and sub.unsubscribed_at is None
+
+    add, unblock = [x for x in brevo.calls if "/contacts" in x["url"]]
+    assert add["method"] == "POST" and add["json"]["listIds"] == [7]
+    assert unblock["method"] == "PUT"
+    assert unblock["url"] == "https://api.brevo.com/v3/contacts/meena%40example.com"
+    assert unblock["json"] == {"emailBlacklisted": False, "listIds": [7]}
+    assert unblock["headers"]["api-key"] == "test-key"
+
+
+def test_confirmation_stays_retryable_when_clearing_the_blocklist_fails(
+    client, db, brevo, hook
+):
+    confirmed(client, brevo)
+    call_hook(client)
+    subscribe(client)
+    c, _ = tokens(brevo)
+
+    brevo.fail_method = "PUT"
+    r = client.post("/public/newsletter/confirm", json={"token": c})
+    assert r.status_code == 502
+    assert row(db).status == "pending"  # not confirmed while Brevo still blocks them
+
+    brevo.fail_method = None
+    r = client.post("/public/newsletter/confirm", json={"token": c})
+    assert r.status_code == 200
+    assert row(db).status == "confirmed"
+
+
+def test_a_hard_bounced_address_may_sign_up_again_and_confirm(client, db, brevo, hook):
+    confirmed(client, brevo)
+    call_hook(client, "hard_bounce")
+    brevo.calls.clear()
+    assert subscribe(client).status_code == 202
+    assert row(db).status == "pending"
+    assert len(brevo.to("/smtp/email")) == 1  # they must receive it to get any further
+    c, _ = tokens(brevo)
+    assert (
+        client.post("/public/newsletter/confirm", json={"token": c}).status_code == 200
+    )
+    assert row(db).status == "confirmed"
+
+
+def test_someone_who_reported_spam_is_not_resubscribed_automatically(
+    client, db, brevo, hook
+):
+    confirmed(client, brevo)
+    call_hook(client, "spam")
+    brevo.calls.clear()
+
+    r = subscribe(client)  # the same plain 202 as always: nothing to tell the visitor
+    assert r.status_code == 202
+    assert r.json() == {"status": "check_your_email"}
+    assert row(db).status == "complained"
+    assert brevo.calls == []  # no email, nothing touched in Brevo
+
+
+def test_old_links_and_our_own_unsubscribe_cannot_change_a_bounce_or_spam_row(
+    client, db, brevo, hook
+):
+    c, u = confirmed(client, brevo)
+    for event, status in (("hard_bounce", "bounced"), ("spam", "complained")):
+        call_hook(client, event)
+        brevo.calls.clear()
+        r = client.post("/public/newsletter/confirm", json={"token": c})
+        assert r.status_code == 400
+        assert row(db).status == status
+        assert brevo.to("/contacts") == []
+        # their own opt-out link still works (it is idempotent) but keeps the reason
+        client.post("/public/newsletter/unsubscribe", json={"token": u})
+        assert row(db).status == status

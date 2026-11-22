@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 
 from fastapi import Request
@@ -7,6 +8,25 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class HideSecretInAccessLog(logging.Filter):
+    """uvicorn's access log prints the whole URL; keep `?secret=...` (Brevo's webhook
+    secret) out of it."""
+
+    _SECRET = re.compile(r"([?&]secret=)[^&\s]*")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                (
+                    self._SECRET.sub(lambda m: m.group(1) + "***", a)
+                    if isinstance(a, str)
+                    else a
+                )
+                for a in record.args
+            )
+        return True
 
 
 class TimingMiddleware(BaseHTTPMiddleware):

@@ -11,6 +11,13 @@ signed with a keyed hash that also names the purpose, so a confirm link can neve
 unsubscribe anyone and the other way round. Nothing is stored and nothing is logged.
 Confirm links last 7 days; unsubscribe links never expire.
 
+People can also leave from inside Brevo (its own unsubscribe link in a campaign, a hard
+bounce, a spam report). Brevo tells us through a webhook (`apply_brevo_event`) and the row
+is marked `unsubscribed`, `bounced` or `complained`. Someone who signs up again after
+`unsubscribed` or `bounced` starts a new round of consent; once they confirm, Brevo's
+blocklist flag is cleared and they are put back on the list. `complained` (they reported
+us as spam) is never undone automatically: sign-up answers as usual but sends nothing.
+
 Every Brevo call is plain HTTPS inside the request with a short timeout (serverless
 cannot be trusted to finish background work). When Brevo cannot be reached the person is
 told so (502), never that it worked.
@@ -22,7 +29,8 @@ import html
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import List, Optional, Union
+from urllib.parse import quote
 
 import httpx
 from fastapi import HTTPException
@@ -45,6 +53,20 @@ NOT_SET_UP = "The newsletter is not set up yet."
 SEND_FAILED = "We could not send the email. Please try again."
 BREVO_FAILED = "We could not reach the newsletter service. Please try again."
 STORE_NAME = "Vriksha Studios"
+WEBHOOK_OFF = "The newsletter webhook is not set up yet."
+WEBHOOK_DENIED = "Not allowed."
+
+# Statuses that mean "do not mail this person". Brevo's own events map onto them, and a
+# stronger one (complained > bounced > unsubscribed) is never replaced by a weaker one.
+_OFF_RANK = {"unsubscribed": 1, "bounced": 2, "complained": 3}
+# Brevo spells the events differently for marketing (`hard_bounce`, `unsubscribe`) and
+# transactional (`hardBounce`, `unsubscribed`) webhooks; compared lower case, no `_`.
+_EVENT_STATUS = {
+    "unsubscribe": "unsubscribed",
+    "unsubscribed": "unsubscribed",
+    "hardbounce": "bounced",
+    "spam": "complained",
+}
 
 
 class BrevoError(RuntimeError):
@@ -145,6 +167,14 @@ def _add_to_list(email: str) -> None:
         "POST",
         "/contacts",
         {"email": email, "listIds": [settings.BREVO_LIST_ID], "updateEnabled": True},
+    )
+    # A contact who left through Brevo's own link (or bounced) is blocklisted there, and a
+    # blocklisted contact is never mailed even when it is on the list. They have just
+    # confirmed a fresh sign-up, so clear the flag. Needs the contact to exist: POST above.
+    _brevo(
+        "PUT",
+        f"/contacts/{quote(email, safe='')}",
+        {"emailBlacklisted": False, "listIds": [settings.BREVO_LIST_ID]},
     )
 
 
@@ -257,7 +287,14 @@ def subscribe(
             sub = db.query(NewsletterSubscriber).filter_by(email=email).one()
     elif sub.status == "confirmed":
         return
-    elif sub.status == "unsubscribed":  # a new round of consent
+    elif (
+        sub.status == "complained"
+    ):  # reported us as spam: stays off until cleared by hand
+        logger.info(
+            "newsletter sign-up ignored: address is suppressed after a spam report"
+        )
+        return
+    elif sub.status in ("unsubscribed", "bounced"):  # a new round of consent
         sub.status = "pending"
         sub.source = _clean_source(source) or sub.source
         sub.consent_version = CONSENT_VERSION
@@ -285,7 +322,7 @@ def subscribe(
 def confirm(db: Session, token: str) -> None:
     """The confirm link: mark confirmed and add to the Brevo list. Safe to repeat."""
     sub = _subscriber_for(db, "confirm", token)
-    if sub.status == "unsubscribed":  # an old link must not undo a later opt-out
+    if sub.status in _OFF_RANK:  # an old link must not undo a later opt-out
         raise HTTPException(status_code=400, detail=BAD_LINK)
     if not _configured():
         if not _log_only():
@@ -316,7 +353,49 @@ def unsubscribe(db: Session, token: str) -> None:
         except BrevoError as e:
             logger.error("newsletter list removal failed: %s", e)
             raise HTTPException(status_code=502, detail=BREVO_FAILED) from None
-    if sub.status != "unsubscribed":
+    if sub.status not in _OFF_RANK:  # a bounce or spam report stays on record
         sub.status = "unsubscribed"
         sub.unsubscribed_at = _now()
         db.commit()
+
+
+# --- Brevo's webhook -----------------------------------------------------------------
+
+
+def check_webhook_secret(*given: Optional[str]) -> None:
+    """Fail closed: no secret configured = refuse everything; else one given value must match."""
+    expected = settings.BREVO_WEBHOOK_SECRET.encode()
+    if not expected:
+        raise HTTPException(status_code=503, detail=WEBHOOK_OFF)
+    ok = False
+    for value in given:
+        if value and hmac.compare_digest(value.encode(), expected):
+            ok = True
+    if not ok:
+        raise HTTPException(status_code=401, detail=WEBHOOK_DENIED)
+
+
+def apply_brevo_event(
+    db: Session,
+    event: Optional[str],
+    email: Optional[str],
+    list_id: Union[int, List[int], None] = None,
+) -> None:
+    """
+    A person left inside Brevo: record it. Unknown addresses and events we do not act on
+    are ignored (Brevo must always get a 200, or it retries); repeats change nothing.
+    ponytail: no event-time check, so a delayed old event can mark someone who re-joined
+    since; compare Brevo's `ts_event` with `confirmed_at` if that ever shows up.
+    """
+    new = _EVENT_STATUS.get((event or "").replace("_", "").lower())
+    if new is None or not email:
+        return
+    lists = [list_id] if isinstance(list_id, int) else (list_id or [])
+    if new == "unsubscribed" and lists and settings.BREVO_LIST_ID not in lists:
+        return  # they left some other list of the owner's, not this one
+    sub = db.query(NewsletterSubscriber).filter_by(email=email.strip().lower()).first()
+    if sub is None or _OFF_RANK.get(sub.status, 0) >= _OFF_RANK[new]:
+        return
+    sub.status = new
+    sub.unsubscribed_at = sub.unsubscribed_at or _now()
+    db.commit()

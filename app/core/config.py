@@ -83,6 +83,10 @@ class Settings:
     STOREFRONT_URL: str = os.getenv("STOREFRONT_URL", "").strip().rstrip("/")
     # Signs the confirm/unsubscribe links. Empty = the app's SECRET_KEY is used.
     NEWSLETTER_TOKEN_SECRET: str = os.getenv("NEWSLETTER_TOKEN_SECRET", "")
+    # Shared secret Brevo must present when it calls POST /public/newsletter/brevo-webhook
+    # (unsubscribes, hard bounces and spam complaints made inside Brevo). Empty = that
+    # endpoint refuses every request (503).
+    BREVO_WEBHOOK_SECRET: str = os.getenv("BREVO_WEBHOOK_SECRET", "").strip()
     # --- Paying by cash or UPI (no payment gateway) --------------------------
     # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
     # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.

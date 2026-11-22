@@ -4,6 +4,8 @@ NakamaDesk FastAPI Application Entry Point.
 Initializes the FastAPI app, registers middleware, and includes all API routers.
 """
 
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -49,7 +51,11 @@ from app.api import (
     wages,
 )
 from app.core.config import settings
-from app.core.middleware import SecurityHeadersMiddleware, TimingMiddleware
+from app.core.middleware import (
+    HideSecretInAccessLog,
+    SecurityHeadersMiddleware,
+    TimingMiddleware,
+)
 from app.finance import api as finance_api
 
 # The API docs and schema list every route: keep them for development only.
@@ -60,6 +66,8 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None if settings.IS_PROD else "/openapi.json",
 )
+
+logging.getLogger("uvicorn.access").addFilter(HideSecretInAccessLog())
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(TimingMiddleware)

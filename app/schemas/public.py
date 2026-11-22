@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -122,3 +122,13 @@ class NewsletterToken(BaseModel):
 
 class NewsletterStatus(BaseModel):
     status: Literal["check_your_email", "confirmed", "unsubscribed"]
+
+
+class BrevoWebhookEvent(BaseModel):
+    """The few fields we use from Brevo's webhook body. Lenient on purpose: Brevo retries
+    (and may disable the webhook) when it gets an error, so odd events are ignored, not 422.
+    """
+
+    event: Optional[str] = None
+    email: Optional[str] = None
+    list_id: Union[int, List[int], None] = None
