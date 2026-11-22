@@ -69,6 +69,20 @@ class Settings:
     # new accounts, so these are what actually stop someone running up the SMS/email bill.
     SMS_DAILY_LIMIT: int = int(os.getenv("SMS_DAILY_LIMIT", "300"))
     CODE_EMAILS_DAILY_LIMIT: int = int(os.getenv("CODE_EMAILS_DAILY_LIMIT", "1000"))
+    # --- Newsletter (Brevo) ---------------------------------------------------
+    # Double opt-in sign-up. The confirmation email goes through Brevo's transactional API,
+    # and a confirmed address is added to the Brevo list the owner writes campaigns for.
+    # Empty BREVO_API_KEY (or list id / sender): sign-up answers 503; in ENV=dev the
+    # confirm link is only logged so it can be tried locally.
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
+    BREVO_LIST_ID: int = int(os.getenv("BREVO_LIST_ID") or "0")
+    BREVO_SENDER_EMAIL: str = os.getenv("BREVO_SENDER_EMAIL", "")  # a verified sender
+    BREVO_SENDER_NAME: str = os.getenv("BREVO_SENDER_NAME") or "Vriksha Studios"
+    # The storefront's public address (no trailing slash): the confirm and unsubscribe
+    # links in the emails point at its /newsletter/confirm and /newsletter/unsubscribe.
+    STOREFRONT_URL: str = os.getenv("STOREFRONT_URL", "").strip().rstrip("/")
+    # Signs the confirm/unsubscribe links. Empty = the app's SECRET_KEY is used.
+    NEWSLETTER_TOKEN_SECRET: str = os.getenv("NEWSLETTER_TOKEN_SECRET", "")
     # --- Paying by cash or UPI (no payment gateway) --------------------------
     # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
     # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.

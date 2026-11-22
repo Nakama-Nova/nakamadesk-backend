@@ -83,6 +83,7 @@ All settings are environment variables, read in `app/core/config.py` and `app/co
 | `MEDIA_DIR` | Where public product photos and 3D models are kept on disk (default `media`) |
 | `S3_BUCKET`, `S3_ENDPOINT_URL`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private bucket for scans and 3D files (AWS S3, or Cloudflare R2 via the endpoint). With `S3_BUCKET` empty the upload endpoints answer 503 |
 | `EMAIL_PROVIDER` (`ses`), `SES_REGION`, `SMTP_*`, `EMAIL_FROM`, `SMS_*`, `PAY_UPI_ID`, `PAY_UPI_NAME`, `PAY_PHONE` | Sign-in codes by email or SMS, and the UPI details shown after checkout |
+| `BREVO_API_KEY`, `BREVO_LIST_ID`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME`, `STOREFRONT_URL`, `NEWSLETTER_TOKEN_SECRET` | Newsletter sign-up (double opt-in through Brevo). `BREVO_API_KEY` empty, or no list id, sender or storefront address: sign-up answers 503 (in `ENV=dev` the confirm link is only logged). `STOREFRONT_URL` is the website's public address with no trailing slash. `NEWSLETTER_TOKEN_SECRET` signs the email links and falls back to `SECRET_KEY` when empty |
 | `GITHUB_RELEASES_TOKEN`, `GITHUB_RELEASES_REPO`, `GITHUB_MOBILE_RELEASES_REPO` | Optional read-only token for the releases the update endpoints serve. Empty works while the repos are public (anonymous, 60 questions an hour) |
 | `GPS_MAX_ACCURACY_M` | Phones with a vaguer GPS fix cannot mark attendance (default 100) |
 

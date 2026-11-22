@@ -33,6 +33,7 @@ from app.models.machine import (  # noqa: F401
     MachineDowntime,
     MachineMaintenance,
 )
+from app.models.newsletter_subscriber import NewsletterSubscriber  # noqa: F401
 from app.models.order import Order  # noqa: F401
 from app.models.order_item import OrderItem  # noqa: F401
 from app.models.order_payment import OrderPayment  # noqa: F401
