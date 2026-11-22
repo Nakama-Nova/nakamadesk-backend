@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Tuple
 
 from fastapi import HTTPException
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.config import settings
 
@@ -27,6 +27,47 @@ ALLOWED = {
 }
 MAX_BYTES = {"image": 10 * 1024 * 1024, "glb": 25 * 1024 * 1024}
 _PIL_FORMAT = {"jpg": "JPEG", "png": "PNG", "webp": "WEBP"}
+
+
+# Website photos: shown at most about 1100 px wide (a retina phone or a big desk screen), so 2000 px on the
+# long side is plenty. Staff often upload camera or render files of several MB; those are shrunk on the way in.
+WEB_MAX_SIDE = 2000
+WEB_QUALITY = 82
+LEAVE_ALONE_BYTES = (
+    300 * 1024
+)  # a file this small and not oversized is kept exactly as uploaded
+
+
+def optimise_image(ext: str, data: bytes) -> Tuple[str, bytes, str]:
+    """
+    Make an uploaded photo web-sized. Returns (extension, bytes, content type).
+
+    Larger than WEB_MAX_SIDE on the long side, or bigger than LEAVE_ALONE_BYTES, becomes a WebP (quality
+    WEB_QUALITY) scaled to fit WEB_MAX_SIDE, turned upright by its EXIF orientation, with EXIF (including GPS
+    location) dropped. Small photos, animated images and anything we cannot re-encode are returned unchanged, as is
+    any result that would not be smaller. Never raises: a photo that cannot be optimised is stored as it came.
+    """
+    original = (ext, data, _CONTENT_TYPES[ext])
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            if getattr(img, "n_frames", 1) > 1:  # animated: leave it
+                return original
+            width, height = img.size
+            oversized = max(width, height) > WEB_MAX_SIDE
+            if not oversized and len(data) <= LEAVE_ALONE_BYTES:
+                return original
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((WEB_MAX_SIDE, WEB_MAX_SIDE), Image.Resampling.LANCZOS)
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA" if "A" in img.getbands() else "RGB")
+            out = io.BytesIO()
+            img.save(out, "WEBP", quality=WEB_QUALITY, method=4)
+    except Exception:  # noqa: BLE001
+        return original
+    result = out.getvalue()
+    if len(result) >= len(data) and not oversized:
+        return original
+    return "webp", result, "image/webp"
 
 
 def max_read_size() -> int:
