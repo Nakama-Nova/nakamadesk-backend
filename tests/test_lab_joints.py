@@ -14,8 +14,8 @@ def part(name, size, pos, joint="mortise_tenon", step=1, note=None):
     return {
         "id": name,
         "name": name,
-        "size": dict(zip("xyz", size)),
-        "pos": dict(zip("xyz", pos)),
+        "size": dict(zip("xyz", size, strict=True)),
+        "pos": dict(zip("xyz", pos, strict=True)),
         "joint_type": joint,
         "note": note,
         "step": step,
