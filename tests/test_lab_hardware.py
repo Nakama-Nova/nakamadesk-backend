@@ -395,3 +395,25 @@ def test_lab_pages_are_valid_utf8():
     folder = Path(__file__).resolve().parent.parent / "app" / "static" / "lab"
     for page in [*folder.glob("*.js"), *folder.glob("*.html"), *folder.glob("*.css")]:
         page.read_bytes().decode("utf-8")  # raises on a bad byte
+
+
+def test_the_solved_piece_lists_where_each_joint_sits(client, people, chair):
+    parts = chair_parts()
+    parts[5]["joint_type"] = "mortise_tenon"  # the back rail
+    assert put_parts(client, people, chair, parts).status_code == 200
+    body = solved(client, people, chair)
+    names = [p["name"] for p in body["parts"]]
+    joints = body["joints"]
+    assert [names[j["a"]] for j in joints] == [
+        "Back leg",
+        "Back leg",
+    ]  # the rail meets both back legs
+    assert {names[j["b"]] for j in joints} == {"Back rail"} and {
+        j["kind"] for j in joints
+    } == {"mortise_tenon"}
+    assert all(j["points"] and j["step"] == 3 for j in joints)
+    parts[5]["joint_type"] = None
+    assert put_parts(client, people, chair, parts).status_code == 200
+    assert (
+        solved(client, people, chair)["joints"] == []
+    )  # nobody says anything is joined

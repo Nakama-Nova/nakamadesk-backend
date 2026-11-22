@@ -51,6 +51,7 @@ scene.add(grid);
 const group = new THREE.Group();
 scene.add(group);
 let parts = []; // {data, mesh, centre, base}
+let joints = []; // {data, obj, b} one marker group per joint, a child of its first part
 let data = null;
 let selected = null;
 let framed = false;
@@ -87,6 +88,7 @@ function clearParts() {
     });
   }
   parts = [];
+  joints = [];
   selected = null;
 }
 
@@ -208,7 +210,7 @@ function loadModel(p) {
       const bb2 = new THREE.Box3().setFromObject(model);
       model.position.sub(bb2.getCenter(new THREE.Vector3()));
       p.mesh.material.visible = false;
-      p.mesh.children.forEach((c) => (c.visible = false));
+      p.mesh.children.forEach((c) => c.isLineSegments && (c.visible = false));
       p.mesh.add(model);
     },
     undefined,
@@ -237,10 +239,12 @@ function applySteps() {
     p.mat.color.copy(current ? new THREE.Color(0xe8a21a) : p.base);
     p.mat.emissive.set(current ? 0x442200 : 0x000000);
   }
+  applyJoints();
 }
 
 $("explode").addEventListener("input", applyExplode);
 $("step").addEventListener("input", applySteps);
+$("showJoints").addEventListener("change", applyJoints);
 
 // ---------------------------------------------------------------- selecting a part
 const ray = new THREE.Raycaster();
@@ -250,6 +254,8 @@ canvas.addEventListener("pointerup", (e) => {
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return; // it was a drag
   const r = canvas.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  const near = nearestJoint(e.clientX - r.left, e.clientY - r.top, r);
+  if (near) return selectJoint(near);
   const hit = ray.intersectObjects(parts.filter((p) => p.mesh.visible).map((p) => p.mesh), true)[0];
   let obj = hit?.object;
   while (obj && !obj.userData.part) obj = obj.parent;
@@ -285,6 +291,106 @@ function select(p) {
   for (const c of (data.carvings || []).filter((x) => x.part_id === d.id)) {
     line("Carving", `${c.sku} ${c.name}, ${FACES[c.face]} face${c.mirror ? ", mirrored" : ""}, ${c.area_mm.w} × ${c.area_mm.h} mm`);
   }
+  if (d.note) line("Joinery", d.note);
+}
+
+// ---------------------------------------------------------------- joints
+// The server finds where parts meet (see lab_joints.py) and sends the points in mm; here they are only drawn.
+const JOINT_COLOURS = {
+  mortise_tenon: 0xd62828,
+  dowel: 0x1f6feb,
+  pocket_screw: 0x2a9d3f,
+  half_lap: 0x8e44ad,
+  dovetail: 0xe67e00,
+  biscuit: 0x00a3a3,
+  butt_glue: 0x555555,
+  other: 0xc2185b,
+};
+const jointName = (kind) => JOINTS[kind] || JOINTS.other;
+const jointColour = (kind) => JOINT_COLOURS[kind] ?? JOINT_COLOURS.other;
+
+function buildJoints(list) {
+  const span = group.userData.span || 3;
+  const radius = span * 0.0045;
+  const shape = new THREE.SphereGeometry(radius, 12, 8);
+  const mats = {};
+  for (const d of list) {
+    const owner = parts[d.a];
+    if (!owner || !parts[d.b]) continue;
+    const kind = JOINT_COLOURS[d.kind] ? d.kind : "other";
+    mats[kind] ||= new THREE.MeshBasicMaterial({ color: jointColour(kind), depthTest: false, transparent: true, opacity: 0.92 });
+    const obj = new THREE.Group();
+    obj.userData.joint = d;
+    obj.renderOrder = 10; // drawn over the wood, so a joint inside the piece still shows
+    for (const pt of d.points) {
+      const dot = new THREE.Mesh(shape, mats[kind]);
+      dot.renderOrder = 10;
+      dot.position.set(pt.x, pt.y, pt.z).multiplyScalar(MM).sub(owner.centre);
+      obj.add(dot);
+    }
+    owner.mesh.add(obj);
+    joints.push({ data: d, obj, b: parts[d.b] });
+  }
+  renderLegend(list);
+  applyJoints();
+}
+
+// The dots are small, so a click picks the nearest visible one within 12 px instead of aiming a ray at it.
+function nearestJoint(px, py, rect) {
+  let best = null;
+  let bestD = 12;
+  const v = new THREE.Vector3();
+  for (const j of joints) {
+    if (!j.obj.visible) continue;
+    for (const dot of j.obj.children) {
+      dot.getWorldPosition(v).project(camera);
+      if (v.z > 1) continue;
+      const d = Math.hypot(((v.x + 1) / 2) * rect.width - px, ((1 - v.y) / 2) * rect.height - py);
+      if (d < bestD) [best, bestD] = [j.data, d];
+    }
+  }
+  return best;
+}
+
+function applyJoints() {
+  const on = $("showJoints").checked;
+  for (const j of joints) j.obj.visible = on && j.b.mesh.visible; // the first part's own visibility already hides it
+}
+
+function renderLegend(list) {
+  const host = $("jointLegend");
+  host.replaceChildren();
+  const counts = {};
+  for (const d of list) counts[d.kind] = (counts[d.kind] || 0) + d.points.length;
+  for (const [kind, n] of Object.entries(counts)) {
+    const row = document.createElement("div");
+    row.className = "small";
+    const dot = document.createElement("span");
+    dot.textContent = "● ";
+    dot.style.color = "#" + jointColour(kind).toString(16).padStart(6, "0");
+    row.append(dot, document.createTextNode(`${jointName(kind)}: ${n}`));
+    host.append(row);
+  }
+  if (!list.length) host.textContent = "No joints found. Parts that touch and name a joint show here.";
+}
+
+function selectJoint(d) {
+  select(null);
+  const box = $("partInfo");
+  box.className = "note small";
+  box.replaceChildren();
+  const line = (label, value) => {
+    const row = document.createElement("div");
+    const b = document.createElement("b");
+    b.textContent = label + " ";
+    row.append(b, document.createTextNode(value));
+    box.append(row);
+  };
+  line("Joint", jointName(d.kind));
+  line("Between", `${parts[d.a].data.name} and ${parts[d.b].data.name}`);
+  line("Where", `x ${d.pos.x}, y ${d.pos.y}, z ${d.pos.z} mm (contact ${d.size.x} × ${d.size.y} × ${d.size.z} mm)`);
+  line("Fasteners shown", `${d.points.length} (spread evenly along the joint, a guide only)`);
+  if (d.hardware.length) line("Hardware", d.hardware.join(", "));
   if (d.note) line("Joinery", d.note);
 }
 
@@ -438,6 +544,7 @@ async function load(params = {}) {
     firstLoad = false;
   }
   buildParts(data.parts);
+  buildJoints(data.joints || []);
   select(null);
 }
 
