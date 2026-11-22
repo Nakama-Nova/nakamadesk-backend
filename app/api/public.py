@@ -8,19 +8,23 @@ customers' data are never returned.
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
-from app.db.deps import get_uow
+from app.db.deps import get_db, get_uow
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import (
     CheckoutRequest,
     DeliveryCheck,
     EnquiryRequest,
+    NewsletterStatus,
+    NewsletterSubscribe,
+    NewsletterToken,
     PaymentInfo,
     PublicOrder,
     PublicProduct,
 )
-from app.services import public_service
+from app.services import newsletter_service, public_service
 
 router = APIRouter(prefix="/public", tags=["Public website"])
 
@@ -96,3 +100,37 @@ def track_order(
 ):
     """Order status. Needs the order number AND the phone it was placed with."""
     return public_service.track(uow, order_number, phone)
+
+
+@router.post(
+    "/newsletter/subscribe",
+    response_model=NewsletterStatus,
+    status_code=202,
+    dependencies=[Depends(public_rate_limit("newsletter"))],
+)
+def newsletter_subscribe(body: NewsletterSubscribe, db: Session = Depends(get_db)):
+    """Ask for the newsletter: emails a confirmation link. Same reply for every address."""
+    newsletter_service.subscribe(db, body.email, body.source, body.website)
+    return NewsletterStatus(status="check_your_email")
+
+
+@router.post(
+    "/newsletter/confirm",
+    response_model=NewsletterStatus,
+    dependencies=[Depends(public_rate_limit("newsletter"))],
+)
+def newsletter_confirm(body: NewsletterToken, db: Session = Depends(get_db)):
+    """The link in the confirmation email: adds the address to the mailing list."""
+    newsletter_service.confirm(db, body.token)
+    return NewsletterStatus(status="confirmed")
+
+
+@router.post(
+    "/newsletter/unsubscribe",
+    response_model=NewsletterStatus,
+    dependencies=[Depends(public_rate_limit("newsletter"))],
+)
+def newsletter_unsubscribe(body: NewsletterToken, db: Session = Depends(get_db)):
+    """The link in every email: takes the address off the mailing list."""
+    newsletter_service.unsubscribe(db, body.token)
+    return NewsletterStatus(status="unsubscribed")

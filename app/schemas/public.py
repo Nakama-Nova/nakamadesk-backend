@@ -108,3 +108,17 @@ class AssetResponse(BaseModel):
     storage: str = "local"  # local | public | s3
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NewsletterSubscribe(BaseModel):
+    email: EmailStr
+    source: Optional[str] = Field(default=None, max_length=30)  # footer, journal, home
+    website: Optional[str] = None  # hidden spam trap: real visitors leave it empty
+
+
+class NewsletterToken(BaseModel):
+    token: str = Field(max_length=500)  # garbage is a 400 from the service, not a 422
+
+
+class NewsletterStatus(BaseModel):
+    status: Literal["check_your_email", "confirmed", "unsubscribed"]
