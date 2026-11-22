@@ -18,7 +18,7 @@ from app.models.furniture_hardware import FurnitureHardware
 from app.models.furniture_part import FurniturePart
 from app.models.item import Item
 from app.schemas.lab import HARDWARE_KINDS
-from app.services import formula
+from app.services import formula, lab_joints
 
 SIZE_LABELS = {"S": "Small", "M": "Medium", "L": "Large"}
 CUSTOM_MIN, CUSTOM_MAX = 50.0, 5000.0  # mm, for each of L W H the achari may type
@@ -324,6 +324,7 @@ def solve(
         "parts": solved,
         "cutting_list": cutting_list(solved),
         "steps": max((p["step"] for p in solved), default=0),
+        "joints": lab_joints.find_joints(solved, lines),
         **hardware_lists(lines),
         **solve_carvings(carvings or [], solved, designs or {}),
     }

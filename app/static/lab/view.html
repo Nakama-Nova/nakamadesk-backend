@@ -45,6 +45,9 @@
         <label for="step" class="small muted" style="display:block;margin-top:10px">Build step: <b id="stepLabel">all</b></label>
         <input id="step" type="range" min="0" max="1" value="1">
         <div class="small muted">Parts appear in build order. The current step is highlighted.</div>
+        <label class="row" style="margin-top:10px"><input type="checkbox" id="showJoints" checked style="width:auto"> Show joints</label>
+        <div id="jointLegend"></div>
+        <div class="small muted">Dots sit where two parts meet. Click one for the joint, the parts and the hardware.</div>
       </section>
 
       <section aria-labelledby="h-part">
