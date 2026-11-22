@@ -291,3 +291,19 @@ def test_ordinary_scans_are_unchanged(client, people, chair, store):
         ).status_code
         == 422
     )
+
+
+def test_gcode_needs_the_real_width_before_anything_is_queued(
+    client, people, chair, store
+):
+    r = send(client, people, chair, gcode="true", real_width_mm=None)
+    assert r.status_code == 422 and "real width" in r.json()["detail"]
+    assert (
+        scans_of(client, people, chair) == []
+    )  # nothing waits on the workshop PC just to fail
+    assert (
+        send(client, people, chair, gcode="true").status_code == 201
+    )  # width given (600)
+    assert (
+        send(client, people, chair, real_width_mm=None).status_code == 201
+    )  # no G-code: width is optional
