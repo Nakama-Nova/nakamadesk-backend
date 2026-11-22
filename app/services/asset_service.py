@@ -69,6 +69,14 @@ def attach_private_asset(
                 detail=f"Too large to publish (max {cap // media_service.MB} MB). Keep it staff-only",
             )
         _, checked_ext = media_service.validate(content_type, data)
+        if kind in (
+            "image",
+            "render",
+        ):  # shrink to web size; 3D models stay as they are
+            checked_ext, data, content_type = media_service.optimise_image(
+                checked_ext, data
+            )
+            size = len(data)
         stored_key, storage = media_service.save_public(
             item_id, checked_ext, data, store
         )

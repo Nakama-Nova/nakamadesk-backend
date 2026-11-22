@@ -245,3 +245,24 @@ def test_the_image_kind_refuses_the_wrong_files(auth_client: TestClient, store):
     )
     assert r.status_code == 400
     assert not [k for k in store.objects if k.startswith("public/")]
+
+
+def test_a_big_photo_is_shrunk_to_web_size_when_uploaded(
+    auth_client: TestClient, store
+):
+    item = make_item(auth_client)
+    big = io.BytesIO()
+    Image.frombytes("RGB", (2100, 1500), os.urandom(2100 * 1500 * 3)).save(big, "PNG")
+    data = big.getvalue()
+    r = upload(auth_client, item["id"], data, name="render.png", ctype="image/png")
+    assert r.status_code == 201, r.text
+    asset = r.json()
+    assert asset["url"].endswith(".webp")
+    key = asset["url"].removeprefix("/media/")
+    assert store.types[key] == "image/webp"
+    assert len(store.objects[key]) < len(data) / 3
+    assert asset["bytes"] == len(
+        store.objects[key]
+    )  # the recorded size is the real one
+    served = auth_client.get(asset["url"])
+    assert served.status_code == 200 and served.headers["content-type"] == "image/webp"

@@ -59,12 +59,17 @@ async def upload_asset(
         raise HTTPException(status_code=404, detail="Item not found")
     data = await file.read(media_service.max_read_size())
     kind, ext = media_service.validate(file.content_type or "", data)
+    content_type = file.content_type
+    if (
+        kind == "image"
+    ):  # big photos are shrunk to web size; 3D models are kept as they are
+        ext, data, content_type = media_service.optimise_image(ext, data)
     key, storage = media_service.save_public(item_id, ext, data, store)
     asset = ProductAsset(
         item_id=item_id,
         kind=kind,
         storage_key=key,
-        content_type=file.content_type,
+        content_type=content_type,
         bytes=len(data),
         sort=sort,
         alt=alt,
