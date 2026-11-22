@@ -94,6 +94,10 @@ class Order(Base):
         JSONB, nullable=True
     )  # web orders: address, town, pincode...
     notes = Column(Text, nullable=True)
+    # The address a shopper typed at website checkout, lower case. Set only by
+    # public_service.checkout and the only address order emails are ever sent to: staff
+    # orders leave it empty, so a customer record's email never gets order mail.
+    notify_email = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

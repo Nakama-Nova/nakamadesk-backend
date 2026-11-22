@@ -6,7 +6,7 @@ details, sign out everywhere, delete your data. Nothing here touches staff users
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
@@ -206,6 +206,7 @@ def delete_address(
 )
 def checkout(
     body: AccountCheckoutRequest,
+    background: BackgroundTasks,
     account: CustomerAccount = Depends(get_current_customer),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
@@ -214,7 +215,7 @@ def checkout(
     prices, stock check, pincode check, nothing is charged), but the order belongs to
     your account and shows up in `GET /account/orders`.
     """
-    return shop.checkout(uow, account, body)
+    return shop.checkout(uow, account, body, background)
 
 
 @router.post(

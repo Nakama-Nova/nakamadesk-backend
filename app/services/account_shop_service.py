@@ -11,7 +11,7 @@ their own account (a phone number alone proves nothing here).
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from pydantic import ValidationError
 from sqlalchemy.orm import Session, joinedload
 
@@ -132,7 +132,10 @@ def _validated(model, **fields):
 
 
 def checkout(
-    uow: AbstractUnitOfWork, account: CustomerAccount, req: AccountCheckoutRequest
+    uow: AbstractUnitOfWork,
+    account: CustomerAccount,
+    req: AccountCheckoutRequest,
+    background: Optional[BackgroundTasks] = None,
 ) -> PublicOrder:
     """Place a draft order for the account, to a saved address or a one-off one."""
     if req.address_id is not None:
@@ -156,7 +159,9 @@ def checkout(
         pay_option=req.pay_option,
         items=req.items,
     )
-    return public_service.checkout(uow, guest, account_id=account.id)
+    return public_service.checkout(
+        uow, guest, account_id=account.id, background=background
+    )
 
 
 def enquiry(
