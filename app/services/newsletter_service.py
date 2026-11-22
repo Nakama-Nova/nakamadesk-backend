@@ -32,7 +32,6 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Union
 from urllib.parse import quote
 
-import httpx
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -40,11 +39,11 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.config import settings
 from app.models.newsletter_subscriber import NewsletterSubscriber
+from app.services import brevo_client
+from app.services.brevo_client import BrevoError
 
 logger = logging.getLogger(__name__)
 
-BREVO_URL = "https://api.brevo.com/v3"
-BREVO_TIMEOUT = 8.0
 CONSENT_VERSION = "2026-11-v1"  # bump when the sign-up wording changes
 CONFIRM_DAYS = 7
 RESEND_AFTER = timedelta(hours=1)
@@ -67,10 +66,6 @@ _EVENT_STATUS = {
     "hardbounce": "bounced",
     "spam": "complained",
 }
-
-
-class BrevoError(RuntimeError):
-    """Brevo was unreachable or refused the request."""
 
 
 def _now() -> datetime:
@@ -138,32 +133,9 @@ def _subscriber_for(db: Session, purpose: str, token: str) -> NewsletterSubscrib
 # --- Brevo ---------------------------------------------------------------------------
 
 
-def _brevo(method: str, path: str, body: dict, ok_400: tuple = ()) -> None:
-    """One Brevo call. Raises BrevoError on a network failure or an error answer."""
-    try:
-        r = httpx.request(
-            method,
-            f"{BREVO_URL}{path}",
-            json=body,
-            headers={"api-key": settings.BREVO_API_KEY, "accept": "application/json"},
-            timeout=BREVO_TIMEOUT,
-        )
-    except httpx.HTTPError as e:
-        raise BrevoError(f"{path}: {type(e).__name__}") from None
-    if r.is_success:
-        return
-    try:
-        code = str(r.json().get("code", ""))
-    except Exception:
-        code = ""
-    if r.status_code == 400 and code in ok_400:
-        return
-    raise BrevoError(f"{path}: HTTP {r.status_code} {code}")
-
-
 def _add_to_list(email: str) -> None:
     # updateEnabled: an address that is already a Brevo contact is updated, not refused
-    _brevo(
+    brevo_client.call(
         "POST",
         "/contacts",
         {"email": email, "listIds": [settings.BREVO_LIST_ID], "updateEnabled": True},
@@ -171,7 +143,7 @@ def _add_to_list(email: str) -> None:
     # A contact who left through Brevo's own link (or bounced) is blocklisted there, and a
     # blocklisted contact is never mailed even when it is on the list. They have just
     # confirmed a fresh sign-up, so clear the flag. Needs the contact to exist: POST above.
-    _brevo(
+    brevo_client.call(
         "PUT",
         f"/contacts/{quote(email, safe='')}",
         {"emailBlacklisted": False, "listIds": [settings.BREVO_LIST_ID]},
@@ -180,7 +152,7 @@ def _add_to_list(email: str) -> None:
 
 def _remove_from_list(email: str) -> None:
     # a contact Brevo does not know is already off the list
-    _brevo(
+    brevo_client.call(
         "POST",
         f"/contacts/lists/{settings.BREVO_LIST_ID}/contacts/remove",
         {"emails": [email]},
@@ -232,7 +204,7 @@ def _send_confirmation(sub: NewsletterSubscriber) -> None:
             "NEWSLETTER confirmation not sent (Brevo not set up): %s", confirm
         )
         return
-    _brevo(
+    brevo_client.call(
         "POST",
         "/smtp/email",
         {

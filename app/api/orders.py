@@ -13,7 +13,15 @@ RBAC design:
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Body,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+)
 
 from app.db.deps import check_role, get_uow
 from app.models.enums import UserRole
@@ -146,6 +154,7 @@ def get_order(
 def update_order_status(
     order_id: UUID,
     update_data: OrderStatusUpdate,
+    background: BackgroundTasks,
     current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
@@ -171,13 +180,14 @@ def update_order_status(
         HTTPException 404: If order not found.
         HTTPException 400: If the transition is not permitted.
     """
-    return order_service.update_order_status(uow, order_id, update_data)
+    return order_service.update_order_status(uow, order_id, update_data, background)
 
 
 @router.post("/{order_id}/payments", response_model=OrderResponse, status_code=201)
 def add_order_payment(
     order_id: UUID,
     data: PaymentCreate,
+    background: BackgroundTasks,
     current_user: User = Depends(
         check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
     ),
@@ -187,7 +197,7 @@ def add_order_payment(
     Record money received against an order (advance, instalment or the balance).
     The order's advance_paid becomes the sum of its payments. RBAC: OWNER, MANAGER, SALES.
     """
-    return order_service.add_payment(uow, order_id, data, current_user.id)
+    return order_service.add_payment(uow, order_id, data, current_user.id, background)
 
 
 @router.patch("/{order_id}", response_model=OrderResponse)

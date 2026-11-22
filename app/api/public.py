@@ -7,7 +7,7 @@ customers' data are never returned.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
@@ -70,12 +70,16 @@ def delivery_check(pincode: str = Query(..., pattern=r"^\d{6}$")):
     status_code=201,
     dependencies=[Depends(public_rate_limit("checkout"))],
 )
-def checkout(req: CheckoutRequest, uow: AbstractUnitOfWork = Depends(get_uow)):
+def checkout(
+    req: CheckoutRequest,
+    background: BackgroundTasks,
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
     """
     Guest checkout. Creates a draft order; nothing is charged. Staff confirm by
     phone, then the customer pays an advance by UPI. Prices come from the server.
     """
-    return public_service.checkout(uow, req)
+    return public_service.checkout(uow, req, background=background)
 
 
 @router.post(

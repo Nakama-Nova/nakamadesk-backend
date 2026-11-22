@@ -87,6 +87,19 @@ class Settings:
     # (unsubscribes, hard bounces and spam complaints made inside Brevo). Empty = that
     # endpoint refuses every request (503).
     BREVO_WEBHOOK_SECRET: str = os.getenv("BREVO_WEBHOOK_SECRET", "").strip()
+    # --- Order emails (Brevo) ------------------------------------------------
+    # Order received / confirmed / payment received, sent to the address a shopper gave
+    # at website checkout. Uses the same Brevo key, sender and STOREFRONT_URL as the
+    # newsletter. Any of those empty = nothing is sent (recorded as skipped). Set to
+    # false to stop all of them at once.
+    ORDER_EMAILS_ENABLED: bool = os.getenv(
+        "ORDER_EMAILS_ENABLED", "true"
+    ).strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
     # --- Paying by cash or UPI (no payment gateway) --------------------------
     # The shop's UPI id and the name it shows under; shoppers pay after staff confirm
     # the order by phone. Empty PAY_UPI_ID = no UPI link is shown.

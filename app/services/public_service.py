@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 from urllib.parse import quote
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
@@ -34,7 +34,12 @@ from app.schemas.public import (
     PublicOrderLine,
     PublicProduct,
 )
-from app.services import media_service, pricing, reservation_service
+from app.services import (
+    media_service,
+    order_email_service,
+    pricing,
+    reservation_service,
+)
 from app.services.order_service import _generate_order_number
 
 
@@ -202,7 +207,10 @@ def _customer_for(
 
 
 def checkout(
-    uow: AbstractUnitOfWork, req: CheckoutRequest, account_id=None
+    uow: AbstractUnitOfWork,
+    req: CheckoutRequest,
+    account_id=None,
+    background: Optional[BackgroundTasks] = None,
 ) -> PublicOrder:
     phone = normalize_phone(req.phone)
     if not is_serviceable(req.pincode):
@@ -245,6 +253,9 @@ def checkout(
         "pay_option": req.pay_option,
     }
 
+    # The only place an order gets an email address to notify (see order_email_service)
+    notify_email = req.email.strip().lower() if req.email else None
+
     def build(number: str) -> Order:
         return Order(
             order_number=number,
@@ -253,6 +264,7 @@ def checkout(
             order_type="standard",
             status="draft",
             source="web",
+            notify_email=notify_email,
             delivery_address=address,
             estimated_amount=total,
             created_by=None,
@@ -267,7 +279,9 @@ def checkout(
             ],
         )
 
-    return to_public_order(_new_order_with_retry(uow, build))
+    order = _new_order_with_retry(uow, build)
+    order_email_service.notify(background, order, "order_received")
+    return to_public_order(order)
 
 
 def enquiry(

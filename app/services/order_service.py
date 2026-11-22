@@ -13,9 +13,9 @@ import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -32,7 +32,7 @@ from app.schemas.order import (
     OrderUpdate,
     PaymentCreate,
 )
-from app.services import reservation_service
+from app.services import order_email_service, reservation_service
 from app.services.order_invoice_service import payment_status as invoice_status
 
 logger = logging.getLogger(__name__)
@@ -237,6 +237,7 @@ def update_order_status(
     uow: AbstractUnitOfWork,
     order_id: UUID,
     update_data: OrderStatusUpdate,
+    background: Optional[BackgroundTasks] = None,
 ) -> Order:
     """
     Transition an order to a new lifecycle status.
@@ -306,11 +307,17 @@ def update_order_status(
 
     uow.refresh(order)
     logger.info("Order %s transitioned to '%s'", order.order_number, order.status)
+    if update_data.status == "confirmed":  # only draft -> confirmed can get here
+        order_email_service.notify(background, order, "order_confirmed")
     return get_order(uow, order.id)
 
 
 def add_payment(
-    uow: AbstractUnitOfWork, order_id: UUID, data: PaymentCreate, user_id: UUID
+    uow: AbstractUnitOfWork,
+    order_id: UUID,
+    data: PaymentCreate,
+    user_id: UUID,
+    background: Optional[BackgroundTasks] = None,
 ) -> Order:
     """
     Record money received against an order. Locks the order row so two people taking
@@ -342,8 +349,10 @@ def add_payment(
                 status_code=400,
                 detail=f"That is more than the balance due (Rs {base - paid})",
             )
+        payment_id = uuid4()
         uow.session.add(
             OrderPayment(
+                id=payment_id,
                 order_id=order.id,
                 amount=amount,
                 method=data.method,
@@ -360,6 +369,7 @@ def add_payment(
             sale.payment_method = data.method
         uow.commit()
     logger.info("Payment of %s recorded on order %s", amount, order.order_number)
+    order_email_service.notify(background, order, "payment_received", payment_id)
     return get_order(uow, order_id)
 
 
