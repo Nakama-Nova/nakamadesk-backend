@@ -208,7 +208,7 @@ def list_letters(
     restoration_id: Optional[UUID] = Query(default=None),
     search: Optional[str] = Query(
         default=None, description="number, name or subject contains this"
-    ),  # fmt: skip
+    ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(check_role(letter_service.ALL_ROLES)),
