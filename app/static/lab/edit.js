@@ -703,6 +703,58 @@ $("areaClearOutline").addEventListener("click", () => {
 });
 $("areaReset").addEventListener("click", resetArea);
 
+// The real size of the area, worked out from the piece's own parts instead of typed in.
+function renderAreaParts() {
+  const box = $("areaParts");
+  const ticked = new Set([...box.querySelectorAll("input:checked")].map((i) => i.value));
+  box.replaceChildren(
+    ...partChoices.map(([id, label]) => {
+      const l = document.createElement("label");
+      l.className = "row";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = id;
+      input.checked = ticked.has(id);
+      input.style.width = "auto";
+      l.append(input, ` ${label}`);
+      return l;
+    }),
+  );
+}
+
+function fillAreaSizes(presets) {
+  const names = { S: "Small", M: "Medium", L: "Large" };
+  for (const k of ["S", "M", "L"]) {
+    if (!presets?.[k]) continue;
+    const o = document.createElement("option");
+    o.value = k;
+    o.textContent = names[k];
+    $("areaSize").append(o);
+  }
+}
+
+$("areaFromParts").addEventListener("click", async () => {
+  $("areaError").textContent = "";
+  const ids = [...$("areaParts").querySelectorAll("input:checked")].map((i) => i.value);
+  if (!ids.length) {
+    $("areaFromNote").textContent = "Tick at least one part (save the parts first if the list is empty).";
+    return;
+  }
+  const q = new URLSearchParams();
+  ids.forEach((id) => q.append("parts", id));
+  q.set("face", $("areaFace").value);
+  if ($("areaSize").value) q.set("size", $("areaSize").value);
+  try {
+    const r = await call("GET", `/lab/items/${itemId}/area-size?${q}`);
+    $("areaW").value = Math.round(r.w);
+    $("areaH").value = Math.round(r.h);
+    $("areaFromNote").textContent = `${r.size.label} size (${r.size.l} x ${r.size.w} x ${r.size.h} mm): ${Math.round(r.w)} x ${Math.round(r.h)} mm. Check it against the real board.`;
+  } catch (e) {
+    $("areaFromNote").textContent = "";
+    $("areaError").textContent = e.message;
+  }
+});
+
 $("areaSend").addEventListener("click", async () => {
   $("areaError").textContent = "";
   $("areaOk").textContent = "";
@@ -751,6 +803,7 @@ async function syncPartIds() {
   });
   partChoices = partLabels(def.parts);
   refreshPartSelects();
+  renderAreaParts();
 }
 
 $("addCarving").addEventListener("click", () => {
@@ -789,7 +842,9 @@ async function init() {
     def.parts.forEach((p) => body.append(addRow(p)));
     (def.hardware || []).forEach((h) => $("hardware").tBodies[0].append(addHwRow(h)));
     partChoices = partLabels(def.parts);
-    designChoices = (def.designs || []).map((d) => [d.id, `${d.sku} · ${d.name}`, d.has_image]);
+    renderAreaParts();
+    fillAreaSizes(def.presets);
+    designChoices =(def.designs || []).map((d) => [d.id, `${d.sku} · ${d.name}`, d.has_image]);
     (def.carvings || []).forEach((c) => $("carvings").tBodies[0].append(addCarvingRow(c)));
     renderScans(def.scans || []);
   } catch (e) {

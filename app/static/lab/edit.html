@@ -141,6 +141,25 @@
           <thead><tr><th>Corner</th><th>x (px)</th><th>y (px)</th></tr></thead>
           <tbody></tbody>
         </table>
+        <details style="margin-top:10px">
+          <summary>Take the size from the piece (no measuring)</summary>
+          <p class="small muted" style="margin:6px 0">
+            Tick the parts this carved area covers (for the headboard border: the border strips and the lattice panel).
+            The width and height below are then worked out from this piece's own sizes, for the size you pick.
+          </p>
+          <div class="row" style="margin-bottom:6px">
+            <label for="areaSize" class="small">Size</label>
+            <select id="areaSize"><option value="">Standard</option></select>
+            <label for="areaFace" class="small">Photographed face</label>
+            <select id="areaFace">
+              <option value="right">right</option><option value="left">left</option><option value="front">front</option>
+              <option value="back">back</option><option value="top">top</option><option value="bottom">bottom</option>
+            </select>
+          </div>
+          <div id="areaParts" class="small" style="max-height:200px;overflow:auto;margin-bottom:6px"></div>
+          <button type="button" id="areaFromParts">Fill in the width and height</button>
+          <span class="small muted" id="areaFromNote" aria-live="polite"></span>
+        </details>
         <div class="fields" style="margin-top:10px">
           <div><label for="areaLabel">What it shows</label><input id="areaLabel" type="text" maxlength="80" placeholder="Headboard border"></div>
           <div><label for="areaW">Real width (mm)</label><input id="areaW" type="number" min="1" max="5000" inputmode="numeric"></div>
