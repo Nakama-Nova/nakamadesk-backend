@@ -40,6 +40,15 @@ LEGACY_WORK = {
     "attendance:record:write": OM | {"sales"},
     "attendance:record:read_all": OM | {"sales"},
     "attendance:presence:mark_self": {"owner"},
+    # sync: pulling your own attendance was open to every role except the accountant
+    "attendance:record:read_own": {
+        "owner",
+        "manager",
+        "sales",
+        "achari",
+        "worker",
+        "artisan",
+    },
 }
 
 
@@ -346,5 +355,43 @@ def test_items_hide_cost_without_the_cost_permission(client, db):
     assert Decimal(str(client.get(f"/items/{item.id}").json()["purchase_price"])) == 4
     act_as(make_user(db, "accountant"))
     assert client.get(f"/items/{item.id}").status_code == 403
+    db.delete(item)  # the shared test database keeps rows between tests
+    db.commit()
+
+
+def test_a_custom_role_is_honoured_by_offline_sync(client, db):
+    from decimal import Decimal
+
+    from app.models.item import Item
+
+    item = Item(
+        sku=f"SY-{uuid.uuid4().hex[:6]}",
+        name="Sync chair",
+        selling_price=Decimal("10"),
+        purchase_price=Decimal("4"),
+        production_cost=Decimal("3"),
+        current_stock=1,
+    )
+    db.add(item)
+    db.commit()
+    since = "2000-01-01T00:00:00"
+    clerk = make_user(db, "accountant")  # an accountant gets no items through sync
+    act_as(clerk)
+    assert client.get("/sync/pull", params={"last_sync": since}).json()["items"] == []
+    act_as(make_user(db, "owner"))
+    doc = defaults.document(
+        [{"effect": "Allow", "actions": ["items:item:read"], "resources": ["*"]}]
+    )
+    pol = client.post("/iam/policies", json={"name": "see-items", "document": doc})
+    role = client.post(
+        "/iam/roles", json={"label": "Item Viewer", "policy_ids": [pol.json()["id"]]}
+    )
+    assert role.status_code == 201, role.text
+    r = client.put(f"/iam/users/{clerk.id}/roles", json=[{"role_key": "item_viewer"}])
+    assert r.status_code == 200, r.text
+    act_as(clerk)
+    rows = client.get("/sync/pull", params={"last_sync": since}).json()["items"]
+    mine = [i for i in rows if i["sku"] == item.sku]
+    assert mine and Decimal(str(mine[0]["purchase_price"])) == 0  # cost still hidden
     db.delete(item)  # the shared test database keeps rows between tests
     db.commit()

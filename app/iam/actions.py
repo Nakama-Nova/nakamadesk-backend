@@ -15,6 +15,7 @@ ACTIONS = {
     "payroll:records:read_all": "See anyone's payroll, advances and payments (otherwise only your own)",
     "attendance:record:write": "Check people in and out and record attendance for them",
     "attendance:record:read_all": "See everyone's attendance",
+    "attendance:record:read_own": "See your own attendance (and sync it)",
     "attendance:record:edit": "Correct an attendance record",
     "attendance:presence:mark": "Mark someone present from the phone with GPS",
     "attendance:presence:mark_self": "Mark your own presence (the owner only, by default)",

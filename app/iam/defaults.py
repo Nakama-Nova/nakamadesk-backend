@@ -45,7 +45,7 @@ SALES_BOSS = SALES_DESK + (
     "purchases:purchase:confirm",
 )
 
-FLOOR_VIEW = ("items:item:read",)
+FLOOR_VIEW = ("items:item:read", "attendance:record:read_own")
 PRODUCTION_BOSS = (
     "production:job:create",
     "production:job:read",
@@ -53,6 +53,7 @@ PRODUCTION_BOSS = (
     "production:job:run",
     "bom:entry:read",
     "items:item:read",
+    "attendance:record:read_own",
     "items:cost:read",
     "items:item:write",
     "items:stock:adjust",
@@ -73,6 +74,7 @@ ACHARI = (
     "bom:entry:read",
     "bom:entry:write",
     "items:item:read",
+    "attendance:record:read_own",
     "machines:tool:view",
 )
 
