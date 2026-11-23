@@ -3,8 +3,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.db.deps import check_role, get_current_user, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_uow
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.wage import WagePaymentRequest, WageResponse
@@ -22,7 +23,7 @@ def list_pending_wages(
     """
     Retrieve a list of pending wages for workers.
 
-    RBAC: Restricted to OWNER and MANAGER roles to see all; others see only their own.
+    Needs payroll:records:read_all to see all; others see only their own.
 
     Args:
         user_id (Optional[UUID]): Filter by a specific user (admin only).
@@ -33,7 +34,7 @@ def list_pending_wages(
         List[WageResponse]: List of pending wage records.
     """
     # RBAC: Non-admin see only their own pending wages
-    if current_user.role not in [UserRole.OWNER, UserRole.MANAGER]:
+    if not iam.allowed(uow.session, current_user, "payroll:records:read_all"):
         user_id = current_user.id
 
     return workforce_service.get_pending_wages(uow, user_id)
@@ -42,13 +43,13 @@ def list_pending_wages(
 @router.post("/pay", response_model=List[WageResponse])
 def pay_worker_wages(
     payment_data: WagePaymentRequest,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("payroll:payment:create")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
     Record payment for a set of pending wages.
 
-    RBAC: Restricted to OWNER and MANAGER roles.
+    Needs payroll:payment:create.
 
     Args:
         payment_data (WagePaymentRequest): List of attendance record IDs to pay.

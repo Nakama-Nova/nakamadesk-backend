@@ -11,6 +11,19 @@ def _allow(*actions):
     return [{"effect": "Allow", "actions": list(actions), "resources": ["*"]}]
 
 
+PAYMASTER = (
+    "payroll:summary:read",
+    "payroll:entry:write",
+    "payroll:advance:write",
+    "payroll:payment:create",
+    "payroll:records:read_all",
+)
+ATTENDANCE_DESK = ("attendance:record:write", "attendance:record:read_all")
+ATTENDANCE_BOSS = ATTENDANCE_DESK + (
+    "attendance:record:edit",
+    "attendance:presence:mark",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -20,13 +33,15 @@ SYSTEM_ROLES = {
             "iam:role:read",
             "iam:role:write",
             "iam:user_role:assign",
+            *PAYMASTER,
+            *ATTENDANCE_BOSS,
         ),
     ),
     "accountant": (
         "Accountant",
         _allow("finance:ledger:read", "finance:balance_sheet:read"),
     ),
-    "sales": ("Sales", []),
+    "sales": ("Sales", _allow(*ATTENDANCE_DESK)),
     "achari": ("Achari", []),
     "worker": ("Worker", []),
     "artisan": ("Artisan", []),

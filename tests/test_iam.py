@@ -21,6 +21,34 @@ def stmts(role):
     return [(s, None) for s in defaults.SYSTEM_ROLES[role][1]]
 
 
+# Old PAYMASTERS / attendance lists: payroll = owner+manager, attendance desk = +sales,
+# edit and GPS marking = owner+manager, marking yourself = owner.
+OM = {"owner", "manager"}
+LEGACY_WORK = {
+    **{
+        a: OM
+        for a in (
+            "payroll:summary:read",
+            "payroll:entry:write",
+            "payroll:advance:write",
+            "payroll:payment:create",
+            "payroll:records:read_all",
+            "attendance:record:edit",
+            "attendance:presence:mark",
+        )
+    },
+    "attendance:record:write": OM | {"sales"},
+    "attendance:record:read_all": OM | {"sales"},
+    "attendance:presence:mark_self": {"owner"},
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_WORK)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_WORK[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_FINANCE)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_finance_parity_with_old_role_lists(role, action):
@@ -182,3 +210,16 @@ def test_owner_role_is_locked_and_simulator_works(client, db):
         json={"user_id": str(acct.id), "action": "finance:ledger:write"},
     )
     assert sim.json() == {"allowed": False}
+
+
+def test_payroll_endpoints_follow_role_and_workers_see_only_their_own(client, db):
+    act_as(make_user(db, "sales"))
+    assert client.get("/payroll/summary").status_code == 403
+    assert client.get("/attendance/all").status_code == 200
+    act_as(make_user(db, "manager"))
+    assert client.get("/payroll/summary").status_code == 200
+    me = make_user(db, "worker")
+    act_as(me)
+    assert client.get("/payroll/summary").status_code == 403
+    assert client.get("/attendance/all").status_code == 403
+    assert client.get(f"/payroll/payments?user_id={uuid.uuid4()}").status_code == 200
