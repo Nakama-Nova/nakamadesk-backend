@@ -946,7 +946,7 @@ def download_scan_file(
         )
     if store is None:
         raise HTTPException(status_code=503, detail="File storage is not set up yet")
-    name = f"{asset.kind}{Path(asset.storage_key).suffix}"
+    name = f"{'cad-folder' if asset.kind == 'cad' else asset.kind}{Path(asset.storage_key).suffix}"
     return RedirectResponse(store.presign_get(asset.storage_key, filename=name))
 
 

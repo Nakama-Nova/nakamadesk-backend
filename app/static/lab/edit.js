@@ -602,10 +602,10 @@ function scanRow(s) {
 }
 
 // What a finished scan keeps, and files asked for later (made by the workshop PC from the kept depth map).
-const FILE_WORDS = { depth: "depth map (the master)", render: "picture", glb: "3D view", stl: "3D shape (STL)", obj: "3D shape (OBJ)", ply: "3D points (PLY)", nc: "CNC G-code" };
+const FILE_WORDS = { depth: "depth map (the master)", render: "picture", glb: "3D view", stl: "3D shape (STL)", obj: "3D shape (OBJ)", ply: "3D points (PLY)", nc: "CNC G-code", cad: "CAD folder (zip)" };
 const GET_FILES = [
   ["For the CNC machine (G-code)", ["nc"]],
-  ["For a CAD designer (STL and OBJ)", ["stl", "obj"]],
+  ["For a CAD designer (one folder: model, outline, read-me)", ["cad"]],
   ["For a 3D viewer or sharing (GLB)", ["glb"]],
 ];
 const fileSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
