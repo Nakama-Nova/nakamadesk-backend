@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.inventory_movement import InventoryMovement
 from app.models.item import Item
 from app.models.plant_unit import PlantUnit
@@ -24,9 +24,6 @@ from app.repositories.base import AbstractUnitOfWork
 from app.services import stock_location_service
 
 router = APIRouter(prefix="/stock", tags=["Stock by location"])
-
-MOVERS = [UserRole.OWNER, UserRole.MANAGER]
-VIEWERS = [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES]
 
 
 class LevelOut(BaseModel):
@@ -69,7 +66,7 @@ def levels(
     raw_material_id: Optional[UUID] = None,
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    _: User = Depends(check_role(VIEWERS)),
+    _: User = Depends(require("inventory:stock_location:view")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """What is at each location. Add `/stock/unassigned` for what has no location yet."""
@@ -114,7 +111,7 @@ def levels(
 def unassigned(
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    _: User = Depends(check_role(VIEWERS)),
+    _: User = Depends(require("inventory:stock_location:view")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Stock that exists but is not at any location yet (total minus the levels)."""
@@ -173,7 +170,7 @@ def unassigned(
 @router.post("/transfers", response_model=TransferOut, status_code=201)
 def create_transfer(
     body: TransferIn,
-    current_user: User = Depends(check_role(MOVERS)),
+    current_user: User = Depends(require("inventory:stock_location:transfer")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -220,7 +217,7 @@ class TransferRow(BaseModel):
 def list_transfers(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    _: User = Depends(check_role(VIEWERS)),
+    _: User = Depends(require("inventory:stock_location:view")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Recent transfers, newest first."""

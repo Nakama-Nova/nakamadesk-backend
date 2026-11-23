@@ -5,8 +5,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_db, get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.money import ProfitReport
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 def get_sales_report(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -49,7 +49,7 @@ def get_sales_report(
 @router.get("/top-products", response_model=List[TopProductResponse])
 def get_top_products_report(
     limit: int = Query(10),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -70,7 +70,7 @@ def get_top_products_report(
 
 @router.get("/inventory", response_model=List[InventoryReportResponse])
 def get_inventory_report(
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -92,7 +92,7 @@ def get_inventory_report(
 def get_profit_loss_analytics(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -116,7 +116,7 @@ def get_profit_loss_analytics(
 def get_real_profit(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -130,7 +130,7 @@ def get_real_profit(
 def get_gst_summary_report(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -154,7 +154,7 @@ def get_gst_summary_report(
 def export_sales_excel(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:report:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

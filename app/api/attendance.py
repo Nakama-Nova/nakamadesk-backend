@@ -4,9 +4,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import check_role, get_current_user, get_uow
+from app.db.deps import get_current_user, get_uow
+from app.iam.service import require
 from app.models.attendance import Attendance
-from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import (
@@ -23,9 +23,7 @@ router = APIRouter(prefix="/attendance", tags=["Workforce"])
 @router.post("/", response_model=AttendanceResponse)
 def mark_attendance(
     attendance: AttendanceCreate,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("attendance:record:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -47,7 +45,7 @@ def mark_attendance(
 @router.post("/mark-present", response_model=AttendanceResponse)
 def mark_present_at_location(
     body: GeoAttendanceIn,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("attendance:presence:mark")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -102,9 +100,7 @@ def my_day(
 @router.post("/check-in", response_model=AttendanceResponse)
 def check_in(
     user_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("attendance:record:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -126,9 +122,7 @@ def check_in(
 @router.post("/check-out", response_model=AttendanceResponse)
 def check_out(
     attendance_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("attendance:record:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -183,9 +177,7 @@ def get_all_attendance(
     location_status: Optional[str] = Query(None, pattern="^(on_site|off_site)$"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("attendance:record:read_all")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -223,7 +215,7 @@ def get_all_attendance(
 def update_attendance_record(
     attendance_id: UUID,
     update_data: AttendanceUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("attendance:record:edit")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

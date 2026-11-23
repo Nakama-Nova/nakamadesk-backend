@@ -24,12 +24,11 @@ from sqlalchemy import and_, or_, update
 
 from app.core.ratelimit import public_rate_limit
 from app.db.deps import (
-    RESTORATION_ROLES,
-    check_role,
     get_current_user,
     get_uow,
 )
-from app.models.enums import UserRole
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.restoration import RestorationFile, RestorationProject
 from app.models.scan_job import ScanJob
 from app.models.user import User
@@ -40,9 +39,9 @@ from app.services.object_store import S3Store, get_store, get_store_or_none
 
 router = APIRouter(prefix="/scans", tags=["Scans"])
 
-PROCESSORS = [UserRole.OWNER, UserRole.MANAGER]  # the GPU PC logs in as one of these
-# Restoration scans are processed by the owner or an artisan account (never a manager).
-WORKERS = PROCESSORS + [UserRole.ARTISAN]
+RESTORE = "restoration:project:access"  # owner and artisans, by default
+PROCESS = "scans:job:process"  # the GPU PC logs in as a manager or the owner
+WORK = "scans:job:work"
 LEASE = timedelta(minutes=30)
 MAX_ATTEMPTS = 3
 MIN_PHOTOS, MAX_PHOTOS = 8, 300
@@ -226,29 +225,29 @@ def _get(uow: AbstractUnitOfWork, scan_id: UUID) -> ScanJob:
     return job
 
 
-def _visible(job: ScanJob, user: User) -> None:
+def _visible(uow: AbstractUnitOfWork, job: ScanJob, user: User) -> None:
     """
     Capture is open to all staff, but you only see your own scans; owner/manager see
     all. A restoration scan is seen by the owner and every artisan, and by nobody else
     (a manager is told it does not exist).
     """
     if job.artisan_only:
-        if user.role in RESTORATION_ROLES:
+        if iam.allowed(uow.session, user, RESTORE):
             return
-    elif user.role in PROCESSORS or job.created_by == user.id:
+    elif iam.allowed(uow.session, user, PROCESS) or job.created_by == user.id:
         return
     raise HTTPException(status_code=404, detail="Scan not found")
 
 
-def _may_process(job: ScanJob, user: User) -> None:
+def _may_process(uow: AbstractUnitOfWork, job: ScanJob, user: User) -> None:
     """Who may run a job on the workshop PC: owner/manager, or for a restoration owner/artisan."""
-    allowed = RESTORATION_ROLES if job.artisan_only else PROCESSORS
-    if user.role not in allowed:
+    needed = RESTORE if job.artisan_only else PROCESS
+    if not iam.allowed(uow.session, user, needed):
         raise HTTPException(status_code=404, detail="Scan not found")
 
 
-def _claimed(job: ScanJob, user: User, worker: str) -> None:
-    _may_process(job, user)
+def _claimed(uow: AbstractUnitOfWork, job: ScanJob, user: User, worker: str) -> None:
+    _may_process(uow, job, user)
     if job.status != "processing" or job.claimed_by != f"{user.id}|{worker}":
         raise HTTPException(
             status_code=409, detail="This scan is not claimed by this worker"
@@ -321,13 +320,13 @@ def create_scan(
     artisan_only = bool(req.restoration_id) or bool(
         item and item.item_type == "sculpture"
     )
-    if artisan_only and user.role not in RESTORATION_ROLES:
+    if artisan_only and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403,
             detail="Restoration and sculpture scans are for the owner and artisans",
         )
     if req.restoration_id:
-        if user.role not in RESTORATION_ROLES:
+        if not iam.allowed(uow.session, user, RESTORE):
             raise HTTPException(
                 status_code=403,
                 detail="Restoration scans are for the owner and artisans",
@@ -358,7 +357,7 @@ def presign_sources(
 ):
     """Signed uploads for the capture files. The STORE enforces size and type."""
     job = _get(uow, scan_id)
-    _visible(job, user)
+    _visible(uow, job, user)
     if job.status != "created":
         raise HTTPException(status_code=409, detail="This scan is already uploaded")
     exts, max_bytes, max_files = SOURCES[job.source_kind]
@@ -405,7 +404,7 @@ def complete_upload(
 ):
     """Check every object really arrived, then queue the job for the workshop PC."""
     job = _get(uow, scan_id)
-    _visible(job, user)
+    _visible(uow, job, user)
     if job.status == "uploaded" and sorted(job.source_keys) == sorted(set(req.keys)):
         return _out(job, uow)  # a retried call
     if job.status != "created":
@@ -455,7 +454,7 @@ def cancel_scan(
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
     job = _get(uow, scan_id)
-    _visible(job, user)
+    _visible(uow, job, user)
     if job.status not in OPEN:
         raise HTTPException(
             status_code=409, detail=f"A {job.status} scan cannot be cancelled"
@@ -488,9 +487,9 @@ def list_scans(
     first (the queue). Restoration scans are listed only for the owner and artisans.
     """
     q = uow.session.query(ScanJob)
-    if user.role not in RESTORATION_ROLES:
+    if not iam.allowed(uow.session, user, RESTORE):
         q = q.filter(ScanJob.artisan_only.is_(False))
-    if user.role not in PROCESSORS:
+    if not iam.allowed(uow.session, user, PROCESS):
         q = q.filter(or_(ScanJob.created_by == user.id, ScanJob.artisan_only.is_(True)))
     if restoration_id:
         q = q.filter(ScanJob.restoration_id == restoration_id)
@@ -509,7 +508,7 @@ def get_scan(
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     job = _get(uow, scan_id)
-    _visible(job, user)
+    _visible(uow, job, user)
     return _out(job, uow)
 
 
@@ -518,11 +517,11 @@ def get_scan(
 def claim_scan(
     scan_id: UUID,
     req: Claim,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """One statement decides the winner, so two PCs can never both take a job."""
-    _may_process(_get(uow, scan_id), user)
+    _may_process(uow, _get(uow, scan_id), user)
     _expire_stuck(uow)
     now = _now()
     res = uow.session.execute(
@@ -559,11 +558,11 @@ def claim_scan(
 def report_progress(
     scan_id: UUID,
     req: Progress,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     job = _get(uow, scan_id)
-    _claimed(job, user, req.worker)
+    _claimed(uow, job, user, req.worker)
     job.progress = req.percent
     job.note = req.note
     job.lease_until = _now() + LEASE
@@ -576,12 +575,12 @@ def report_progress(
 def download_urls(
     scan_id: UUID,
     worker: str = Query(min_length=1, max_length=60),
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
     job = _get(uow, scan_id)
-    _claimed(job, user, worker)
+    _claimed(uow, job, user, worker)
     return [{"key": k, "url": store.presign_get(k)} for k in job.source_keys]
 
 
@@ -589,12 +588,12 @@ def download_urls(
 def presign_result(
     scan_id: UUID,
     req: ResultPresign,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
     job = _get(uow, scan_id)
-    _claimed(job, user, req.worker)
+    _claimed(uow, job, user, req.worker)
     ext = media_service.validate_private_upload(
         req.kind, req.filename, req.content_type, req.size
     )
@@ -663,7 +662,7 @@ def _finish_restoration(
 def finish_scan(
     scan_id: UUID,
     req: Finish,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -671,7 +670,7 @@ def finish_scan(
     job = _get(uow, scan_id)
     if job.status == "done" and job.claimed_by == f"{user.id}|{req.worker}":
         return _out(job, uow)  # a retried call
-    _claimed(job, user, req.worker)
+    _claimed(uow, job, user, req.worker)
     if job.restoration_id:
         return _finish_restoration(uow, store, job, req)
 
@@ -685,7 +684,7 @@ def finish_scan(
     if len(set(keys)) != len(keys):
         raise HTTPException(status_code=422, detail="The same file is listed twice")
     for a in req.assets:  # check everything first so a failure attaches nothing
-        if a.visibility == "public" and user.role not in PROCESSORS:
+        if a.visibility == "public" and not iam.allowed(uow.session, user, PROCESS):
             raise HTTPException(
                 status_code=403,
                 detail="Only the owner or a manager can publish a file to the website",
@@ -732,7 +731,7 @@ def finish_scan(
 def answer_scan(
     scan_id: UUID,
     req: Answer,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -743,7 +742,7 @@ def answer_scan(
     job = _get(uow, scan_id)
     if job.status == "done" and job.claimed_by == f"{user.id}|{req.worker}":
         return _out(job, uow)  # a retried call
-    _claimed(job, user, req.worker)
+    _claimed(uow, job, user, req.worker)
     params = job.params or {}
     if params.get("shape") != "suggest":
         raise HTTPException(status_code=409, detail="This scan asks no question")
@@ -770,11 +769,11 @@ def answer_scan(
 def fail_scan(
     scan_id: UUID,
     req: Fail,
-    user: User = Depends(check_role(WORKERS)),
+    user: User = Depends(require(WORK)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     job = _get(uow, scan_id)
-    _claimed(job, user, req.worker)
+    _claimed(uow, job, user, req.worker)
     job.status = "failed"
     job.error = req.error
     job.finished_at = _now()

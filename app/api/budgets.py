@@ -4,20 +4,19 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_db
+from app.iam.service import require
 from app.models.user import User
 from app.schemas.budgets import BudgetIn, BudgetStatus
 from app.services import budget_service as service
 
 router = APIRouter(prefix="/budgets", tags=["Budgets"])
 
-VIEW = [UserRole.OWNER, UserRole.MANAGER]
-SET = [UserRole.OWNER]
-
 
 @router.get("/current", response_model=List[BudgetStatus])
-def current_budgets(_: User = Depends(check_role(VIEW)), db: Session = Depends(get_db)):
+def current_budgets(
+    _: User = Depends(require("budgets:budget:read")), db: Session = Depends(get_db)
+):
     """
     This month and this financial year (April to March) for Machines and for raw
     materials: the budget if one is set, what has been spent, what is left, how much is
@@ -27,7 +26,9 @@ def current_budgets(_: User = Depends(check_role(VIEW)), db: Session = Depends(g
 
 
 @router.get("/warnings", response_model=List[BudgetStatus])
-def budget_warnings(_: User = Depends(check_role(VIEW)), db: Session = Depends(get_db)):
+def budget_warnings(
+    _: User = Depends(require("budgets:budget:read")), db: Session = Depends(get_db)
+):
     """Only the current budgets that are 80% used or over. Purchases are never blocked."""
     return service.warnings(db)
 
@@ -38,7 +39,7 @@ def list_budgets(
     period: Optional[str] = Query(None, pattern="^(month|financial_year)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(VIEW)),
+    _: User = Depends(require("budgets:budget:read")),
     db: Session = Depends(get_db),
 ):
     """Every budget that has been set, newest period first, with its figures."""
@@ -48,7 +49,7 @@ def list_budgets(
 @router.put("/", response_model=BudgetStatus)
 def set_budget(
     body: BudgetIn,
-    current_user: User = Depends(check_role(SET)),
+    current_user: User = Depends(require("budgets:budget:write")),
     db: Session = Depends(get_db),
 ):
     """Owner only. Sets the budget for the period holding `starts_on`, or changes it."""
@@ -58,7 +59,7 @@ def set_budget(
 @router.delete("/{budget_id}", status_code=204)
 def delete_budget(
     budget_id: UUID,
-    _: User = Depends(check_role(SET)),
+    _: User = Depends(require("budgets:budget:write")),
     db: Session = Depends(get_db),
 ):
     """Owner only. Removes a budget (the spending records are untouched)."""

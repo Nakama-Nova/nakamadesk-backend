@@ -18,7 +18,8 @@ from sqlalchemy import func, or_
 
 from app.api import scans as scans_api
 from app.api.restorations import FileOut
-from app.db.deps import RESTORATION_ROLES, check_role, get_uow
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.design import (
     DESIGN_CATEGORIES,
     DESIGN_STATUSES,
@@ -35,6 +36,8 @@ from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate
 from app.services import design_service, inventory_service, media_service, sku_service
 from app.services.object_store import S3Store, get_store_or_none
+
+RESTORE = "restoration:project:access"  # owner and artisans, by default
 
 router = APIRouter(prefix="/designs", tags=["Designs"])
 
@@ -255,7 +258,7 @@ def _link(uow: AbstractUnitOfWork, design_id: UUID, item_id: UUID) -> bool:
 @router.post("", response_model=DesignOut, status_code=201)
 def create_design(
     req: DesignCreate,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     _check_restoration(uow, req.restoration_id)
@@ -285,7 +288,7 @@ def list_designs(
     search: Optional[str] = Query(
         default=None, description="code or name contains this"
     ),
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     query = uow.session.query(Design)
@@ -308,7 +311,7 @@ def list_designs(
 @router.get("/{design_id}", response_model=DesignDetail)
 def get_design(
     design_id: UUID,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     design = _design(uow, design_id)
@@ -349,7 +352,7 @@ def get_design(
 def update_design(
     design_id: UUID,
     req: DesignUpdate,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     design = _design(uow, design_id)
@@ -369,7 +372,7 @@ def update_design(
 @router.post("/from-scan", response_model=FromScanOut)
 def create_design_from_scan(
     req: FromScan,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
@@ -380,7 +383,7 @@ def create_design_from_scan(
     picture is already a design, returns that design with created = false.
     """
     job = scans_api._get(uow, req.scan_id)
-    scans_api._visible(job, user)
+    scans_api._visible(uow, job, user)
     design, created = design_service.design_from_scan(uow, job, user, req.name, store)
     uow.refresh(design)
     return {**_out(uow, design), "created": created}
@@ -390,7 +393,7 @@ def create_design_from_scan(
 async def set_design_image(
     design_id: UUID,
     file: UploadFile = File(...),
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
@@ -409,7 +412,7 @@ async def set_design_image(
 @router.get("/{design_id}/image")
 def get_design_image(
     design_id: UUID,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
@@ -420,7 +423,7 @@ def get_design_image(
 def link_product(
     design_id: UUID,
     req: ProductLink,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Say that a product is built from this design. Linking twice changes nothing."""
@@ -436,7 +439,7 @@ def link_product(
 def unlink_product(
     design_id: UUID,
     item_id: UUID,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     design = _design(uow, design_id)
@@ -454,7 +457,7 @@ def unlink_product(
 def create_product_from_design(
     design_id: UUID,
     req: ProductFromDesign,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

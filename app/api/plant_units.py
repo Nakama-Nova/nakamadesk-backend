@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 
-from app.db.deps import check_role, get_current_user, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_uow
+from app.iam.service import require
 from app.models.plant_unit import PlantUnit
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -39,7 +39,7 @@ def _save(uow: AbstractUnitOfWork, row: PlantUnit) -> PlantUnit:
 @router.post("/", response_model=PlantUnitOut, status_code=201)
 def create_plant_unit(
     body: PlantUnitIn,
-    _: User = Depends(check_role([UserRole.OWNER])),
+    _: User = Depends(require("plants:plant_unit:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Owner only."""
@@ -50,7 +50,7 @@ def create_plant_unit(
 def update_plant_unit(
     unit_id: UUID,
     body: PlantUnitIn,
-    _: User = Depends(check_role([UserRole.OWNER])),
+    _: User = Depends(require("plants:plant_unit:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Owner only. Switch a unit off with is_active=false; units are never deleted."""

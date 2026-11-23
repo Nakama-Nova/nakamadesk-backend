@@ -7,6 +7,7 @@ from passlib.context import CryptContext
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.iam import service as iam
 from app.models.enums import UserRole
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -182,6 +183,10 @@ def update_user(db: Session, actor: User, user_id, data: UserUpdate) -> User:
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     changes = data.model_dump(exclude_unset=True)
+    # you may not edit someone who holds more than you do, nor give a role above your own
+    iam.check_may_grant_role(db, actor, user.role, strict=False)
+    if "role" in changes:
+        iam.check_may_grant_role(db, actor, changes["role"])
 
     if user.id == actor.id and (
         changes.get("role", user.role) != user.role or changes.get("is_active") is False

@@ -4,8 +4,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_db
+from app.iam.service import require
 from app.models.sale import Sale
 from app.models.user import User
 from app.schemas.invoice import InvoiceResponse
@@ -21,9 +21,7 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 def list_invoices(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:invoice:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -46,9 +44,7 @@ def list_invoices(
 @router.get("/{invoice_number}", response_model=InvoiceResponse)
 def get_invoice(
     invoice_number: str,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:invoice:read")),
     db: Session = Depends(get_db),
 ):
     """
@@ -76,9 +72,7 @@ def get_invoice(
 @router.get("/{invoice_number}/pdf")
 def get_invoice_pdf(
     invoice_number: str,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:invoice:read")),
     db: Session = Depends(get_db),
 ):
     """

@@ -1,11 +1,8 @@
-from typing import List
-
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core.security import oauth2_scheme, verify_token
 from app.db.session import SessionLocal
-from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.repositories.sqlalchemy_repo import SQLAlchemyUnitOfWork
@@ -50,29 +47,7 @@ def get_current_user(
     return user
 
 
-def check_role(allowed_roles: List[UserRole]):
-    def role_checker(current_user: User = Depends(get_current_user)):
-        if current_user.role not in allowed_roles:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Operation not permitted for role: {current_user.role}. Required: {allowed_roles}",
-            )
-        return current_user
-
-    return role_checker
-
-
 LAB_COOKIE = "lab_session"
-# Temple restorations (projects, scans, 3D results) are for the owner and artisans only.
-RESTORATION_ROLES = [UserRole.OWNER, UserRole.ARTISAN]
-LAB_ROLES = [
-    UserRole.OWNER,
-    UserRole.MANAGER,
-    UserRole.ACHARI,
-    UserRole.WORKER,
-    UserRole.ARTISAN,
-]
-LAB_EDIT_ROLES = [UserRole.OWNER, UserRole.MANAGER]
 
 
 def get_lab_user(
@@ -106,13 +81,19 @@ def get_lab_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found")
     check_token_version(payload, user)
-    if user.role not in LAB_ROLES:
+    from app.iam import service as iam  # late: iam imports this module
+
+    if not iam.allowed(uow.session, user, "lab:part:read"):
         raise HTTPException(status_code=403, detail="Not permitted for your role")
     return user
 
 
-def get_lab_editor(user: User = Depends(get_lab_user)) -> User:
-    if user.role not in LAB_EDIT_ROLES:
+def get_lab_editor(
+    user: User = Depends(get_lab_user), uow: AbstractUnitOfWork = Depends(get_uow)
+) -> User:
+    from app.iam import service as iam  # late: iam imports this module
+
+    if not iam.allowed(uow.session, user, "lab:part:edit"):
         raise HTTPException(
             status_code=403, detail="Only the owner or a manager can edit parts"
         )

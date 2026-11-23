@@ -76,7 +76,7 @@ def test_sales_cannot_delete_customer(client: TestClient, db):
 
     customer_id = str(uuid.uuid4())
     response = client.delete(f"/customers/{customer_id}")
-    assert response.status_code == 403  # Rejected by check_role
+    assert response.status_code == 403  # Rejected: no sales:customer permission
 
     teardown_override()
 

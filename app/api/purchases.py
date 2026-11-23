@@ -15,8 +15,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.purchase import PurchaseCreate, PurchaseResponse
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/purchases", tags=["Purchases"])
 @router.post("/", response_model=PurchaseResponse, status_code=201)
 def create_purchase(
     purchase_data: PurchaseCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("purchases:purchase:create")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -58,9 +58,7 @@ def create_purchase(
 def list_purchases(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("purchases:purchase:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -83,9 +81,7 @@ def list_purchases(
 @router.get("/{purchase_id}", response_model=PurchaseResponse)
 def get_purchase(
     purchase_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("purchases:purchase:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -114,7 +110,7 @@ def get_purchase(
 def confirm_purchase(
     purchase_id: UUID,
     location_id: Optional[UUID] = None,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("purchases:purchase:confirm")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

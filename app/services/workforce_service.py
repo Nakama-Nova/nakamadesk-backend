@@ -3,9 +3,9 @@ from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
+from app.iam import service as iam
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
-from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
@@ -330,7 +330,9 @@ def mark_present_at_location(
     """
     from fastapi import HTTPException
 
-    if data.user_id == recorder.id and recorder.role != UserRole.OWNER.value:
+    if data.user_id == recorder.id and not iam.allowed(
+        uow.session, recorder, "attendance:presence:mark_self"
+    ):
         raise HTTPException(
             status_code=403, detail="You cannot mark your own attendance"
         )

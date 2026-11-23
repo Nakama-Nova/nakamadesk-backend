@@ -5,7 +5,7 @@ restoration. Each is numbered once (QTN-2026-27-0001), saved as a snapshot, and 
 a PDF on the shop's letterhead. A wrong letter is edited (same number, same date) or
 voided; only a void letter can be deleted, and what it said is kept in the audit log.
 
-Who may issue and see each kind is in letter_service.ROLES: the owner all of them, a
+Who may issue and see each kind is in the letters:<kind>:issue permissions: the owner all of them, a
 manager all but certificates, sales only quotations and order confirmations.
 """
 
@@ -19,8 +19,9 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import or_
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_uow
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.letter import KINDS, Letter
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -121,6 +122,18 @@ class LetterDetail(LetterOut):
     payload: Dict[str, Any]
 
 
+def any_letter_user(
+    user: User = Depends(get_current_user), uow: AbstractUnitOfWork = Depends(get_uow)
+) -> User:
+    """Anyone who may issue at least one kind of letter (and so see those kinds)."""
+    if not letter_service.kinds_for(uow.session, user):
+        raise HTTPException(
+            status_code=403,
+            detail="Operation not permitted. Missing permission: letters:<kind>:issue",
+        )
+    return user
+
+
 def _out(letter: Letter) -> dict:
     return {**{c.name: getattr(letter, c.name) for c in Letter.__table__.columns}, "kind_label": KINDS[letter.kind][1]}  # fmt: skip
 
@@ -128,7 +141,7 @@ def _out(letter: Letter) -> dict:
 def _letter(uow: AbstractUnitOfWork, user: User, letter_id: UUID) -> Letter:
     """A letter this user may see; one they may not is simply not found."""
     letter = uow.session.get(Letter, letter_id)
-    if not letter or user.role not in letter_service.ROLES[letter.kind]:
+    if not letter or not iam.allowed(uow.session, user, f"letters:{letter.kind}:issue"):
         raise HTTPException(status_code=404, detail="Letter not found")
     return letter
 
@@ -144,7 +157,7 @@ def _issue(uow, user, kind, builder, data) -> dict:
 # ---------------------------------------------------------------- letterhead
 @router.get("/profile", response_model=ProfileIn)
 def get_profile(
-    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    user: User = Depends(any_letter_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return letter_service.get_profile(uow.session)
@@ -153,7 +166,7 @@ def get_profile(
 @router.put("/profile", response_model=ProfileIn)
 def put_profile(
     req: ProfileIn,
-    user: User = Depends(check_role([UserRole.OWNER])),
+    user: User = Depends(require("letters:profile:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     with uow:
@@ -166,7 +179,7 @@ def put_profile(
 @router.post("/quotation", response_model=LetterOut, status_code=201)
 def issue_quotation(
     req: QuotationIn,
-    user: User = Depends(check_role(letter_service.ROLES["quotation"])),
+    user: User = Depends(require("letters:quotation:issue")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return _issue(uow, user, "quotation", letter_service.issue_quotation, req)
@@ -175,7 +188,7 @@ def issue_quotation(
 @router.post("/order-confirmation", response_model=LetterOut, status_code=201)
 def issue_order_confirmation(
     req: OrderConfirmationIn,
-    user: User = Depends(check_role(letter_service.ROLES["order_confirmation"])),
+    user: User = Depends(require("letters:order_confirmation:issue")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return _issue(uow, user, "order_confirmation", letter_service.issue_order_confirmation, req)  # fmt: skip
@@ -184,7 +197,7 @@ def issue_order_confirmation(
 @router.post("/purchase-receipt", response_model=LetterOut, status_code=201)
 def issue_purchase_receipt(
     req: PurchaseReceiptIn,
-    user: User = Depends(check_role(letter_service.ROLES["purchase_receipt"])),
+    user: User = Depends(require("letters:purchase_receipt:issue")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return _issue(uow, user, "purchase_receipt", letter_service.issue_purchase_receipt, req)  # fmt: skip
@@ -193,7 +206,7 @@ def issue_purchase_receipt(
 @router.post("/completion-certificate", response_model=LetterOut, status_code=201)
 def issue_completion_certificate(
     req: CompletionIn,
-    user: User = Depends(check_role(letter_service.ROLES["completion_certificate"])),
+    user: User = Depends(require("letters:completion_certificate:issue")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return _issue(uow, user, "completion_certificate", letter_service.issue_completion_certificate, req)  # fmt: skip
@@ -211,10 +224,10 @@ def list_letters(
     ),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    user: User = Depends(any_letter_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
-    query = uow.session.query(Letter).filter(Letter.kind.in_(letter_service.kinds_for(user.role)))  # fmt: skip
+    query = uow.session.query(Letter).filter(Letter.kind.in_(letter_service.kinds_for(uow.session, user)))  # fmt: skip
     if kind:
         query = query.filter(Letter.kind == kind)
     if status:
@@ -233,7 +246,7 @@ def list_letters(
 @router.get("/{letter_id}", response_model=LetterDetail)
 def get_letter(
     letter_id: UUID,
-    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    user: User = Depends(any_letter_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     letter = _letter(uow, user, letter_id)
@@ -243,7 +256,7 @@ def get_letter(
 @router.get("/{letter_id}/pdf")
 def letter_pdf(
     letter_id: UUID,
-    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    user: User = Depends(any_letter_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     letter = _letter(uow, user, letter_id)
@@ -258,7 +271,7 @@ def letter_pdf(
 def void_letter(
     letter_id: UUID,
     req: VoidIn,
-    user: User = Depends(check_role([UserRole.OWNER])),
+    user: User = Depends(require("letters:letter:void")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     letter = _letter(uow, user, letter_id)
@@ -301,7 +314,7 @@ def edit_letter(
     body: Dict[str, Any] = Body(
         ..., description="The same details as when this kind of letter was issued"
     ),
-    user: User = Depends(check_role(letter_service.ALL_ROLES)),
+    user: User = Depends(any_letter_user),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -330,7 +343,7 @@ def edit_letter(
 @router.delete("/{letter_id}", status_code=204)
 def delete_letter(
     letter_id: UUID,
-    user: User = Depends(check_role([UserRole.OWNER])),
+    user: User = Depends(require("letters:letter:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

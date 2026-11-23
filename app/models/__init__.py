@@ -23,6 +23,12 @@ from app.models.expense import Expense  # noqa: F401
 from app.models.furniture_carving import FurnitureCarving  # noqa: F401
 from app.models.furniture_hardware import FurnitureHardware  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
+from app.models.iam import (  # noqa: F401
+    IamPolicy,
+    IamRole,
+    IamRolePolicy,
+    IamUserRole,
+)
 from app.models.inventory_movement import InventoryMovement  # noqa: F401
 from app.models.invoice_counter import InvoiceCounter  # noqa: F401
 from app.models.item import Item  # noqa: F401

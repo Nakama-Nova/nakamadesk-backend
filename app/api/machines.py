@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_db
+from app.iam.service import require
 from app.models.user import User
 from app.schemas.registers import (
     DowntimeOut,
@@ -20,13 +20,11 @@ from app.services import machine_service as service
 
 router = APIRouter(prefix="/machines", tags=["Machines"])
 
-STAFF = [UserRole.OWNER, UserRole.MANAGER]
-
 
 @router.post("/", response_model=MachineOut, status_code=201)
 def create_machine(
     body: MachineIn,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:write")),
     db: Session = Depends(get_db),
 ):
     """Add a machine to the register. Owner and manager."""
@@ -39,7 +37,7 @@ def list_machines(
     status: Optional[str] = Query(None, pattern="^(active|down|retired)$"),
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:read")),
     db: Session = Depends(get_db),
 ):
     """Machines with what each is worth now and when it is next due for service."""
@@ -49,7 +47,7 @@ def list_machines(
 @router.get("/due", response_model=List[MachineOut])
 def due_for_service(
     within_days: int = Query(14, ge=0, le=365),
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:read")),
     db: Session = Depends(get_db),
 ):
     """Machines overdue for service or due within `within_days`, soonest first."""
@@ -59,7 +57,7 @@ def due_for_service(
 @router.get("/{machine_id}", response_model=MachineOut)
 def get_machine(
     machine_id: UUID,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:read")),
     db: Session = Depends(get_db),
 ):
     return service.get(db, machine_id)
@@ -69,7 +67,7 @@ def get_machine(
 def update_machine(
     machine_id: UUID,
     body: MachineUpdate,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:write")),
     db: Session = Depends(get_db),
 ):
     """Change a machine's details, or retire it (status "retired"). Never deleted."""
@@ -82,7 +80,7 @@ def update_machine(
 def add_maintenance(
     machine_id: UUID,
     body: MaintenanceIn,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("machines:machine:write")),
     db: Session = Depends(get_db),
 ):
     """Record a service or repair that has been done, and what it cost."""
@@ -94,7 +92,7 @@ def list_maintenance(
     machine_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:read")),
     db: Session = Depends(get_db),
 ):
     return service.list_maintenance(db, machine_id, limit, offset)
@@ -104,7 +102,7 @@ def list_maintenance(
 def start_downtime(
     machine_id: UUID,
     body: DowntimeStart,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("machines:machine:write")),
     db: Session = Depends(get_db),
 ):
     """The machine stopped working. Marks it down until downtime is ended."""
@@ -114,7 +112,7 @@ def start_downtime(
 @router.post("/{machine_id}/downtime/end", response_model=DowntimeOut)
 def end_downtime(
     machine_id: UUID,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:write")),
     db: Session = Depends(get_db),
 ):
     """The machine is working again."""
@@ -126,7 +124,7 @@ def list_downtime(
     machine_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("machines:machine:read")),
     db: Session = Depends(get_db),
 ):
     return service.list_downtime(db, machine_id, limit, offset)

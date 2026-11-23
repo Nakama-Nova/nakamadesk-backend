@@ -5,8 +5,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_current_user, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_db
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.user import User
 from app.schemas.money import (
     AdvanceCreate,
@@ -23,7 +24,7 @@ from app.services import payroll_service
 
 router = APIRouter(prefix="/payroll", tags=["Payroll"])
 
-PAYMASTERS = [UserRole.OWNER, UserRole.MANAGER]
+READ_ALL = "payroll:records:read_all"  # others see only their own
 
 
 @router.get("/me", response_model=MyPayroll)
@@ -37,7 +38,7 @@ def my_payroll(
 @router.get("/summary", response_model=List[OwedSummary])
 def everyone_owed(
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(PAYMASTERS)),
+    current_user: User = Depends(require("payroll:summary:read")),
 ):
     """Every active person: what they are owed and what they owe back."""
     return payroll_service.everyone_owed(db)
@@ -47,7 +48,7 @@ def everyone_owed(
 def add_work_entry(
     data: WorkEntryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(PAYMASTERS)),
+    current_user: User = Depends(require("payroll:entry:write")),
 ):
     """Pay by the piece, overtime hours or a bonus, on top of the daily wage."""
     return payroll_service.create_work_entry(db, current_user, data)
@@ -60,7 +61,7 @@ def list_work_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in PAYMASTERS:
+    if not iam.allowed(db, current_user, READ_ALL):
         user_id = current_user.id  # everyone else sees only their own
     return payroll_service.list_work_entries(db, user_id, status)
 
@@ -69,7 +70,7 @@ def list_work_entries(
 def delete_work_entry(
     entry_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(PAYMASTERS)),
+    current_user: User = Depends(require("payroll:entry:write")),
 ):
     """Remove a mistaken entry. Only while it is still unpaid."""
     payroll_service.delete_work_entry(db, entry_id)
@@ -79,7 +80,7 @@ def delete_work_entry(
 def add_advance(
     data: AdvanceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(PAYMASTERS)),
+    current_user: User = Depends(require("payroll:advance:write")),
 ):
     """Lend money to staff (kind=advance) or record a cash repayment (kind=recovery)."""
     return payroll_service.add_advance(db, current_user, data)
@@ -91,7 +92,7 @@ def advance_ledger(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in PAYMASTERS and user_id != current_user.id:
+    if not iam.allowed(db, current_user, READ_ALL) and user_id != current_user.id:
         user_id = current_user.id
     return payroll_service.advance_ledger(db, user_id)
 
@@ -100,7 +101,7 @@ def advance_ledger(
 def pay(
     data: PayRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(PAYMASTERS)),
+    current_user: User = Depends(require("payroll:payment:create")),
 ):
     """
     Pay one person everything earned up to a date, optionally taking back part of
@@ -117,6 +118,6 @@ def list_payments(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role not in PAYMASTERS:
+    if not iam.allowed(db, current_user, READ_ALL):
         user_id = current_user.id
     return payroll_service.list_payments(db, user_id, start_date, end_date)

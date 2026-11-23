@@ -5,8 +5,6 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from app.models.enums import UserRole
-
 
 class UserBase(BaseModel):
     """
@@ -17,7 +15,7 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
     phone: Optional[str] = None
-    role: UserRole = UserRole.WORKER
+    role: str = Field(default="worker", max_length=60)  # a key from /iam/roles
     status: str = "active"
     is_active: bool = True
 
@@ -41,7 +39,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = Field(default=None, max_length=120)
     phone: Optional[str] = Field(default=None, max_length=30)
     email: Optional[EmailStr] = None
-    role: Optional[UserRole] = None
+    role: Optional[str] = Field(default=None, max_length=60)
     is_active: Optional[bool] = None
     base_daily_wage: Optional[Decimal] = Field(default=None, ge=0)
     overtime_rate_per_hour: Optional[Decimal] = Field(default=None, ge=0)

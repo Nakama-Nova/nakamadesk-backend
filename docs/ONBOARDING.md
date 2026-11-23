@@ -19,7 +19,7 @@ GitHub org: `Nakama-Nova`. Three repos:
 ```
 Desktop (PyQt6) ──┐                     ┌─ PostgreSQL
 Android (Compose) ┼── HTTPS/JSON ── FastAPI ── services ── repositories (UnitOfWork) ── models
-                  │                     └─ JWT auth + check_role RBAC
+                  │                     └─ JWT auth + permission checks (app/iam)
 Local SQLite outbox (desktop) ── POST /sync/push, GET /sync/pull
 ```
 
@@ -36,7 +36,7 @@ Backend layering is strict: `api → services → repositories → models`. Rout
 
 ## 3. Roles and permissions (`UserRole`)
 
-`owner`, `manager`, `sales`, `achari` (master craftsman), `worker`. Enforced by the `check_role([...])` dependency.
+`owner`, `manager`, `sales`, `achari` (master craftsman), `worker`. Roles are data: each is a bundle of policies in the database (see docs/IAM_DESIGN.md), and routes ask for a permission with `require("service:resource:verb")`.
 
 | Area | Access |
 |---|---|

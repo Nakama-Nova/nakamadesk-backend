@@ -6,10 +6,10 @@ from decimal import Decimal
 from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
+from app.iam import service as iam
 from app.models.attendance import Attendance
 from app.models.customer import Customer
 from app.models.daily_wage import DailyWage
-from app.models.enums import UserRole
 from app.models.item import Item
 from app.models.raw_material import RawMaterial
 from app.models.sale import Sale
@@ -49,41 +49,29 @@ def _get_model_class(entity: str):
     return None
 
 
-# Sync must grant no more than the REST routes do. Lists (not sets): UserRole is a
-# str Enum whose hash differs from the plain string stored on User.role.
-_ALL_ROLES = (
-    UserRole.OWNER,
-    UserRole.MANAGER,
-    UserRole.SALES,
-    UserRole.ACHARI,
-    UserRole.WORKER,
-    UserRole.ARTISAN,
-)
-_COST_VIEWERS = (UserRole.OWNER, UserRole.MANAGER)
-_SALES_ROLES = (UserRole.OWNER, UserRole.MANAGER, UserRole.SALES)
-
+# Sync must grant no more than the REST routes do, so each entity asks for the same
+# permission as its REST routes (see app/iam). Roles are data now: a custom role works
+# here too.
 # Who may push changes for each entity (same as POST/PUT/DELETE on its REST routes).
-PUSH_ROLES = {
-    "sale": _SALES_ROLES,
-    "item": _COST_VIEWERS,
-    "raw_material": _COST_VIEWERS,
-    "attendance": _SALES_ROLES,
+PUSH_ACTIONS = {
+    "sale": "sales:sale:create",
+    "item": "items:item:write",
+    "raw_material": "inventory:raw_material:write",
+    "attendance": "attendance:record:write",
 }
-# Who may pull each entity (same as its REST GET routes). Items are readable by all
-# staff with cost fields hidden; attendance is own-rows-only outside _SALES_ROLES.
-PULL_ROLES = {
-    "sale": _SALES_ROLES,
-    "item": _ALL_ROLES,
-    "raw_material": _COST_VIEWERS,
-    "attendance": _ALL_ROLES,
+# Who may pull each entity (same as its REST GET routes). Items come with cost fields
+# hidden unless the person has items:cost:read; attendance is own-rows-only unless they
+# have attendance:record:read_all.
+PULL_ACTIONS = {
+    "sale": "sales:sale:read",
+    "item": "items:item:read",
+    "raw_material": "inventory:raw_material:read",
+    "attendance": "attendance:record:read_own",
 }
 
 
-def _role_of(user: User) -> Optional[UserRole]:
-    try:
-        return UserRole(user.role)
-    except ValueError:
-        return None  # an unknown role gets nothing
+def _can(uow: AbstractUnitOfWork, user: User, action: str) -> bool:
+    return iam.allowed(uow.session, user, action)
 
 
 class OperationValidator:
@@ -114,9 +102,12 @@ class OperationValidator:
         )
 
     @staticmethod
-    def authorize(op: SyncOperation, user: User) -> Optional[str]:
+    def authorize(
+        op: SyncOperation, user: User, uow: AbstractUnitOfWork
+    ) -> Optional[str]:
         """Error message if this user's role may not push this entity, else None."""
-        if _role_of(user) in PUSH_ROLES.get(op.entity, ()):
+        action = PUSH_ACTIONS.get(op.entity)
+        if action and _can(uow, user, action):
             return None
         return f"Access denied: your role may not sync '{op.entity}' changes"
 
@@ -575,7 +566,7 @@ class AttendanceSyncHandler(GenericSyncHandler):
         if all(data.get(k) is None for k in _GEO_INPUT):
             for key in _GEO_INPUT:
                 data.pop(key, None)
-            if _role_of(current_user) not in _COST_VIEWERS:
+            if not _can(uow, current_user, "attendance:presence:mark"):
                 data["daily_wage"] = current_user.base_daily_wage or Decimal("0")
             return super().apply_create(uow, data, current_user, op)
         error = self._locate(uow, data, current_user)
@@ -611,13 +602,12 @@ class AttendanceSyncHandler(GenericSyncHandler):
         own base_daily_wage, the unit from the position. Fills `data` in; returns an
         error message or None.
         """
-        if _role_of(current_user) not in _COST_VIEWERS:
+        if not _can(uow, current_user, "attendance:presence:mark"):
             return "Access denied: only an owner or manager can mark attendance by GPS"
         if data.get("status") not in ("present", "half-day"):
             return "A GPS-marked attendance must be 'present' or 'half-day'"
-        if (
-            data["user_id"] == current_user.id
-            and _role_of(current_user) != UserRole.OWNER
+        if data["user_id"] == current_user.id and not _can(
+            uow, current_user, "attendance:presence:mark_self"
         ):
             return "You cannot mark your own attendance"
         staff = uow.users.get_by_id(data["user_id"])
@@ -822,7 +812,7 @@ class OperationDispatcher:
                 if err:
                     aggregator.add_result(op.id, None, "wrong_user", err)
                     continue
-                err = OperationValidator.authorize(op, current_user)
+                err = OperationValidator.authorize(op, current_user, uow)
             if err:
                 aggregator.add_result(op.id, None, "failed", err)
                 continue
@@ -885,10 +875,8 @@ def pull_sync(
     # Enforce global max limit for stability
     limit = min(limit, 100)
 
-    role = _role_of(current_user)
-
     def may_read(entity: str) -> bool:
-        return role in PULL_ROLES[entity]
+        return _can(uow, current_user, PULL_ACTIONS[entity])
 
     # helper row to dict
     def to_dict_list(rows):
@@ -936,7 +924,7 @@ def pull_sync(
     attendance_q = uow.session.query(Attendance).filter(
         Attendance.updated_at > last_sync
     )
-    if role not in _SALES_ROLES:
+    if not _can(uow, current_user, "attendance:record:read_all"):
         attendance_q = attendance_q.filter(Attendance.user_id == current_user.id)
     attendance = (
         attendance_q.order_by(Attendance.updated_at, Attendance.id)
@@ -957,7 +945,7 @@ def pull_sync(
         else []
     )
 
-    readable = [e for e in PULL_ROLES if may_read(e)]
+    readable = [e for e in PULL_ACTIONS if may_read(e)]
     deleted = (
         uow.session.query(SyncTombstone)
         .filter(
@@ -971,7 +959,7 @@ def pull_sync(
     )
 
     item_dicts = to_dict_list(items)
-    if role not in _COST_VIEWERS:
+    if not _can(uow, current_user, "items:cost:read"):
         # what an item cost is for the owner and managers only (as on GET /items)
         for d in item_dicts:
             d["purchase_price"] = Decimal("0.00")

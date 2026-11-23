@@ -12,25 +12,14 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.iam import service as iam
 from app.models.customer import Customer
-from app.models.enums import UserRole
 from app.models.item import Item
 from app.models.letter import KINDS, BusinessProfile, Letter
 from app.models.order import Order
 from app.models.restoration import RestorationProject
 from app.models.supplier import Supplier
 from app.models.user import User
-
-# who may issue (and therefore see) each kind of letter
-ROLES = {
-    "quotation": [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES],
-    "order_confirmation": [UserRole.OWNER, UserRole.MANAGER, UserRole.SALES],
-    "purchase_receipt": [UserRole.OWNER, UserRole.MANAGER],
-    "completion_certificate": [UserRole.OWNER],
-}
-ALL_ROLES = sorted(
-    {r for roles in ROLES.values() for r in roles}, key=lambda r: r.value
-)
 
 DEFAULT_PROFILE = {
     "name": "Vriksha Studios",
@@ -50,8 +39,9 @@ QUOTATION_TERMS = [
 ]
 
 
-def kinds_for(role) -> List[str]:
-    return [k for k, roles in ROLES.items() if role in roles]
+def kinds_for(db, user) -> List[str]:
+    """The kinds of letter this person may issue, and so see (letters:<kind>:issue)."""
+    return [k for k in KINDS if iam.allowed(db, user, f"letters:{k}:issue")]
 
 
 def money(value) -> str:

@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db
+from app.db.deps import get_db
 from app.finance import projector, reconcile, reports, service
 from app.finance.schemas import (
     AccountIn,
@@ -26,21 +26,21 @@ from app.finance.schemas import (
     SyncOut,
     TrialBalance,
 )
-from app.models.enums import UserRole
+from app.iam.service import require
 from app.models.user import User
 
 router = APIRouter(prefix="/finance", tags=["Finance ledger"])
 
-# The accountant (your CA) can read the books and the reports but never change anything.
-READ = [UserRole.OWNER, UserRole.MANAGER, UserRole.ACCOUNTANT]
-BALANCE_SHEET = [UserRole.OWNER, UserRole.ACCOUNTANT]
-WRITE = [UserRole.OWNER]
+# Who may do what lives in the roles (see app/iam/defaults.py): the accountant reads, never changes.
+READ = "finance:ledger:read"
+BALANCE_SHEET = "finance:balance_sheet:read"
+WRITE = "finance:ledger:write"
 
 
 @router.get("/accounts", response_model=List[AccountOut])
 def list_accounts(
     include_inactive: bool = False,
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """The chart of accounts."""
@@ -50,7 +50,7 @@ def list_accounts(
 @router.post("/accounts", response_model=AccountOut, status_code=201)
 def create_account(
     body: AccountIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """Owner only. Add an account; accounts are never deleted, only switched off."""
@@ -61,7 +61,7 @@ def create_account(
 def update_account(
     code: str,
     body: AccountUpdate,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """Owner only. Rename an account or switch it off (nothing more can be posted to it)."""
@@ -71,7 +71,7 @@ def update_account(
 @router.get("/trial-balance", response_model=TrialBalance)
 def trial_balance(
     as_of: Optional[date] = None,
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """Every account's totals and balance up to `as_of` (today by default)."""
@@ -82,7 +82,7 @@ def trial_balance(
 def profit_and_loss(
     date_from: Optional[date] = Query(None, alias="from"),
     date_to: Optional[date] = Query(None, alias="to"),
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """Income minus expenses over a period, from the ledger. Leave the dates out for all time."""
@@ -92,7 +92,7 @@ def profit_and_loss(
 @router.get("/balance-sheet", response_model=BalanceSheet)
 def balance_sheet(
     as_of: Optional[date] = None,
-    _: User = Depends(check_role(BALANCE_SHEET)),
+    _: User = Depends(require(BALANCE_SHEET)),
     db: Session = Depends(get_db),
 ):
     """What the business has, owes and is worth on a day (today by default). Owner and accountant."""
@@ -104,7 +104,7 @@ def account_ledger(
     code: str,
     date_from: Optional[date] = Query(None, alias="from"),
     date_to: Optional[date] = Query(None, alias="to"),
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """One account's entries with a running balance, after an opening balance."""
@@ -119,7 +119,7 @@ def list_entries(
     source_type: Optional[str] = Query(None, max_length=40),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     return service.list_entries(
@@ -130,7 +130,7 @@ def list_entries(
 @router.get("/entries/{entry_id}", response_model=EntryOut)
 def get_entry(
     entry_id: UUID,
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     return service.get_entry(db, entry_id)
@@ -139,7 +139,7 @@ def get_entry(
 @router.post("/journal", response_model=EntryOut, status_code=201)
 def post_journal(
     body: JournalIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """
@@ -154,7 +154,7 @@ def post_journal(
 def edit_entry(
     entry_id: UUID,
     body: EditIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """
@@ -170,7 +170,7 @@ def edit_entry(
 def reverse_entry(
     entry_id: UUID,
     body: ReverseIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """Owner only. Undo an entry by posting its mirror image. The original stays."""
@@ -178,7 +178,7 @@ def reverse_entry(
 
 
 @router.get("/closing", response_model=Closing)
-def get_closing(_: User = Depends(check_role(READ)), db: Session = Depends(get_db)):
+def get_closing(_: User = Depends(require(READ)), db: Session = Depends(get_db)):
     """The date the books are closed through (nothing can be posted on or before it)."""
     return service.get_closing(db)
 
@@ -186,7 +186,7 @@ def get_closing(_: User = Depends(check_role(READ)), db: Session = Depends(get_d
 @router.put("/closing", response_model=Closing)
 def set_closing(
     body: ClosingIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """Owner only. Close the books through a date, or open them again. Always audited."""
@@ -196,7 +196,7 @@ def set_closing(
 @router.post("/sync", response_model=SyncOut)
 def sync(
     body: SyncIn,
-    current_user: User = Depends(check_role(WRITE)),
+    current_user: User = Depends(require(WRITE)),
     db: Session = Depends(get_db),
 ):
     """
@@ -230,7 +230,7 @@ def _sync_out(result) -> SyncOut:
 def reconciliation(
     date_from: Optional[date] = Query(None, alias="from"),
     date_to: Optional[date] = Query(None, alias="to"),
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """
@@ -245,7 +245,7 @@ def reconciliation(
 def exceptions(
     date_from: Optional[date] = Query(None, alias="from"),
     date_to: Optional[date] = Query(None, alias="to"),
-    _: User = Depends(check_role(READ)),
+    _: User = Depends(require(READ)),
     db: Session = Depends(get_db),
 ):
     """Records the ledger cannot post cleanly, and why (a dry run; nothing is written)."""

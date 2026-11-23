@@ -13,9 +13,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.exc import IntegrityError
 
-from app.db.deps import check_role, get_uow
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.category import Category
-from app.models.enums import UserRole
 from app.models.inventory_movement import InventoryMovement
 from app.models.item import Item
 from app.models.purchase import Purchase
@@ -23,8 +23,6 @@ from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-
-STAFF = [UserRole.OWNER, UserRole.MANAGER]
 
 suppliers = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 categories = APIRouter(prefix="/categories", tags=["Categories"])
@@ -108,7 +106,8 @@ def _used(uow: AbstractUnitOfWork, model, column, id: UUID) -> bool:
 # ----------------------------------------------------------------- suppliers
 @suppliers.get("/", response_model=List[SupplierOut])
 def list_suppliers(
-    _: User = Depends(check_role(STAFF)), uow: AbstractUnitOfWork = Depends(get_uow)
+    _: User = Depends(require("inventory:master:read")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return uow.session.query(Supplier).order_by(Supplier.name).all()
 
@@ -116,7 +115,7 @@ def list_suppliers(
 @suppliers.post("/", response_model=SupplierOut, status_code=201)
 def create_supplier(
     body: SupplierIn,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("inventory:master:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     return _save(uow, Supplier(**body.model_dump()), "Supplier already exists")
@@ -126,7 +125,7 @@ def create_supplier(
 def update_supplier(
     supplier_id: UUID,
     body: SupplierIn,
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("inventory:master:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     row = _get_or_404(uow, Supplier, supplier_id, "Supplier")
@@ -138,7 +137,7 @@ def update_supplier(
 @suppliers.delete("/{supplier_id}")
 def delete_supplier(
     supplier_id: UUID,
-    _: User = Depends(check_role([UserRole.OWNER])),
+    _: User = Depends(require("inventory:supplier:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     row = _get_or_404(uow, Supplier, supplier_id, "Supplier")
@@ -150,7 +149,7 @@ def delete_supplier(
 def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
     @router.get("/", response_model=List[NameOut], name=f"list_{plural}")
     def list_rows(
-        _: User = Depends(check_role(STAFF)),
+        _: User = Depends(require("inventory:master:read")),
         uow: AbstractUnitOfWork = Depends(get_uow),
     ):
         return uow.session.query(model).order_by(model.name).all()
@@ -158,7 +157,7 @@ def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
     @router.post("/", response_model=NameOut, status_code=201, name=f"create_{plural}")
     def create_row(
         body: NameIn,
-        _: User = Depends(check_role(STAFF)),
+        _: User = Depends(require("inventory:master:write")),
         uow: AbstractUnitOfWork = Depends(get_uow),
     ):
         return _save(uow, model(**body.model_dump()), f"{label} already exists")
@@ -167,7 +166,7 @@ def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
     def update_row(
         row_id: UUID,
         body: NameIn,
-        _: User = Depends(check_role(STAFF)),
+        _: User = Depends(require("inventory:master:write")),
         uow: AbstractUnitOfWork = Depends(get_uow),
     ):
         row = _get_or_404(uow, model, row_id, label)
@@ -178,7 +177,7 @@ def _taxonomy(router: APIRouter, model, item_column, label: str, plural: str):
     @router.delete("/{row_id}", name=f"delete_{plural}")
     def delete_row(
         row_id: UUID,
-        _: User = Depends(check_role(STAFF)),
+        _: User = Depends(require("inventory:master:write")),
         uow: AbstractUnitOfWork = Depends(get_uow),
     ):
         row = _get_or_404(uow, model, row_id, label)
@@ -196,7 +195,7 @@ def movements(
     raw_material_id: Optional[UUID] = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
-    _: User = Depends(check_role(STAFF)),
+    _: User = Depends(require("inventory:master:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """The stock ledger, newest first: every receipt, sale, use and manual change."""

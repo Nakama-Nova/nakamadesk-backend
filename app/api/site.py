@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_db, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_db, get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.site import (
@@ -32,7 +32,6 @@ from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/site", tags=["Website content"])
 
-STAFF = [UserRole.OWNER, UserRole.MANAGER]
 PAGE = Path(__file__).resolve().parent.parent / "static" / "site" / "admin.html"
 PAGE_HEADERS = {
     "Cache-Control": "no-store",
@@ -48,7 +47,8 @@ def admin_page():
 
 @router.get("/announcement", response_model=Optional[AnnouncementOut])
 def get_announcement(
-    current_user: User = Depends(check_role(STAFF)), db: Session = Depends(get_db)
+    current_user: User = Depends(require("site:content:manage")),
+    db: Session = Depends(get_db),
 ):
     """The saved announcement (even when it is switched off or not showing now), or null."""
     return site_service.staff_announcement(db)
@@ -57,7 +57,7 @@ def get_announcement(
 @router.put("/announcement", response_model=AnnouncementOut)
 def put_announcement(
     body: AnnouncementIn,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:content:manage")),
     db: Session = Depends(get_db),
 ):
     """Save the announcement. Switch it off with enabled=false; it also ends by itself after ends_on."""
@@ -66,7 +66,7 @@ def put_announcement(
 
 @router.get("/ribbons", response_model=List[RibbonRow])
 def get_ribbons(
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:content:manage")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Every published product with its ribbon (if any)."""
@@ -77,7 +77,7 @@ def get_ribbons(
 def put_ribbon(
     item_id: UUID,
     body: RibbonIn,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:content:manage")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Set a product's ribbon (new, bestseller, few_left, offer), or null to remove it."""
@@ -86,7 +86,8 @@ def put_ribbon(
 
 @router.get("/banner", response_model=Optional[BannerOut])
 def get_banner(
-    current_user: User = Depends(check_role(STAFF)), db: Session = Depends(get_db)
+    current_user: User = Depends(require("site:content:manage")),
+    db: Session = Depends(get_db),
 ):
     """The saved home-page banner (even when switched off or not showing now), or null."""
     return site_service.staff_banner(db)
@@ -95,7 +96,7 @@ def get_banner(
 @router.put("/banner", response_model=BannerOut)
 def put_banner(
     body: BannerIn,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:content:manage")),
     db: Session = Depends(get_db),
 ):
     """
@@ -108,7 +109,7 @@ def put_banner(
 @router.post("/banner/image", response_model=BannerOut)
 async def post_banner_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:content:manage")),
     db: Session = Depends(get_db),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
@@ -122,7 +123,7 @@ async def post_banner_image(
 @router.get("/stats", response_model=StatsOut)
 def get_stats(
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("site:stats:read")),
     db: Session = Depends(get_db),
 ):
     """Visitor numbers for the last `days` days: views, most viewed pages, actions, a line per day."""

@@ -3,9 +3,9 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy import case, func
 
-from app.db.deps import check_role, get_uow
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.attendance import Attendance
-from app.models.enums import UserRole
 from app.models.item import Item
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
 @router.get("/summary")
 def get_dashboard_summary(
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("reports:dashboard:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

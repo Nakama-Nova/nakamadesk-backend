@@ -3,8 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.customer import CustomerCreate, CustomerResponse
@@ -16,9 +16,7 @@ router = APIRouter(prefix="/customers", tags=["Customers"])
 @router.post("/", response_model=CustomerResponse)
 def create_customer(
     customer: CustomerCreate,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:customer:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -40,9 +38,7 @@ def create_customer(
 @router.get("/search", response_model=CustomerResponse)
 def search_customer_by_phone(
     phone: str,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:customer:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -71,9 +67,7 @@ def search_customer_by_phone(
 def get_customers(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:customer:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -96,9 +90,7 @@ def get_customers(
 @router.get("/{customer_id}", response_model=CustomerResponse)
 def get_customer(
     customer_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:customer:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -127,9 +119,7 @@ def get_customer(
 def update_customer(
     customer_id: UUID,
     customer_data: CustomerCreate,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:customer:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -158,7 +148,7 @@ def update_customer(
 @router.delete("/{customer_id}")
 def delete_customer(
     customer_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:customer:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

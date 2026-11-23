@@ -17,8 +17,8 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.core.ratelimit import public_rate_limit
-from app.db.deps import check_role, get_current_user, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_uow
+from app.iam.service import require
 from app.models.product_asset import ProductAsset
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -53,7 +53,7 @@ class RegisterRequest(BaseModel):
 )
 def presign(
     req: PresignRequest,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("assets:file:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -84,7 +84,7 @@ def presign(
 def register_asset(
     item_id: UUID,
     req: RegisterRequest,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("assets:file:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
