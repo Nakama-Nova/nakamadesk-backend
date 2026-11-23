@@ -53,7 +53,7 @@ SOURCES = {
     "photos": ({".jpg", ".jpeg", ".png"}, 100 * MB, MAX_PHOTOS),
     "video": ({".mp4", ".mov"}, 1024 * MB, 1),
 }
-RESULT_KINDS = ["render", "glb", "stl", "obj", "ply", "nc"]
+RESULT_KINDS = ["render", "glb", "stl", "obj", "ply", "nc", "depth"]
 OPEN = ("created", "uploaded")
 
 
@@ -134,7 +134,7 @@ class Progress(Claim):
 
 
 class ResultPresign(Claim):
-    kind: Literal["render", "glb", "stl", "obj", "ply", "nc"]
+    kind: Literal["render", "glb", "stl", "obj", "ply", "nc", "depth"]
     filename: str = Field(max_length=200)
     content_type: str = Field(max_length=100)
     size: int
@@ -142,7 +142,7 @@ class ResultPresign(Claim):
 
 class ResultAsset(BaseModel):
     key: str = Field(max_length=300)
-    kind: Literal["render", "glb", "stl", "obj", "ply", "nc"]
+    kind: Literal["render", "glb", "stl", "obj", "ply", "nc", "depth"]
     visibility: Literal["public", "staff"] = "staff"
     content_type: str = Field(max_length=100)
     alt: Optional[str] = Field(default=None, max_length=200)

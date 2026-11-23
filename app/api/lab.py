@@ -61,6 +61,7 @@ from app.schemas.lab import (
     HardwareOut,
     LabItem,
     LinkIn,
+    MakeFilesIn,
     PartOut,
     PartsIn,
     PresetsIn,
@@ -172,6 +173,46 @@ def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
         d.scan_id: d
         for d in uow.session.query(Design).filter(Design.scan_id.in_(ids)).all()
     }
+    exports = (
+        uow.session.query(ScanJob)
+        .filter(
+            ScanJob.item_id == item_id,
+            ScanJob.params["shape"].astext == "export",
+            ScanJob.params["from_scan"].astext.in_([str(i) for i in ids]),
+        )
+        .order_by(ScanJob.created_at.desc())
+        .all()
+    )
+    files: dict = {}
+    for a in (
+        uow.session.query(ProductAsset)
+        .filter(ProductAsset.scan_id.in_(ids + [e.id for e in exports]))
+        .order_by(ProductAsset.sort, ProductAsset.created_at)
+        .all()
+    ):
+        files.setdefault(a.scan_id, []).append(
+            {
+                "id": str(a.id),
+                "kind": a.kind,
+                "bytes": a.bytes,
+                "alt": a.alt,
+                "download_path": f"/lab/assets/{a.id}/download",
+            }
+        )
+    asked: dict = {}
+    for e in exports:
+        asked.setdefault(e.params["from_scan"], []).append(
+            {
+                "id": str(e.id),
+                "status": e.status,
+                "progress": e.progress,
+                "error": e.error,
+                "outputs": e.params.get("outputs", []),
+                "real_width_mm": e.params.get("real_width_mm"),
+                "created_at": e.created_at.isoformat() if e.created_at else None,
+                "files": files.get(e.id, []),
+            }
+        )
     return [
         {
             "id": str(s.id),
@@ -186,6 +227,13 @@ def _design_scans(uow: AbstractUnitOfWork, item_id: UUID) -> list:
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "real_width_mm": (s.params or {}).get("real_width_mm"),
             "gcode": bool((s.params or {}).get("gcode")),
+            "files": files.get(
+                s.id, []
+            ),  # what this scan keeps (the depth map is the master)
+            "can_make_files": any(f["kind"] == "depth" for f in files.get(s.id, [])),
+            "exports": asked.get(
+                str(s.id), []
+            ),  # files asked for later, made from the depth map
             "design": (
                 {
                     "id": str(made[s.id].id),
@@ -712,6 +760,109 @@ def design_from_scan(
             "has_image": bool(design.image_key),
         },
     }
+
+
+@router.post("/scans/{scan_id}/make-files", status_code=201)
+def make_files(
+    scan_id: UUID,
+    body: MakeFilesIn,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """
+    Ask the workshop PC for files made from a finished flat-carving scan's stored depth map
+    (STL, OBJ, PLY, GLB, CNC G-code), at a real width. Only the small depth map is kept by
+    default; everything else is made when someone asks, so it never piles up in storage.
+    """
+    job = uow.session.get(ScanJob, scan_id)
+    if (
+        not job
+        or not job.item_id
+        or (job.params or {}).get("shape") != "relief"
+        or job.status != "done"
+    ):
+        raise HTTPException(
+            status_code=404, detail="Finished flat-carving scan not found"
+        )
+    item = _item(uow, job.item_id)
+    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Sculpture scans are for the owner and artisans"
+        )
+    master = (
+        uow.session.query(ProductAsset)
+        .filter(ProductAsset.scan_id == job.id, ProductAsset.kind == "depth")
+        .first()
+    )
+    if not master:
+        raise HTTPException(
+            status_code=422,
+            detail="This scan kept no depth map (it was made before this feature). Mark the area again.",
+        )
+    width = body.real_width_mm or (job.params or {}).get("real_width_mm")
+    if not width:
+        raise HTTPException(
+            status_code=422, detail="Enter the real width of the area in mm"
+        )
+    outputs = sorted(set(body.outputs))
+    waiting = (
+        uow.session.query(ScanJob)
+        .filter(
+            ScanJob.item_id == job.item_id,
+            ScanJob.status.in_(("uploaded", "processing")),
+            ScanJob.params["shape"].astext == "export",
+            ScanJob.params["from_scan"].astext == str(job.id),
+        )
+        .all()
+    )
+    for w in waiting:  # the same request twice: do not queue it twice
+        if (
+            w.params.get("outputs") == outputs
+            and w.params.get("real_width_mm") == width
+        ):
+            return {"id": str(w.id), "status": w.status}
+    new = ScanJob(
+        item_id=job.item_id,
+        artisan_only=job.artisan_only,
+        created_by=user.id,
+        source_kind="photos",
+        status="uploaded",
+        source_keys=[master.storage_key],
+        source_bytes=master.bytes,
+        params={
+            "shape": "export",
+            "from_scan": str(job.id),
+            "outputs": outputs,
+            "real_width_mm": width,
+            "label": (job.params or {}).get("label"),
+            "gcode": "nc" in outputs,
+        },
+    )
+    uow.session.add(new)
+    uow.commit()
+    return {"id": str(new.id), "status": new.status}
+
+
+@router.get("/assets/{asset_id}/download")
+def download_scan_file(
+    asset_id: UUID,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """A file a scan made (depth map, STL, G-code...), for the editor page, which has the Lab cookie."""
+    asset = uow.session.get(ProductAsset, asset_id)
+    job = uow.session.get(ScanJob, asset.scan_id) if asset and asset.scan_id else None
+    if not asset or not job or asset.storage != "s3":
+        raise HTTPException(status_code=404, detail="File not found")
+    if job.artisan_only and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Sculpture scans are for the owner and artisans"
+        )
+    if store is None:
+        raise HTTPException(status_code=503, detail="File storage is not set up yet")
+    name = f"{asset.kind}{Path(asset.storage_key).suffix}"
+    return RedirectResponse(store.presign_get(asset.storage_key, filename=name))
 
 
 @router.get("/templates")

@@ -542,6 +542,87 @@ function scanRow(s) {
   return tr;
 }
 
+// What a finished scan keeps, and files asked for later (made by the workshop PC from the kept depth map).
+const FILE_WORDS = { depth: "depth map (the master)", render: "picture", glb: "3D view", stl: "3D shape (STL)", obj: "3D shape (OBJ)", ply: "3D points (PLY)", nc: "CNC G-code" };
+const GET_FILES = [
+  ["For the CNC machine (G-code)", ["nc"]],
+  ["For a CAD designer (STL and OBJ)", ["stl", "obj"]],
+  ["For a 3D viewer or sharing (GLB)", ["glb"]],
+];
+const fileSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const exportBusy = (e) => e.status === "uploaded" || e.status === "processing";
+
+function fileLinks(files) {
+  const out = [];
+  files.forEach((f, i) => {
+    const a = document.createElement("a");
+    a.href = f.download_path;
+    a.textContent = `${FILE_WORDS[f.kind] || f.kind} (${fileSize(f.bytes)})`;
+    if (i) out.push(", ");
+    out.push(a);
+  });
+  return out;
+}
+
+function exportState(e) {
+  const what = e.outputs.map((k) => FILE_WORDS[k] || k).join(" + ");
+  const wrap = document.createElement("div");
+  wrap.append(`${what}, ${e.real_width_mm} mm wide: `);
+  if (e.status === "done") wrap.append(...fileLinks(e.files));
+  else if (e.status === "failed") wrap.append(`could not be made (${e.error || "unknown reason"}). Ask again.`);
+  else wrap.append(e.status === "uploaded" ? "waiting for the workshop PC" : `being made (${e.progress}%)`);
+  return wrap;
+}
+
+function filesRow(s) {
+  if (s.status !== "done" || (!s.files.length && !s.exports.length)) return null;
+  const tr = document.createElement("tr");
+  const cell = tr.insertCell();
+  cell.colSpan = 3;
+  cell.className = "small";
+  const kept = document.createElement("div");
+  kept.append("Kept (small): ", ...fileLinks(s.files));
+  cell.append(kept);
+  if (s.can_make_files) {
+    const ask = document.createElement("div");
+    ask.className = "row";
+    ask.style.margin = "4px 0";
+    const width = textInput(s.real_width_mm || "", "width mm", 6);
+    width.type = "number";
+    width.min = "1";
+    width.max = "5000";
+    width.setAttribute("aria-label", "real width in mm for the files");
+    ask.append("Get files at a real width of ", width, " mm: ");
+    for (const [label, outputs] of GET_FILES) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.addEventListener("click", async () => {
+        $("scansError").textContent = "";
+        $("scansOk").textContent = "";
+        if (!width.value) {
+          $("scansError").textContent = "Enter the real width of the area in mm first.";
+          return;
+        }
+        b.disabled = true;
+        try {
+          await call("POST", `/lab/scans/${s.id}/make-files`, { outputs, real_width_mm: Number(width.value) });
+          $("scansOk").textContent = "Asked the workshop PC. The files appear here when they are ready (it checks every 30 seconds).";
+          await refreshScans();
+        } catch (e) {
+          $("scansError").textContent = e.message;
+        } finally {
+          b.disabled = false;
+        }
+      });
+      ask.append(b);
+    }
+    cell.append(ask);
+  }
+  s.exports.forEach((e) => cell.append(exportState(e)));
+  return tr;
+}
+
 // The list of scans is redrawn only when it changed (so a name being typed is not wiped),
 // and refreshed every 10 s while a marked area waits for or is on the workshop PC.
 let scansJson = "";
@@ -550,11 +631,11 @@ function renderScans(list) {
   const json = JSON.stringify(list);
   if (json === scansJson) return;
   scansJson = json;
-  $("scans").tBodies[0].replaceChildren(...list.map(scanRow));
+  $("scans").tBodies[0].replaceChildren(...list.flatMap((s) => [scanRow(s), filesRow(s)].filter(Boolean)));
   $("scans").hidden = !list.length;
   $("noScans").hidden = !!list.length;
   clearInterval(scanTimer);
-  if (list.some((s) => s.status === "uploaded" || s.status === "processing")) scanTimer = setInterval(refreshScans, 10000);
+  if (list.some((s) => s.status === "uploaded" || s.status === "processing" || (s.exports || []).some(exportBusy))) scanTimer = setInterval(refreshScans, 10000);
 }
 async function refreshScans() {
   try {

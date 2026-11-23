@@ -99,6 +99,16 @@ class CarvingListIn(BaseModel):
     carvings: List[CarvingIn] = Field(max_length=60)
 
 
+MakeFile = Literal["stl", "obj", "ply", "glb", "nc"]
+
+
+class MakeFilesIn(BaseModel):
+    outputs: List[MakeFile] = Field(min_length=1, max_length=5)
+    real_width_mm: Optional[float] = Field(
+        default=None, gt=0, le=5000
+    )  # the scan's own width if left out
+
+
 class DesignFromScanIn(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
 
