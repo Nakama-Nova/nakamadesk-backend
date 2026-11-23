@@ -51,6 +51,13 @@
         piece's standard size above first. You get your <b>own copy</b> to edit; the template or the other piece is not
         changed. If this piece already has parts you are asked before they are replaced.
       </p>
+      <div class="row" style="margin-bottom:6px">
+        <label for="sugPhoto" class="small">Not sure which? Guess it from a photo of the piece (JPG or PNG)</label>
+        <input type="file" id="sugPhoto" accept="image/jpeg,image/png">
+        <button type="button" id="sugSend">Guess the template</button>
+      </div>
+      <div class="small" id="sugNote" aria-live="polite"></div>
+      <div class="row" id="sugPicks" style="margin:6px 0 10px"></div>
       <div class="fields">
         <div><label for="tplPick">Built-in template</label><select id="tplPick"></select></div>
         <div><label for="tplWood">Wood for every part</label><input id="tplWood" type="text" maxlength="60" value="Teak"></div>

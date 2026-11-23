@@ -454,6 +454,65 @@ $("cpUse").addEventListener("click", () => {
   startFrom(`/lab/items/${itemId}/copy-parts`, { source_item_id: sel.value, hardware: $("cpHw").checked, carvings: $("cpCv").checked }, `a copy of ${sel.selectedOptions[0].textContent}`);
 });
 
+// A photo of the piece: the workshop PC says which template it looks most like.
+let sugTimer = null;
+function renderSuggestion(list) {
+  clearInterval(sugTimer);
+  const s = list[0];
+  const picks = $("sugPicks");
+  picks.replaceChildren();
+  $("sugNote").textContent = "";
+  if (!s) return;
+  if (s.status === "uploaded" || s.status === "processing") {
+    $("sugNote").textContent = "Waiting for the workshop PC to look at the photo...";
+    sugTimer = setInterval(refreshSuggestion, 5000);
+  } else if (s.status === "failed") {
+    $("sugNote").textContent = `The workshop PC could not read the photo: ${s.error || "no reason given"}`;
+  } else if (s.status === "done" && s.picks.length) {
+    $("sugNote").textContent = "It looks most like these. Pick one to see it below, then press Use this template. A guess can be wrong.";
+    for (const p of s.picks) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = `${p.name} (${Math.round(p.score * 100)}%)`;
+      b.addEventListener("click", () => {
+        $("tplPick").value = p.template;
+        showTemplate();
+      });
+      picks.append(b);
+    }
+  }
+}
+async function refreshSuggestion() {
+  try {
+    renderSuggestion(await call("GET", `/lab/items/${itemId}/suggestions`));
+  } catch {
+    /* try again at the next tick */
+  }
+}
+$("sugSend").addEventListener("click", async () => {
+  $("startError").textContent = "";
+  const file = $("sugPhoto").files[0];
+  if (!file || !["image/jpeg", "image/png"].includes(file.type)) {
+    $("startError").textContent = "Pick a JPG or PNG photo of the piece first.";
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    $("startError").textContent = "That photo is over 25 MB. Pick a smaller one.";
+    return;
+  }
+  const form = new FormData();
+  form.append("photo", file);
+  $("sugSend").disabled = true;
+  try {
+    await call("POST", `/lab/items/${itemId}/suggest-template`, form);
+    await refreshSuggestion();
+  } catch (e) {
+    $("startError").textContent = e.message;
+  } finally {
+    $("sugSend").disabled = false;
+  }
+});
+
 // The product's category has a template that fits: pick it, say so, and offer its typical size if the piece has none.
 function suggest(sg, hasSize) {
   if (!sg) return;
@@ -919,6 +978,7 @@ async function init() {
     $("isFurniture").checked = def.item.is_furniture;
     fillSizes(def);
     loadStarts(def.suggestion, !!def.dimensions_mm);
+    refreshSuggestion();
     const body = $("parts").tBodies[0];
     def.parts.forEach((p) => body.append(addRow(p)));
     (def.hardware || []).forEach((h) => $("hardware").tBodies[0].append(addHwRow(h)));
