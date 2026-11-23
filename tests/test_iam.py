@@ -154,6 +154,34 @@ def test_lab_restoration_scans_parity_with_old_role_lists(role, action):
     assert evaluator.decide(stmts(role), action) == (role in LEGACY_LAB[action])
 
 
+# Letters, budgets, reports, dashboard.
+LEGACY_DOCS = {
+    "letters:quotation:issue": OMS,
+    "letters:order_confirmation:issue": OMS,
+    "letters:purchase_receipt:issue": OM,
+    "letters:completion_certificate:issue": {"owner"},
+    "letters:profile:write": {"owner"},
+    "letters:letter:void": {"owner"},
+    "letters:letter:delete": {"owner"},
+    "budgets:budget:read": OM,
+    "budgets:budget:write": {"owner"},
+    "reports:report:read": OM,
+    "reports:dashboard:read": OM,
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_DOCS)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_letters_budgets_reports_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_DOCS[action])
+
+
+def test_letter_kinds_match_the_registered_issue_actions():
+    from app.models.letter import KINDS
+
+    assert {f"letters:{k}:issue" for k in KINDS} <= set(ACTIONS)
+
+
 @pytest.mark.parametrize("action", LEGACY_WORK)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
@@ -356,6 +384,7 @@ def test_every_registered_action_is_covered_by_a_parity_table():
         **LEGACY_SALES,
         **LEGACY_FLOOR,
         **LEGACY_LAB,
+        **LEGACY_DOCS,
     }
     skip = {a for a in ACTIONS if a.startswith("iam:")}
     assert set(ACTIONS) - skip == set(tables)

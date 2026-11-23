@@ -96,6 +96,14 @@ ARTISAN = (
     "assets:file:read",
 )
 
+DOCS_DESK = ("letters:quotation:issue", "letters:order_confirmation:issue")
+DOCS_BOSS = DOCS_DESK + (
+    "letters:purchase_receipt:issue",
+    "budgets:budget:read",
+    "reports:report:read",
+    "reports:dashboard:read",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -110,6 +118,7 @@ SYSTEM_ROLES = {
             *SALES_BOSS,
             *PRODUCTION_BOSS,
             *LAB_BOSS,
+            *DOCS_BOSS,
         ),
     ),
     "accountant": (
@@ -119,7 +128,11 @@ SYSTEM_ROLES = {
     "sales": (
         "Sales",
         _allow(
-            *ATTENDANCE_DESK, *SALES_DESK, *FLOOR_VIEW, "inventory:stock_location:view"
+            *ATTENDANCE_DESK,
+            *SALES_DESK,
+            *FLOOR_VIEW,
+            "inventory:stock_location:view",
+            *DOCS_DESK,
         ),
     ),
     "achari": ("Achari", _allow(*ACHARI)),
