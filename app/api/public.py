@@ -16,16 +16,19 @@ from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import (
     BrevoWebhookEvent,
     CheckoutRequest,
+    CommentReceived,
+    CommentSubmit,
     DeliveryCheck,
     EnquiryRequest,
     NewsletterStatus,
     NewsletterSubscribe,
     NewsletterToken,
     PaymentInfo,
+    PublicComment,
     PublicOrder,
     PublicProduct,
 )
-from app.services import newsletter_service, public_service
+from app.services import comment_service, newsletter_service, public_service
 
 router = APIRouter(prefix="/public", tags=["Public website"])
 
@@ -105,6 +108,27 @@ def track_order(
 ):
     """Order status. Needs the order number AND the phone it was placed with."""
     return public_service.track(uow, order_number, phone)
+
+
+@router.get("/comments", response_model=List[PublicComment])
+def comments(uow: AbstractUnitOfWork = Depends(get_uow)):
+    """What customers said, only the ones staff approved."""
+    return comment_service.list_public(uow)
+
+
+@router.post(
+    "/comments",
+    response_model=CommentReceived,
+    status_code=201,
+    dependencies=[Depends(public_rate_limit("comments"))],
+)
+def send_comment(body: CommentSubmit, uow: AbstractUnitOfWork = Depends(get_uow)):
+    """
+    A customer's comment about their order. Needs the order number AND the phone it was
+    placed with, and the order must be confirmed. It is held until staff approve it.
+    """
+    comment_service.submit(uow, body)
+    return CommentReceived(status="received")
 
 
 @router.post(

@@ -19,6 +19,7 @@ from app.api import (
     auth,
     bom,
     budgets,
+    comments,
     customers,
     dashboard,
     designs,
@@ -118,6 +119,7 @@ app.include_router(scans.router)
 app.include_router(restorations.router)
 app.include_router(designs.router)
 app.include_router(letters.router)
+app.include_router(comments.router)
 app.include_router(notifications.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
