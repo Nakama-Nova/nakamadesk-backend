@@ -24,6 +24,27 @@ ATTENDANCE_BOSS = ATTENDANCE_DESK + (
     "attendance:presence:mark",
 )
 
+SALES_DESK = (
+    "sales:sale:create",
+    "sales:sale:read",
+    "sales:order:create",
+    "sales:order:read",
+    "sales:order:payment_add",
+    "sales:order:invoice",
+    "sales:invoice:read",
+    "sales:customer:read",
+    "sales:customer:write",
+    "purchases:purchase:read",
+)
+SALES_BOSS = SALES_DESK + (
+    "sales:sale:edit",
+    "sales:order:update",
+    "sales:order:delete",
+    "sales:customer:delete",
+    "purchases:purchase:create",
+    "purchases:purchase:confirm",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -35,13 +56,14 @@ SYSTEM_ROLES = {
             "iam:user_role:assign",
             *PAYMASTER,
             *ATTENDANCE_BOSS,
+            *SALES_BOSS,
         ),
     ),
     "accountant": (
         "Accountant",
         _allow("finance:ledger:read", "finance:balance_sheet:read"),
     ),
-    "sales": ("Sales", _allow(*ATTENDANCE_DESK)),
+    "sales": ("Sales", _allow(*ATTENDANCE_DESK, *SALES_DESK)),
     "achari": ("Achari", []),
     "worker": ("Worker", []),
     "artisan": ("Artisan", []),

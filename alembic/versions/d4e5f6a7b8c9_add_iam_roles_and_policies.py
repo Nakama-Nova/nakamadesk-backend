@@ -1,7 +1,7 @@
 """Add IAM roles and policies
 
 Revision ID: d4e5f6a7b8c9
-Revises: c9e5a1b3d7f4
+Revises: d0f6b2c4e8a5
 Create Date: 2026-11-23 22:00:00.000000
 
 Additive: four tables, plus the built-in roles (owner, manager, ...) as rows. users.role
@@ -18,7 +18,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "d4e5f6a7b8c9"
-down_revision: Union[str, Sequence[str], None] = "c9e5a1b3d7f4"
+down_revision: Union[str, Sequence[str], None] = "d0f6b2c4e8a5"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

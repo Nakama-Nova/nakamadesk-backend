@@ -23,8 +23,8 @@ from fastapi import (
     Response,
 )
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.order import (
@@ -47,9 +47,7 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 @router.post("/", response_model=OrderResponse, status_code=201)
 def create_order(
     order_data: OrderCreate,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:order:create")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -86,9 +84,7 @@ def list_orders(
     search: Optional[str] = Query(
         None, description="Order number, customer name or phone contains this text"
     ),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:order:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -123,9 +119,7 @@ def list_orders(
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_order(
     order_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:order:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -155,7 +149,7 @@ def update_order_status(
     order_id: UUID,
     update_data: OrderStatusUpdate,
     background: BackgroundTasks,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:order:update")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -188,9 +182,7 @@ def add_order_payment(
     order_id: UUID,
     data: PaymentCreate,
     background: BackgroundTasks,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:order:payment_add")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -204,7 +196,7 @@ def add_order_payment(
 def update_order(
     order_id: UUID,
     data: OrderUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:order:update")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Edit the amounts, expected delivery or notes of an open order. RBAC: OWNER, MANAGER."""
@@ -216,9 +208,7 @@ def invoice_order(
     order_id: UUID,
     response: Response,
     req: OrderInvoiceRequest = Body(default_factory=OrderInvoiceRequest),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:order:invoice")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -240,7 +230,7 @@ def invoice_order(
 def edit_order_items(
     order_id: UUID,
     data: OrderItemsUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:order:update")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -258,7 +248,7 @@ def edit_order_payment(
     order_id: UUID,
     payment_id: UUID,
     data: PaymentUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("sales:order:payment_edit")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Correct a payment's amount, method, reference, note or date. RBAC: OWNER."""
@@ -270,7 +260,7 @@ def void_order_payment(
     order_id: UUID,
     payment_id: UUID,
     data: PaymentVoid,
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("sales:order:payment_void")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -285,7 +275,7 @@ def void_order_payment(
 @router.delete("/{order_id}", status_code=204)
 def delete_order(
     order_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:order:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

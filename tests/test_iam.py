@@ -43,6 +43,47 @@ LEGACY_WORK = {
 }
 
 
+# Old lists: sales desk = owner+manager+sales; bosses-only = owner+manager; owner-only = owner.
+OMS = OM | {"sales"}
+LEGACY_SALES = {
+    **{
+        a: OMS
+        for a in (
+            "sales:sale:create",
+            "sales:sale:read",
+            "sales:order:create",
+            "sales:order:read",
+            "sales:order:payment_add",
+            "sales:order:invoice",
+            "sales:invoice:read",
+            "sales:customer:read",
+            "sales:customer:write",
+            "purchases:purchase:read",
+        )
+    },
+    **{
+        a: OM
+        for a in (
+            "sales:sale:edit",
+            "sales:order:update",
+            "sales:order:delete",
+            "sales:customer:delete",
+            "purchases:purchase:create",
+            "purchases:purchase:confirm",
+        )
+    },
+    "sales:sale:delete": {"owner"},
+    "sales:order:payment_edit": {"owner"},
+    "sales:order:payment_void": {"owner"},
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_SALES)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_sales_and_purchases_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_SALES[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_WORK)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
@@ -223,3 +264,16 @@ def test_payroll_endpoints_follow_role_and_workers_see_only_their_own(client, db
     assert client.get("/payroll/summary").status_code == 403
     assert client.get("/attendance/all").status_code == 403
     assert client.get(f"/payroll/payments?user_id={uuid.uuid4()}").status_code == 200
+
+
+def test_sales_and_purchases_endpoints_follow_role(client, db):
+    act_as(make_user(db, "sales"))
+    assert client.get("/sales/").status_code == 200
+    assert client.get("/orders/").status_code == 200
+    assert client.get("/purchases/").status_code == 200  # sales could always list
+    assert client.post("/purchases/", json={}).status_code == 403  # but not create
+    assert client.delete(f"/sales/{uuid.uuid4()}").status_code == 403
+    act_as(make_user(db, "worker"))
+    assert client.get("/sales/").status_code == 403
+    assert client.get("/customers/").status_code == 403
+    assert client.get("/invoices/").status_code == 403

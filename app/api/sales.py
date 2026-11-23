@@ -3,8 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse, SaleUpdate
@@ -23,9 +23,7 @@ router = APIRouter(prefix="/sales", tags=["Sales"])
 @router.post("/", response_model=SaleResponse)
 def create_sale(
     sale_data: SaleCreate,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:sale:create")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -53,9 +51,7 @@ def get_sales(
     offset: int = Query(0, ge=0),
     customer_id: Optional[UUID] = None,
     date: str = None,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:sale:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -82,9 +78,7 @@ def get_sales(
 @router.get("/{sale_id}", response_model=SaleResponse)
 def get_sale(
     sale_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:sale:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -112,9 +106,7 @@ def get_sale(
 @router.get("/{sale_id}/items", response_model=List[SaleItemResponse])
 def get_sale_items(
     sale_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("sales:sale:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -137,7 +129,7 @@ def get_sale_items(
 def edit_sale(
     sale_id: UUID,
     data: SaleUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("sales:sale:edit")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -151,7 +143,7 @@ def edit_sale(
 def delete_sale(
     sale_id: UUID,
     reason: str = Query(min_length=3, max_length=300),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("sales:sale:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
