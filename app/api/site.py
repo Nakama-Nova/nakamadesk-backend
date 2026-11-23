@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -18,8 +18,16 @@ from app.db.deps import check_role, get_db, get_uow
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.site import AnnouncementIn, AnnouncementOut, RibbonIn, RibbonRow
-from app.services import site_service
+from app.schemas.site import (
+    AnnouncementIn,
+    AnnouncementOut,
+    BannerIn,
+    BannerOut,
+    RibbonIn,
+    RibbonRow,
+)
+from app.services import media_service, site_service
+from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/site", tags=["Website content"])
 
@@ -73,3 +81,38 @@ def put_ribbon(
 ):
     """Set a product's ribbon (new, bestseller, few_left, offer), or null to remove it."""
     return site_service.set_ribbon(uow, item_id, body.ribbon)
+
+
+@router.get("/banner", response_model=Optional[BannerOut])
+def get_banner(
+    current_user: User = Depends(check_role(STAFF)), db: Session = Depends(get_db)
+):
+    """The saved home-page banner (even when switched off or not showing now), or null."""
+    return site_service.staff_banner(db)
+
+
+@router.put("/banner", response_model=BannerOut)
+def put_banner(
+    body: BannerIn,
+    current_user: User = Depends(check_role(STAFF)),
+    db: Session = Depends(get_db),
+):
+    """
+    Save the banner. For a video, paste its YouTube link or Instagram reel link in `media_link`:
+    only the video's id is kept. A picture is added with POST /site/banner/image after saving.
+    """
+    return site_service.save_banner(db, body, current_user.id)
+
+
+@router.post("/banner/image", response_model=BannerOut)
+async def post_banner_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(check_role(STAFF)),
+    db: Session = Depends(get_db),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """Upload the banner's picture (JPG, PNG or WebP, 8 MB max). It is shrunk to web size."""
+    data = await file.read(media_service.max_read_size())
+    return site_service.save_banner_image(
+        db, file.content_type or "", data, store, current_user.id
+    )

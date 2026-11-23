@@ -19,6 +19,9 @@
   button.go { background: #5a2a06; color: #fff; border-color: #5a2a06; margin-top: 14px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0e6d4; }
   .ok { color: #2f7d4f; } .err { color: #b3261e; }
+  select { width: 100%; box-sizing: border-box; margin-top: 4px; }
+  textarea { font: inherit; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border: 1.5px solid #e8dcc8; border-radius: 8px; }
+  img.thumb { max-width: 260px; border-radius: 8px; display: block; margin-top: 8px; }
   .bar { background: #5a2a06; color: #fbf6ec; text-align: center; padding: 8px 12px; font-size: .85rem; border-radius: 8px; margin-top: 12px; }
 </style>
 </head>
@@ -48,6 +51,34 @@
       <p id="amsg" class="meta" aria-live="polite"></p>
     </form>
 
+    <form id="ban" class="card">
+      <h2>Banner on the home page</h2>
+      <p class="meta">A wide card under the top of the home page: headline, a few words, a picture or a playable video, and a button.</p>
+      <label>Headline (up to 80 characters)<input type="text" id="bh" maxlength="80" required></label>
+      <label>A few words (optional, up to 240)<textarea id="bb" maxlength="240" rows="2"></textarea></label>
+      <label>Picture or video
+        <select id="bk">
+          <option value="none">Words only</option>
+          <option value="image">A picture (upload it below)</option>
+          <option value="youtube">A YouTube video (paste the link)</option>
+          <option value="instagram">An Instagram reel or post (paste the link)</option>
+        </select>
+      </label>
+      <label id="blw" hidden>Link to the video<input type="text" id="bl" maxlength="300" placeholder="https://www.youtube.com/watch?v=... or https://www.instagram.com/reel/..."></label>
+      <label>Button address (optional): a page like /shop or an address starting https://<input type="text" id="bu" maxlength="300"></label>
+      <label>Button words (optional, up to 30)<input type="text" id="bt" maxlength="30"></label>
+      <label>Starts on (optional)<input type="date" id="bf"></label>
+      <label>Ends on (optional, the last day it shows)<input type="date" id="be"></label>
+      <label><input type="checkbox" id="bo" checked> Show it</label>
+      <button class="go" type="submit">Save banner</button>
+      <p id="bmsg" class="meta" aria-live="polite"></p>
+      <div id="picbox" hidden>
+        <label>Picture (JPG, PNG or WebP, up to 8 MB)<input type="file" id="pic" accept="image/jpeg,image/png,image/webp"></label>
+        <img id="picprev" class="thumb" alt="" hidden>
+        <p id="pmsg" class="meta" aria-live="polite"></p>
+      </div>
+    </form>
+
     <section class="card">
       <h2>Ribbons on product photos</h2>
       <p class="meta">Pick a label for each piece, or none.</p>
@@ -70,7 +101,42 @@ async function api(path, opts = {}) {
 function preview() { $("preview").textContent = $("msg").value + ($("url").value ? "  \u203a " + ($("lbl").value || "Learn more") : ""); }
 ["msg", "url", "lbl"].forEach((id) => $(id).addEventListener("input", preview));
 
+function showKind() { $("blw").hidden = !["youtube", "instagram"].includes($("bk").value); }
+$("bk").addEventListener("change", showKind);
+async function loadBanner() {
+  const b = await api("/site/banner");
+  $("picbox").hidden = !b;
+  if (!b) { $("bmsg").textContent = "No banner saved yet. The home page shows no banner."; showKind(); return; }
+  $("bh").value = b.headline; $("bb").value = b.body || ""; $("bk").value = b.media_kind; $("bl").value = b.media_link || "";
+  $("bu").value = b.button_url || ""; $("bt").value = b.button_label || ""; $("bf").value = b.starts_on || ""; $("be").value = b.ends_on || ""; $("bo").checked = b.enabled;
+  $("bmsg").textContent = b.showing_now ? "Showing on the home page now." : "Not showing right now (switched off, or outside its dates).";
+  if (b.image_url) { $("picprev").src = b.image_url; $("picprev").hidden = false; }
+  showKind();
+}
+$("ban").onsubmit = async (ev) => {
+  ev.preventDefault(); $("bmsg").className = "meta";
+  try {
+    const body = { headline: $("bh").value, body: $("bb").value || null, media_kind: $("bk").value, media_link: $("bl").value || null, button_url: $("bu").value || null, button_label: $("bt").value || null, starts_on: $("bf").value || null, ends_on: $("be").value || null, enabled: $("bo").checked };
+    const b = await api("/site/banner", { method: "PUT", body: JSON.stringify(body) });
+    $("picbox").hidden = false;
+    $("bmsg").textContent = (b.showing_now ? "Saved. Showing on the home page now." : "Saved. Not showing right now (switched off, or outside its dates).") + (b.media_kind === "image" && !b.image_url ? " Now add the picture below." : "");
+    $("bmsg").className = "meta ok";
+  } catch (e) { $("bmsg").textContent = e.message; $("bmsg").className = "meta err"; }
+};
+$("pic").onchange = async () => {
+  const f = $("pic").files[0]; if (!f) return;
+  $("pmsg").className = "meta"; $("pmsg").textContent = "Uploading...";
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    const r = await fetch("/site/banner/image", { method: "POST", body: fd, headers: { Authorization: "Bearer " + token } });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(typeof (j && j.detail) === "string" ? j.detail : "Could not upload that picture");
+    $("picprev").src = j.image_url; $("picprev").hidden = false; $("pmsg").textContent = "Picture saved. Choose 'A picture' above and save the banner if you have not."; $("pmsg").className = "meta ok";
+  } catch (e) { $("pmsg").textContent = e.message; $("pmsg").className = "meta err"; }
+};
+
 async function load() {
+  await loadBanner();
   const a = await api("/site/announcement");
   if (a) {
     $("msg").value = a.message; $("url").value = a.link_url || ""; $("lbl").value = a.link_label || "";

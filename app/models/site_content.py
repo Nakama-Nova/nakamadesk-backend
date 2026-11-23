@@ -62,3 +62,48 @@ class ProductRibbon(Base):
     )
     ribbon = Column(String(20), nullable=False)
     updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+
+
+class SiteBanner(Base):
+    """
+    The feature banner on the website's home page: a headline and a few words, with a picture
+    or a video, and a button. One row is kept and edited. Shows while `enabled` and today
+    (India time) is between `starts_on` and `ends_on` (both optional, inclusive).
+
+    `media_kind`: none, image, youtube or instagram. For the two video kinds only the video's
+    id is stored (read out of the link staff paste), and the address to embed is built from a
+    fixed template, so no other address can ever be put in a page. `image_key` is a file in the
+    public store, kept (and shrunk to web size) by the upload route.
+    """
+
+    __tablename__ = "site_banners"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
+    headline = Column(String(80), nullable=False)
+    body = Column(String(240), nullable=True)
+    media_kind = Column(String(12), nullable=False, default="none")
+    video_id = Column(String(40), nullable=True)
+    video_variant = Column(String(8), nullable=True)  # instagram: reel or p
+    image_key = Column(String(300), nullable=True)
+    image_storage = Column(String(12), nullable=True)
+    button_url = Column(String(300), nullable=True)
+    button_label = Column(String(30), nullable=True)
+    starts_on = Column(Date, nullable=True)
+    ends_on = Column(Date, nullable=True)
+    enabled = Column(Boolean, nullable=False, default=False)
+    updated_at = Column(DateTime, nullable=False, default=_now, onupdate=_now)
+    updated_by = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    def is_live(self, today: date) -> bool:
+        return bool(
+            self.enabled
+            and (self.starts_on is None or today >= self.starts_on)
+            and (self.ends_on is None or today <= self.ends_on)
+        )

@@ -167,3 +167,16 @@ class PublicAnnouncement(BaseModel):
     message: str
     link_url: Optional[str] = None
     link_label: Optional[str] = None
+
+
+class PublicBanner(BaseModel):
+    """The feature banner on the home page. `embed_url` is built by the server from a fixed template."""
+
+    headline: str
+    body: Optional[str] = None
+    media_kind: str  # none, image, youtube or instagram
+    image_url: Optional[str] = None
+    embed_url: Optional[str] = None
+    watch_url: Optional[str] = None  # the plain video page, for a "watch on ..." link
+    button_url: Optional[str] = None
+    button_label: Optional[str] = None

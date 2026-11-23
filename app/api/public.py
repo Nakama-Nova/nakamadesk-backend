@@ -25,6 +25,7 @@ from app.schemas.public import (
     NewsletterToken,
     PaymentInfo,
     PublicAnnouncement,
+    PublicBanner,
     PublicComment,
     PublicOrder,
     PublicProduct,
@@ -120,6 +121,12 @@ def track_order(
 def announcement(db: Session = Depends(get_db)):
     """The line for the top bar of the website, or null when there is none right now."""
     return site_service.public_announcement(db)
+
+
+@router.get("/banner", response_model=Optional[PublicBanner])
+def banner(db: Session = Depends(get_db)):
+    """The feature banner for the home page, or null when there is none right now."""
+    return site_service.public_banner(db)
 
 
 @router.get("/comments", response_model=List[PublicComment])
