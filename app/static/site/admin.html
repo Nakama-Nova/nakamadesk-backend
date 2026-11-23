@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Website content</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #fbf6ec; color: #3a1b04; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.2rem; margin: 0 0 8px; }
+  .card { background: #fff; border: 1px solid #e8dcc8; border-radius: 12px; padding: 16px; margin: 14px 0; }
+  .meta { color: #7a5a3c; font-size: .85rem; }
+  label { display: block; font-size: .9rem; margin-top: 10px; }
+  button, input, select { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #e8dcc8; background: #fff; color: #3a1b04; }
+  input[type=text], input[type=password], input[type=date] { width: 100%; box-sizing: border-box; margin-top: 4px; }
+  button { border-color: #bf830b; color: #5a2a06; cursor: pointer; }
+  button.go { background: #5a2a06; color: #fff; border-color: #5a2a06; margin-top: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0e6d4; }
+  .ok { color: #2f7d4f; } .err { color: #b3261e; }
+  select { width: 100%; box-sizing: border-box; margin-top: 4px; }
+  textarea { font: inherit; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 10px 12px; border: 1.5px solid #e8dcc8; border-radius: 8px; }
+  img.thumb { max-width: 260px; border-radius: 8px; display: block; margin-top: 8px; }
+  .bar { background: #5a2a06; color: #fbf6ec; text-align: center; padding: 8px 12px; font-size: .85rem; border-radius: 8px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Website content</h1>
+  <p class="meta">The line at the top of the website and the labels on product photos. Changes show on the website within a minute. <a href="/comments/review">Customer comments</a></p>
+
+  <form id="login" class="card">
+    <label>Staff username<input type="text" id="u" autocomplete="username" required></label>
+    <label>Password<input type="password" id="p" autocomplete="current-password" required></label>
+    <button class="go" type="submit">Sign in</button>
+    <p id="lerr" class="err" role="alert"></p>
+  </form>
+
+  <div id="app" hidden>
+    <form id="ann" class="card">
+      <h2>Announcement at the top</h2>
+      <label>Message (up to 160 characters)<input type="text" id="msg" maxlength="160" required></label>
+      <label>Link (optional): a page like /shop or an address starting https://<input type="text" id="url" maxlength="300"></label>
+      <label>Link words (optional, up to 30)<input type="text" id="lbl" maxlength="30"></label>
+      <label>Starts on (optional)<input type="date" id="from"></label>
+      <label>Ends on (optional, the last day it shows)<input type="date" id="to"></label>
+      <label><input type="checkbox" id="on" checked> Show it</label>
+      <div id="preview" class="bar" aria-live="polite"></div>
+      <button class="go" type="submit">Save</button>
+      <p id="amsg" class="meta" aria-live="polite"></p>
+    </form>
+
+    <form id="ban" class="card">
+      <h2>Banner on the home page</h2>
+      <p class="meta">A wide card under the top of the home page: headline, a few words, a picture or a playable video, and a button.</p>
+      <label>Headline (up to 80 characters)<input type="text" id="bh" maxlength="80" required></label>
+      <label>A few words (optional, up to 240)<textarea id="bb" maxlength="240" rows="2"></textarea></label>
+      <label>Picture or video
+        <select id="bk">
+          <option value="none">Words only</option>
+          <option value="image">A picture (upload it below)</option>
+          <option value="youtube">A YouTube video (paste the link)</option>
+          <option value="instagram">An Instagram reel or post (paste the link)</option>
+        </select>
+      </label>
+      <label id="blw" hidden>Link to the video<input type="text" id="bl" maxlength="300" placeholder="https://www.youtube.com/watch?v=... or https://www.instagram.com/reel/..."></label>
+      <label>Button address (optional): a page like /shop or an address starting https://<input type="text" id="bu" maxlength="300"></label>
+      <label>Button words (optional, up to 30)<input type="text" id="bt" maxlength="30"></label>
+      <label>Starts on (optional)<input type="date" id="bf"></label>
+      <label>Ends on (optional, the last day it shows)<input type="date" id="be"></label>
+      <label><input type="checkbox" id="bo" checked> Show it</label>
+      <button class="go" type="submit">Save banner</button>
+      <p id="bmsg" class="meta" aria-live="polite"></p>
+      <div id="picbox" hidden>
+        <label>Picture (JPG, PNG or WebP, up to 8 MB)<input type="file" id="pic" accept="image/jpeg,image/png,image/webp"></label>
+        <img id="picprev" class="thumb" alt="" hidden>
+        <p id="pmsg" class="meta" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <section class="card">
+      <h2>Ribbons on product photos</h2>
+      <p class="meta">Pick a label for each piece, or none.</p>
+      <p id="rmsg" class="meta" aria-live="polite"></p>
+      <div id="ribbons"></div>
+    </section>
+  </div>
+</main>
+<script>
+let token = null;
+const $ = (id) => document.getElementById(id);
+const LABELS = { "": "No ribbon", new: "New", bestseller: "Bestseller", few_left: "Only a few left", offer: "Offer" };
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", ...(opts.headers || {}), Authorization: "Bearer " + token } });
+  if (r.status === 401) { location.reload(); }
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(typeof (j && j.detail) === "string" ? j.detail : (Array.isArray(j && j.detail) && j.detail[0] ? j.detail[0].msg : "Something went wrong"));
+  return j;
+}
+function preview() { $("preview").textContent = $("msg").value + ($("url").value ? "  \u203a " + ($("lbl").value || "Learn more") : ""); }
+["msg", "url", "lbl"].forEach((id) => $(id).addEventListener("input", preview));
+
+function showKind() { $("blw").hidden = !["youtube", "instagram"].includes($("bk").value); }
+$("bk").addEventListener("change", showKind);
+async function loadBanner() {
+  const b = await api("/site/banner");
+  $("picbox").hidden = !b;
+  if (!b) { $("bmsg").textContent = "No banner saved yet. The home page shows no banner."; showKind(); return; }
+  $("bh").value = b.headline; $("bb").value = b.body || ""; $("bk").value = b.media_kind; $("bl").value = b.media_link || "";
+  $("bu").value = b.button_url || ""; $("bt").value = b.button_label || ""; $("bf").value = b.starts_on || ""; $("be").value = b.ends_on || ""; $("bo").checked = b.enabled;
+  $("bmsg").textContent = b.showing_now ? "Showing on the home page now." : "Not showing right now (switched off, or outside its dates).";
+  if (b.image_url) { $("picprev").src = b.image_url; $("picprev").hidden = false; }
+  showKind();
+}
+$("ban").onsubmit = async (ev) => {
+  ev.preventDefault(); $("bmsg").className = "meta";
+  try {
+    const body = { headline: $("bh").value, body: $("bb").value || null, media_kind: $("bk").value, media_link: $("bl").value || null, button_url: $("bu").value || null, button_label: $("bt").value || null, starts_on: $("bf").value || null, ends_on: $("be").value || null, enabled: $("bo").checked };
+    const b = await api("/site/banner", { method: "PUT", body: JSON.stringify(body) });
+    $("picbox").hidden = false;
+    $("bmsg").textContent = (b.showing_now ? "Saved. Showing on the home page now." : "Saved. Not showing right now (switched off, or outside its dates).") + (b.media_kind === "image" && !b.image_url ? " Now add the picture below." : "");
+    $("bmsg").className = "meta ok";
+  } catch (e) { $("bmsg").textContent = e.message; $("bmsg").className = "meta err"; }
+};
+$("pic").onchange = async () => {
+  const f = $("pic").files[0]; if (!f) return;
+  $("pmsg").className = "meta"; $("pmsg").textContent = "Uploading...";
+  try {
+    const fd = new FormData(); fd.append("file", f);
+    const r = await fetch("/site/banner/image", { method: "POST", body: fd, headers: { Authorization: "Bearer " + token } });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(typeof (j && j.detail) === "string" ? j.detail : "Could not upload that picture");
+    $("picprev").src = j.image_url; $("picprev").hidden = false; $("pmsg").textContent = "Picture saved. Choose 'A picture' above and save the banner if you have not."; $("pmsg").className = "meta ok";
+  } catch (e) { $("pmsg").textContent = e.message; $("pmsg").className = "meta err"; }
+};
+
+async function load() {
+  await loadBanner();
+  const a = await api("/site/announcement");
+  if (a) {
+    $("msg").value = a.message; $("url").value = a.link_url || ""; $("lbl").value = a.link_label || "";
+    $("from").value = a.starts_on || ""; $("to").value = a.ends_on || ""; $("on").checked = a.enabled;
+    $("amsg").textContent = a.showing_now ? "Showing on the website now." : "Not showing right now (switched off, or outside its dates).";
+  } else { $("amsg").textContent = "No announcement saved yet. The website shows its normal line."; }
+  preview();
+  const rows = await api("/site/ribbons");
+  const box = $("ribbons"); box.replaceChildren();
+  if (!rows.length) { $("rmsg").textContent = "No published products yet."; }
+  for (const r of rows) {
+    const row = document.createElement("div"); row.className = "row";
+    const name = document.createElement("span"); name.textContent = r.name;
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Ribbon for " + r.name);
+    for (const [v, t] of Object.entries(LABELS)) { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.append(o); }
+    sel.value = r.ribbon || "";
+    sel.onchange = async () => {
+      try { await api("/site/ribbons/" + r.item_id, { method: "PUT", body: JSON.stringify({ ribbon: sel.value || null }) }); $("rmsg").textContent = "Saved: " + r.name; $("rmsg").className = "meta ok"; }
+      catch (e) { $("rmsg").textContent = e.message; $("rmsg").className = "meta err"; }
+    };
+    row.append(name, sel); box.append(row);
+  }
+}
+$("ann").onsubmit = async (ev) => {
+  ev.preventDefault(); $("amsg").className = "meta";
+  try {
+    const body = { message: $("msg").value, link_url: $("url").value || null, link_label: $("lbl").value || null, starts_on: $("from").value || null, ends_on: $("to").value || null, enabled: $("on").checked };
+    const a = await api("/site/announcement", { method: "PUT", body: JSON.stringify(body) });
+    $("amsg").textContent = a.showing_now ? "Saved. Showing on the website now." : "Saved. Not showing right now (switched off, or outside its dates).";
+    $("amsg").className = "meta ok";
+  } catch (e) { $("amsg").textContent = e.message; $("amsg").className = "meta err"; }
+};
+$("login").onsubmit = async (ev) => {
+  ev.preventDefault(); $("lerr").textContent = "";
+  const r = await fetch("/auth/login", { method: "POST", body: new URLSearchParams({ username: $("u").value, password: $("p").value }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) { $("lerr").textContent = typeof j.detail === "string" ? j.detail : "Could not sign in"; return; }
+  token = j.access_token; $("p").value = ""; $("login").hidden = true; $("app").hidden = false;
+  load().catch((e) => { $("amsg").textContent = e.message; });
+};
+</script>
+</body>
+</html>

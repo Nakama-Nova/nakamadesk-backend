@@ -61,6 +61,11 @@ from app.models.restoration import (  # noqa: F401
 from app.models.sale import Sale  # noqa: F401
 from app.models.sale_item import SaleItem  # noqa: F401
 from app.models.scan_job import ScanJob  # noqa: F401
+from app.models.site_content import (  # noqa: F401
+    ProductRibbon,
+    SiteAnnouncement,
+    SiteBanner,
+)
 from app.models.sku_counter import SkuCounter  # noqa: F401
 from app.models.staff_code import StaffCode  # noqa: F401
 from app.models.stock_level import StockLevel  # noqa: F401

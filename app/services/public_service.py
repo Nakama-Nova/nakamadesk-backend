@@ -39,6 +39,7 @@ from app.services import (
     order_email_service,
     pricing,
     reservation_service,
+    site_service,
 )
 from app.services.order_service import _generate_order_number
 
@@ -72,7 +73,12 @@ def _find_customer(uow: AbstractUnitOfWork, phone: str) -> Optional[Customer]:
 
 
 # --------------------------------------------------------------------------- catalogue
-def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str]):
+def _to_product(
+    item: Item,
+    assets: List[ProductAsset],
+    category: Optional[str],
+    ribbon: Optional[str] = None,
+):
     # `assets` is already limited to public, server-disk files (see _products_for)
     def pictures(kind: str):
         return [
@@ -98,6 +104,7 @@ def _to_product(item: Item, assets: List[ProductAsset], category: Optional[str])
         images=images,
         renders=renders,
         model_url=media_service.url(model.storage_key) if model else None,
+        ribbon=ribbon,
     )
 
 
@@ -155,7 +162,11 @@ def _products_for(uow: AbstractUnitOfWork, items: List[Item]) -> List[PublicProd
         if cat_ids
         else {}
     )
-    return [_to_product(i, assets[i.id], cats.get(i.category_id)) for i in items]
+    ribbons = site_service.ribbons_for(uow.session, ids)
+    return [
+        _to_product(i, assets[i.id], cats.get(i.category_id), ribbons.get(i.id))
+        for i in items
+    ]
 
 
 def get_product(uow: AbstractUnitOfWork, slug: str) -> PublicProduct:

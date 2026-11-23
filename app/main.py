@@ -44,6 +44,7 @@ from app.api import (
     restorations,
     sales,
     scans,
+    site,
     stock_locations,
     sync,
     team,
@@ -120,6 +121,7 @@ app.include_router(restorations.router)
 app.include_router(designs.router)
 app.include_router(letters.router)
 app.include_router(comments.router)
+app.include_router(site.router)
 app.include_router(notifications.router)
 app.include_router(app_updates.router)
 app.include_router(masters.suppliers)
