@@ -28,6 +28,9 @@ class PublicProduct(BaseModel):
     images: List[PublicImage] = []
     renders: List[PublicImage] = []  # finished-piece render pictures
     model_url: Optional[str] = None  # .glb for the 3D viewer, when there is one
+    ribbon: Optional[str] = (
+        None  # new, bestseller, few_left or offer: a label on the photo
+    )
 
 
 class CheckoutLine(BaseModel):
@@ -156,3 +159,11 @@ class PublicComment(BaseModel):
     place: Optional[str] = None
     piece: Optional[str] = None
     text: str
+
+
+class PublicAnnouncement(BaseModel):
+    """The line for the top bar of the website."""
+
+    message: str
+    link_url: Optional[str] = None
+    link_label: Optional[str] = None

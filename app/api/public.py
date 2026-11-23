@@ -24,11 +24,17 @@ from app.schemas.public import (
     NewsletterSubscribe,
     NewsletterToken,
     PaymentInfo,
+    PublicAnnouncement,
     PublicComment,
     PublicOrder,
     PublicProduct,
 )
-from app.services import comment_service, newsletter_service, public_service
+from app.services import (
+    comment_service,
+    newsletter_service,
+    public_service,
+    site_service,
+)
 
 router = APIRouter(prefix="/public", tags=["Public website"])
 
@@ -108,6 +114,12 @@ def track_order(
 ):
     """Order status. Needs the order number AND the phone it was placed with."""
     return public_service.track(uow, order_number, phone)
+
+
+@router.get("/announcement", response_model=Optional[PublicAnnouncement])
+def announcement(db: Session = Depends(get_db)):
+    """The line for the top bar of the website, or null when there is none right now."""
+    return site_service.public_announcement(db)
 
 
 @router.get("/comments", response_model=List[PublicComment])
