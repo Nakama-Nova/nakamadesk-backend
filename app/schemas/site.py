@@ -2,7 +2,7 @@
 
 import re
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -151,3 +151,23 @@ class BannerOut(BaseModel):
     enabled: bool
     showing_now: bool
     updated_at: datetime
+
+
+# ---- visitor numbers
+class StatDay(BaseModel):
+    day: date
+    views: int
+    events: int
+
+
+class StatRow(BaseModel):
+    key: str
+    count: int
+
+
+class StatsOut(BaseModel):
+    days: int
+    views: int
+    pages: List[StatRow]  # most viewed first
+    events: List[StatRow]  # action name and how many times
+    per_day: List[StatDay]

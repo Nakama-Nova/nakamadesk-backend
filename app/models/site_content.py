@@ -1,7 +1,16 @@
 import uuid
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, String, text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 
 from app.db.base import Base
@@ -107,3 +116,19 @@ class SiteBanner(Base):
             and (self.starts_on is None or today >= self.starts_on)
             and (self.ends_on is None or today <= self.ends_on)
         )
+
+
+class SiteHit(Base):
+    """
+    A daily count for the website's own visitor numbers: how many times a page was opened
+    (`kind` view, `key` the page address) or an action happened (`kind` event, `key` its name).
+    Only a count per day, page or action is kept. No address, device, cookie or any other
+    identifier is stored, so visitors cannot be told apart or followed.
+    """
+
+    __tablename__ = "site_hits"
+
+    day = Column(Date, primary_key=True)  # India date
+    kind = Column(String(8), primary_key=True)  # view or event
+    key = Column(String(120), primary_key=True)
+    count = Column(Integer, nullable=False, default=0)
