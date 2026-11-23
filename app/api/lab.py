@@ -55,6 +55,7 @@ from app.schemas.lab import (
     CarvingOut,
     CopyPartsIn,
     DesignFromScanIn,
+    Face,
     FurnitureIn,
     HardwareListIn,
     HardwareOut,
@@ -577,6 +578,28 @@ def design_scans(
     """The editor refreshes this while a marked area waits for the workshop PC."""
     _item(uow, item_id)
     return _design_scans(uow, item_id)
+
+
+@router.get("/items/{item_id}/area-size")
+def get_area_size(
+    item_id: UUID,
+    parts: List[UUID] = Query(..., description="the parts the carved area covers"),
+    face: Face = Query("right", description="the face the photo was taken of"),
+    size: Optional[str] = Query(
+        None,
+        pattern="^[SMLsml]$",
+        description="S, M or L; the standard size if left out",
+    ),
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Real width and height of a carved area, from the piece's own sizes (nothing typed, nothing saved)."""
+    item = _furniture(uow, item_id)
+    solved = lab_service.solve(item, _parts(uow, item.id), size=size)
+    return {
+        "size": solved["size"],
+        **lab_service.area_size(solved["parts"], {str(p) for p in parts}, face),
+    }
 
 
 @router.post("/items/{item_id}/areas", status_code=201)

@@ -463,3 +463,6 @@ Carved areas are separate thin parts in the templates (each border strip, the la
 | Wooden pillars | `pillar-carved` (Standard) |
 | Wooden Shelves | `bookshelf-open` (Standard) |
 | Raja Rani Dolls | none: carved figures are scanned (full 3D route), not built from parts |
+
+### The real size of a carved area, from the parts
+`GET /lab/items/{id}/area-size?parts=<id>&parts=<id>&face=right&size=S` (owner, manager) returns `w` and `h` in mm: the box the chosen parts fill, seen from that face (the same faces as carvings), at the standard size or S, M or L. The editor's "Take the size from the piece" box (inside "Mark a carved area on a photo") uses it to fill the real width and height, so nothing is measured or typed: tick the border strips and the lattice panel of the queen bed and it gives 1471 x 510 mm. The numbers are only as good as the parts' formulas (the template's thicknesses are estimates), so the page says to check them against the real board. Nothing is saved.

@@ -251,6 +251,26 @@ def carving_area(size: Dict[str, float], face: str, margin: int) -> Dict[str, fl
     }
 
 
+def area_size(
+    solved_parts: List[Dict[str, Any]], part_ids: Iterable[str], face: str
+) -> Dict[str, float]:
+    """
+    Width and height (mm) of the box the chosen parts fill, seen from one face: for the
+    real size of a carved area (a border and its lattice, say) that spans several parts.
+    """
+    chosen = [p for p in solved_parts if p["id"] in set(part_ids)]
+    if not chosen:
+        raise HTTPException(status_code=422, detail="Choose at least one part")
+    across, up = FACE_SPANS[face]
+
+    def span(axis: str) -> float:
+        lo = min(p["pos"][axis] for p in chosen)
+        hi = max(p["pos"][axis] + p["size"][axis] for p in chosen)
+        return round(hi - lo, 2)
+
+    return {"w": span(across), "h": span(up)}
+
+
 def solve_carvings(
     carvings: Iterable[FurnitureCarving],
     solved_parts: List[Dict[str, Any]],

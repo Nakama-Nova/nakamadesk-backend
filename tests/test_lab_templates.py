@@ -733,3 +733,65 @@ def test_who_may_copy(client, people, chair):
         == 401
     )
     assert copy(client, people, target, chair, role="manager").status_code == 200
+
+
+# ------------------------------------------------------------------ the size of a carved area, from the parts
+BORDER_PARTS = [
+    "Headboard border strip (top)",
+    "Headboard border strip (left)",
+    "Headboard border strip (right)",
+    "Headboard lattice panel",
+]
+
+
+def area_size(client, people, item, names, face="right", size=None, role="owner"):
+    ids = {p["name"]: p["id"] for p in definition(client, people, item)["parts"]}
+    q = (
+        [("parts", ids[n]) for n in names]
+        + [("face", face)]
+        + ([("size", size)] if size else [])
+    )
+    return client.get(
+        f"/lab/items/{item['id']}/area-size", params=q, headers=people[role]["h"]
+    )
+
+
+def test_the_headboard_border_size_comes_from_the_beds_own_parts(client, people):
+    queen = new_piece(
+        client,
+        people,
+        size=SIZES["queen"],
+        presets={"S": {"l": 2000, "w": 1000, "h": 1100}},
+    )
+    assert apply(client, people, queen).status_code == 200
+    r = area_size(client, people, queen, BORDER_PARTS)
+    assert r.status_code == 200, r.text
+    assert (r.json()["w"], r.json()["h"]) == (
+        1471,
+        510,
+    )  # between the posts, and the band from 620 to 1130
+    assert r.json()["size"]["label"] == "Standard"
+    small = area_size(client, people, queen, BORDER_PARTS, size="S").json()
+    assert (small["w"], small["h"]) == (796, 340) and small["size"][
+        "label"
+    ] != "Standard"  # it follows the size
+    # one part alone: the lattice panel is narrower than the whole border
+    assert (
+        area_size(client, people, queen, ["Headboard lattice panel"]).json()["w"]
+        == 1675 - 464
+    )
+
+
+def test_the_area_size_needs_parts_and_is_for_editors_only(client, people):
+    queen = new_piece(client, people, size=SIZES["queen"])
+    assert apply(client, people, queen).status_code == 200
+    assert area_size(client, people, queen, []).status_code == 422
+    stranger = client.get(
+        f"/lab/items/{queen['id']}/area-size",
+        params=[("parts", str(uuid.uuid4())), ("face", "right")],
+        headers=people["owner"]["h"],
+    )
+    assert stranger.status_code == 422  # a part that is not on this piece
+    assert (
+        area_size(client, people, queen, BORDER_PARTS, role="worker").status_code == 403
+    )
