@@ -65,6 +65,7 @@ from app.models.site_content import (  # noqa: F401
     ProductRibbon,
     SiteAnnouncement,
     SiteBanner,
+    SiteHit,
 )
 from app.models.sku_counter import SkuCounter  # noqa: F401
 from app.models.staff_code import StaffCode  # noqa: F401

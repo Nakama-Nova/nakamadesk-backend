@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -25,6 +25,7 @@ from app.schemas.site import (
     BannerOut,
     RibbonIn,
     RibbonRow,
+    StatsOut,
 )
 from app.services import media_service, site_service
 from app.services.object_store import S3Store, get_store_or_none
@@ -116,3 +117,13 @@ async def post_banner_image(
     return site_service.save_banner_image(
         db, file.content_type or "", data, store, current_user.id
     )
+
+
+@router.get("/stats", response_model=StatsOut)
+def get_stats(
+    days: int = Query(30, ge=1, le=365),
+    current_user: User = Depends(check_role(STAFF)),
+    db: Session = Depends(get_db),
+):
+    """Visitor numbers for the last `days` days: views, most viewed pages, actions, a line per day."""
+    return site_service.stats(db, days)

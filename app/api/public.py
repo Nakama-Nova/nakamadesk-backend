@@ -7,7 +7,7 @@ customers' data are never returned.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, Request
 from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
@@ -20,6 +20,8 @@ from app.schemas.public import (
     CommentSubmit,
     DeliveryCheck,
     EnquiryRequest,
+    HitIn,
+    HitOut,
     NewsletterStatus,
     NewsletterSubscribe,
     NewsletterToken,
@@ -127,6 +129,23 @@ def announcement(db: Session = Depends(get_db)):
 def banner(db: Session = Depends(get_db)):
     """The feature banner for the home page, or null when there is none right now."""
     return site_service.public_banner(db)
+
+
+@router.post(
+    "/hit",
+    response_model=HitOut,
+    status_code=202,
+    dependencies=[Depends(public_rate_limit("hit", per_minute=120))],
+)
+def hit(body: HitIn, request: Request, db: Session = Depends(get_db)):
+    """
+    Count one page view or action for the website's own visitor numbers. Stores only a daily
+    count per page or action: no address, cookie or other identifier. Always answers the same.
+    """
+    site_service.record_hit(
+        db, body.kind, body.key, request.headers.get("user-agent", "")
+    )
+    return HitOut()
 
 
 @router.get("/comments", response_model=List[PublicComment])

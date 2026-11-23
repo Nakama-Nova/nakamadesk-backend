@@ -180,3 +180,14 @@ class PublicBanner(BaseModel):
     watch_url: Optional[str] = None  # the plain video page, for a "watch on ..." link
     button_url: Optional[str] = None
     button_label: Optional[str] = None
+
+
+class HitIn(BaseModel):
+    """One page view or action, for the daily counts. Carries no identifier of the visitor."""
+
+    kind: Literal["view", "event"]
+    key: str = Field(min_length=1, max_length=120)
+
+
+class HitOut(BaseModel):
+    ok: bool = True
