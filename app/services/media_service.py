@@ -226,6 +226,8 @@ PRIVATE_KINDS = {
     "obj": ({".obj"}, 300 * MB, False),
     "ply": ({".ply"}, 300 * MB, False),
     "nc": ({".nc", ".gcode", ".ngc", ".tap"}, 50 * MB, False),
+    # the stored master of a flat carving (16-bit grey, white = nearest): every other file is made from it on request
+    "depth": ({".png"}, 50 * MB, False),
     "source_scan": (
         {".mp4", ".mov", ".jpg", ".jpeg", ".png", ".zip"},
         1024 * MB,
