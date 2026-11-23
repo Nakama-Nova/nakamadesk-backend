@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.core.ratelimit import public_rate_limit
 from app.core.security import create_access_token
-from app.db.deps import check_role, get_current_user, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_db
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.user import User
 from app.schemas.user import (
     ForgotPassword,
@@ -31,7 +32,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 def register(
     user: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("people:user:create")),
 ):
     """
     Create a new staff account.
@@ -40,7 +41,7 @@ def register(
     owner never knows it (503 if email is not set up: the account is still created and
     "send-invite" can be used once it is).
 
-    RBAC: OWNER only. The very first owner is created from the command line
+    Needs the matching people:user:* permission (the owner, by default). The very first owner is created from the command line
     (`python -m app.cli create-owner`), since nobody can be logged in yet.
 
     Args:
@@ -51,6 +52,9 @@ def register(
     Returns:
         UserResponse: The newly created user.
     """
+    iam.check_may_grant_role(
+        db, current_user, user.role
+    )  # no handing out more than you hold
     created = auth_service.register_user(db, user, actor_id=current_user.id)
     if user.password is None:
         staff_code_service.issue(db, created, "invite")
@@ -127,9 +131,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.get("/", response_model=List[UserResponse])
 def list_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.SALES])
-    ),
+    current_user: User = Depends(require("people:user:read")),
 ):
     """
     List all users in the system.
@@ -144,9 +146,9 @@ def list_users(
         List[UserResponse]: A list of all registered users.
     """
     users = auth_service.list_users(db)
-    if current_user.role in (UserRole.OWNER, UserRole.MANAGER):
+    if iam.allowed(db, current_user, "people:user:read_pay"):
         return users
-    # sales staff pick people for attendance, but do not see what anyone is paid
+    # people without people:user:read_pay (sales, say) pick people for attendance but do not see pay
     out = [UserResponse.model_validate(u) for u in users]
     for u in out:
         u.base_daily_wage = u.overtime_rate_per_hour = None
@@ -158,12 +160,12 @@ def update_user(
     user_id: UUID,
     data: UserUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("people:user:update")),
 ):
     """
     Edit a staff account: name, phone, email, role, daily wage, or switch it
     on/off. There is no delete: a switched-off account keeps its history but
-    can no longer log in. RBAC: OWNER only.
+    can no longer log in. Needs the matching people:user:* permission (the owner, by default).
     """
     return auth_service.update_user(db, current_user, user_id, data)
 
@@ -173,12 +175,13 @@ def reset_password(
     user_id: UUID,
     body: PasswordReset,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("people:user:reset_password")),
 ):
-    """Set a new password for someone who forgot theirs. RBAC: OWNER only."""
+    """Set a new password for someone who forgot theirs. Needs the matching people:user:* permission (the owner, by default)."""
     user = db.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    iam.check_may_grant_role(db, current_user, user.role, strict=False)
     auth_service.set_password(
         db, user, body.new_password, actor_id=current_user.id, action="PASSWORD_RESET"
     )
@@ -233,11 +236,12 @@ def set_password_with_code(body: SetPasswordWithCode, db: Session = Depends(get_
 def send_invite(
     user_id: UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("people:user:invite")),
 ):
     """Email this person a fresh code to set their password (a lost or expired invite). OWNER only."""
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=404, detail="User not found")
+    iam.check_may_grant_role(db, current_user, user.role, strict=False)
     staff_code_service.issue(db, user, "invite")
     return {"message": f"A code was sent to {user.email}"}

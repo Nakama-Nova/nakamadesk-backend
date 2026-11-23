@@ -1,6 +1,8 @@
 # Dynamic roles & permissions ("Nakama IAM") — design
 
-Status: proposal. Scope: `nakamadesk-backend` (source of truth) + clients
+Status: built. Every route now asks for a permission with `require(...)`; the old `check_role` is gone. Sections 1-3 describe the starting point and the plan. Still open: roles screens in the desktop app, plant-scoped checks on individual routes, and section 4.
+
+Status before: proposal. Scope: `nakamadesk-backend` (source of truth) + clients
 (`nakama-desktop*`, `vriksha-mobile*`, `vriksha-storefront*`). Other repos are
 forks/worktrees of the same backend or desktop and inherit whatever lands in main.
 

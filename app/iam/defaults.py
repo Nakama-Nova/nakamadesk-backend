@@ -104,6 +104,14 @@ DOCS_BOSS = DOCS_DESK + (
     "reports:dashboard:read",
 )
 
+PEOPLE_DESK = ("people:user:read",)
+PEOPLE_BOSS = PEOPLE_DESK + (
+    "people:user:read_pay",
+    "comments:comment:review",
+    "site:content:manage",
+    "site:stats:read",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -119,6 +127,7 @@ SYSTEM_ROLES = {
             *PRODUCTION_BOSS,
             *LAB_BOSS,
             *DOCS_BOSS,
+            *PEOPLE_BOSS,
         ),
     ),
     "accountant": (
@@ -133,6 +142,7 @@ SYSTEM_ROLES = {
             *FLOOR_VIEW,
             "inventory:stock_location:view",
             *DOCS_DESK,
+            *PEOPLE_DESK,
         ),
     ),
     "achari": ("Achari", _allow(*ACHARI)),

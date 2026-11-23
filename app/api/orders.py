@@ -2,7 +2,7 @@
 REST API routes for Order Management.
 
 Exposes CRUD operations for customer orders following the
-existing project conventions: RBAC via check_role, UoW injection,
+existing project conventions: RBAC via require(permission), UoW injection,
 PEP 257 docstrings, and explicit role lists per endpoint.
 
 RBAC design:

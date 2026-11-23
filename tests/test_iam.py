@@ -182,6 +182,26 @@ def test_letter_kinds_match_the_registered_issue_actions():
     assert {f"letters:{k}:issue" for k in KINDS} <= set(ACTIONS)
 
 
+# People, comments, site.
+LEGACY_PEOPLE = {
+    "people:user:read": OMS,
+    "people:user:read_pay": OM,
+    "people:user:create": {"owner"},
+    "people:user:update": {"owner"},
+    "people:user:reset_password": {"owner"},
+    "people:user:invite": {"owner"},
+    "comments:comment:review": OM,
+    "site:content:manage": OM,
+    "site:stats:read": OM,
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_PEOPLE)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_people_comments_site_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_PEOPLE[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_WORK)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
@@ -385,6 +405,7 @@ def test_every_registered_action_is_covered_by_a_parity_table():
         **LEGACY_FLOOR,
         **LEGACY_LAB,
         **LEGACY_DOCS,
+        **LEGACY_PEOPLE,
     }
     skip = {a for a in ACTIONS if a.startswith("iam:")}
     assert set(ACTIONS) - skip == set(tables)
@@ -452,3 +473,41 @@ def test_a_custom_role_is_honoured_by_offline_sync(client, db):
     assert mine and Decimal(str(mine[0]["purchase_price"])) == 0  # cost still hidden
     db.delete(item)  # the shared test database keeps rows between tests
     db.commit()
+
+
+def test_a_custom_role_can_be_given_as_the_main_role_but_not_above_your_own(client, db):
+    boss = make_user(db, "owner")
+    act_as(boss)
+    doc = defaults.document(
+        [{"effect": "Allow", "actions": ["finance:ledger:read"], "resources": ["*"]}]
+    )
+    pol = client.post(
+        "/iam/policies", json={"name": "books-only", "document": doc}
+    ).json()
+    r = client.post(
+        "/iam/roles", json={"label": "Bookkeeper", "policy_ids": [pol["id"]]}
+    )
+    assert r.status_code == 201, r.text
+    person = make_user(db, "worker")
+    ok = client.patch(f"/auth/users/{person.id}", json={"role": "bookkeeper"})
+    assert ok.status_code == 200, ok.text
+    assert (
+        client.patch(f"/auth/users/{person.id}", json={"role": "nonsense"}).status_code
+        == 422
+    )
+    # someone who may update people but holds less than the owner cannot make an owner
+    mgr_doc = defaults.document(
+        [{"effect": "Allow", "actions": ["people:user:update"], "resources": ["*"]}]
+    )
+    p2 = client.post("/iam/policies", json={"name": "hr", "document": mgr_doc}).json()
+    client.post("/iam/roles", json={"label": "HR Clerk", "policy_ids": [p2["id"]]})
+    clerk = make_user(db, "hr_clerk")
+    act_as(clerk)
+    assert (
+        client.patch(f"/auth/users/{person.id}", json={"role": "owner"}).status_code
+        == 403
+    )
+    assert (
+        client.patch(f"/auth/users/{boss.id}", json={"full_name": "x"}).status_code
+        == 403
+    )

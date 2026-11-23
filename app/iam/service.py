@@ -107,3 +107,29 @@ def ensure_system_roles(db: Session) -> None:
         db.flush()
         db.add(IamRolePolicy(role_id=role.id, policy_id=pol.id))
     db.commit()
+
+
+def check_may_grant_role(
+    db: Session, actor: User, role_key, strict: bool = True
+) -> None:
+    """403 unless the actor holds every permission the role carries.
+
+    Stops anyone handing out, or editing someone who holds, more than they have. An
+    unknown role is a 422 when strict (naming a role) and ignored when not (looking at
+    someone's old role)."""
+    role_key = _key(role_key)
+    role = db.query(IamRole).filter(IamRole.key == role_key).first()
+    if role:
+        stmts = role_statements(db, role)
+    elif role_key in defaults.SYSTEM_ROLES:
+        stmts = defaults.SYSTEM_ROLES[role_key][1]
+    elif strict:
+        raise HTTPException(status_code=422, detail=f"No such role: {role_key}")
+    else:
+        return
+    over = evaluator.can_grant(statements_for(db, actor), defaults.document(stmts))
+    if over:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You cannot grant or change a role that carries more than you hold: {over}",
+        )
