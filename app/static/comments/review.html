@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Customer comments</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; margin: 0; background: #fbf6ec; color: #3a1b04; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .card { background: #fff; border: 1px solid #e8dcc8; border-radius: 12px; padding: 16px; margin: 14px 0; }
+  .meta { color: #7a5a3c; font-size: .85rem; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  button, input { font: inherit; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #bf830b; background: #fff; color: #5a2a06; }
+  input { border-color: #e8dcc8; width: 100%; box-sizing: border-box; margin: 4px 0 10px; }
+  button.go { background: #5a2a06; color: #fff; border-color: #5a2a06; cursor: pointer; }
+  button.alt { cursor: pointer; }
+  .tabs { display: flex; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
+  .tabs button[aria-pressed=true] { background: #5a2a06; color: #fff; }
+  .err { color: #b3261e; }
+  blockquote { margin: 8px 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Customer comments</h1>
+  <p class="meta">Only comments you approve appear on the website. Customers who ordered wrote these.</p>
+
+  <form id="login" class="card">
+    <label>Staff username<input id="u" autocomplete="username" required></label>
+    <label>Password<input id="p" type="password" autocomplete="current-password" required></label>
+    <button class="go" type="submit">Sign in</button>
+    <p id="lerr" class="err" role="alert"></p>
+  </form>
+
+  <section id="app" hidden>
+    <div class="tabs" role="group" aria-label="Show">
+      <button data-s="pending" aria-pressed="true">Waiting</button>
+      <button data-s="approved" aria-pressed="false">On the website</button>
+      <button data-s="hidden" aria-pressed="false">Hidden</button>
+    </div>
+    <p id="msg" class="meta" aria-live="polite"></p>
+    <div id="list"></div>
+  </section>
+</main>
+<script>
+let token = null, status = "pending";
+const $ = (id) => document.getElementById(id);
+const api = async (path, opts = {}) => {
+  const r = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + token } });
+  if (r.status === 401) { token = null; location.reload(); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Something went wrong");
+  return r.json();
+};
+function el(tag, text, cls) { const e = document.createElement(tag); if (text) e.textContent = text; if (cls) e.className = cls; return e; }
+
+async function load() {
+  $("msg").textContent = "Loading...";
+  try {
+    const rows = await api("/comments?status=" + status);
+    $("msg").textContent = rows.length ? "" : "Nothing here.";
+    const list = $("list"); list.replaceChildren();
+    for (const c of rows) {
+      const card = el("div", "", "card");
+      card.append(el("div", c.display_name + (c.place ? ", " + c.place : ""), ""));
+      card.firstChild.style.fontWeight = "600";
+      card.append(el("div", "Order " + c.order_number + (c.piece ? " \u00b7 " + c.piece : "") + " \u00b7 " + new Date(c.created_at + "Z").toLocaleDateString(), "meta"));
+      const q = el("blockquote", c.body); card.append(q);
+      const row = el("div", "", "row");
+      if (c.status !== "approved") { const a = el("button", "Approve and show", "go"); a.onclick = () => decide(c.id, "approved"); row.append(a); }
+      if (c.status !== "hidden") { const h = el("button", "Hide", "alt"); h.onclick = () => decide(c.id, "hidden"); row.append(h); }
+      card.append(row); list.append(card);
+    }
+  } catch (e) { $("msg").textContent = e.message; }
+}
+async function decide(id, s) {
+  try { await api("/comments/" + id, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: s }) }); load(); }
+  catch (e) { $("msg").textContent = e.message; }
+}
+$("login").onsubmit = async (ev) => {
+  ev.preventDefault(); $("lerr").textContent = "";
+  const body = new URLSearchParams({ username: $("u").value, password: $("p").value });
+  const r = await fetch("/auth/login", { method: "POST", body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) { $("lerr").textContent = typeof j.detail === "string" ? j.detail : "Could not sign in"; return; }
+  token = j.access_token; $("p").value = "";
+  $("login").hidden = true; $("app").hidden = false; load();
+};
+document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => {
+  status = b.dataset.s; document.querySelectorAll(".tabs button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  load();
+});
+</script>
+</body>
+</html>

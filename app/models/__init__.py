@@ -16,6 +16,7 @@ from app.models.customer_account import (  # noqa: F401
     LoginCode,
     PhoneCode,
 )
+from app.models.customer_comment import CustomerComment  # noqa: F401
 from app.models.daily_wage import DailyWage  # noqa: F401
 from app.models.design import Design, DesignProduct  # noqa: F401
 from app.models.expense import Expense  # noqa: F401

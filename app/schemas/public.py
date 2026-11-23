@@ -132,3 +132,27 @@ class BrevoWebhookEvent(BaseModel):
     event: Optional[str] = None
     email: Optional[str] = None
     list_id: Union[int, List[int], None] = None
+
+
+class CommentSubmit(BaseModel):
+    """A customer's comment. The order number AND the phone it was placed with are the proof they ordered."""
+
+    order_number: str = Field(min_length=3, max_length=40)
+    phone: str = Field(max_length=20)
+    display_name: str = Field(min_length=2, max_length=60)
+    place: Optional[str] = Field(default=None, max_length=60)
+    text: str = Field(min_length=10, max_length=800)
+    # They must agree to having it (and the name above) shown on the website
+    consent: bool
+    website: str = Field(default="", max_length=200)  # hidden spam trap, stays empty
+
+
+class CommentReceived(BaseModel):
+    status: str  # always "received": whether it was stored is not revealed to bots
+
+
+class PublicComment(BaseModel):
+    name: str
+    place: Optional[str] = None
+    piece: Optional[str] = None
+    text: str
