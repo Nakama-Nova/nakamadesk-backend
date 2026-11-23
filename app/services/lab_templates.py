@@ -38,8 +38,8 @@ def all_templates() -> Dict[str, Dict[str, Any]]:
 # Each template in plain words, for guessing the kind of piece from a photo
 # (the workshop PC compares the photo with these sentences).
 LOOKS = {
-    "bed-crown-headboard": "a wooden bed with a tall carved headboard with a shaped crown",
-    "bed-square-posts": "a wooden bed with four square posts and a tall flat headboard",
+    "bed-crown-headboard": "a wooden bed with a tall carved headboard whose top is a curved crown with a shell crest",
+    "bed-square-posts": "a wooden bed with a tall flat rectangular headboard with a carved border and a lattice panel, and square posts",
     "bookshelf-open": "an open wooden bookshelf with shelves",
     "chair-dining": "a wooden dining chair",
     "chest-box": "a wooden storage chest with a lid",
