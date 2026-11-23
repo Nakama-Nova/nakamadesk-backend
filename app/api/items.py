@@ -4,8 +4,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.item import ItemCreate, ItemResponse, ItemUpdate
@@ -14,19 +15,11 @@ from app.services import inventory_service, reservation_service
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
-COST_VIEWERS = [UserRole.OWNER, UserRole.MANAGER]
-READERS = COST_VIEWERS + [
-    UserRole.SALES,
-    UserRole.ACHARI,
-    UserRole.WORKER,
-    UserRole.ARTISAN,
-]
 
-
-def _for(user: User, item) -> ItemResponse:
-    """Everyone on the staff can read stock; only owner/manager see what it cost."""
+def _for(sees_cost: bool, item) -> ItemResponse:
+    """Everyone allowed to read stock can; only those with items:cost:read see what it cost."""
     out = ItemResponse.model_validate(item)
-    if user.role in COST_VIEWERS:
+    if sees_cost:
         return out
     return out.model_copy(
         update={
@@ -40,7 +33,7 @@ def _for(user: User, item) -> ItemResponse:
 @router.post("/", response_model=ItemResponse)
 def create_item(
     item: ItemCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("items:item:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -66,7 +59,7 @@ def get_items(
     item_type: Optional[str] = Query(
         None, pattern="^(furniture|sculpture)$", description="furniture or sculpture"
     ),
-    current_user: User = Depends(check_role(READERS)),
+    current_user: User = Depends(require("items:item:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -84,15 +77,16 @@ def get_items(
     Returns:
         List[ItemResponse]: List of inventory items.
     """
+    sees_cost = iam.allowed(uow.session, current_user, "items:cost:read")
     return [
-        _for(current_user, i)
+        _for(sees_cost, i)
         for i in inventory_service.get_items(uow, limit, offset, item_type)
     ]
 
 
 @router.get("/held")
 def held_stock(
-    current_user: User = Depends(check_role(READERS)),
+    current_user: User = Depends(require("items:item:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -109,7 +103,7 @@ def held_stock(
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(
     item_id: UUID,
-    current_user: User = Depends(check_role(READERS)),
+    current_user: User = Depends(require("items:item:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -132,14 +126,14 @@ def get_item(
     item = inventory_service.get_item(uow, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return _for(current_user, item)
+    return _for(iam.allowed(uow.session, current_user, "items:cost:read"), item)
 
 
 @router.put("/{item_id}", response_model=ItemResponse)
 def update_item(
     item_id: UUID,
     item_data: ItemUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("items:item:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -168,7 +162,7 @@ def update_item(
 @router.delete("/{item_id}")
 def delete_item(
     item_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("items:item:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -197,7 +191,7 @@ def delete_item(
 def adjust_stock(
     item_id: UUID,
     stock_update: StockUpdate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("items:stock:adjust")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

@@ -45,6 +45,37 @@ SALES_BOSS = SALES_DESK + (
     "purchases:purchase:confirm",
 )
 
+FLOOR_VIEW = ("items:item:read",)
+PRODUCTION_BOSS = (
+    "production:job:create",
+    "production:job:read",
+    "production:job:assign",
+    "production:job:run",
+    "bom:entry:read",
+    "items:item:read",
+    "items:cost:read",
+    "items:item:write",
+    "items:stock:adjust",
+    "inventory:raw_material:read",
+    "inventory:raw_material:write",
+    "inventory:raw_material:adjust",
+    "inventory:stock_location:view",
+    "inventory:stock_location:transfer",
+    "inventory:master:read",
+    "inventory:master:write",
+    "machines:machine:read",
+    "machines:machine:write",
+    "machines:tool:view",
+    "machines:tool:manage",
+)
+ACHARI = (
+    "production:job:read",
+    "bom:entry:read",
+    "bom:entry:write",
+    "items:item:read",
+    "machines:tool:view",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -57,16 +88,22 @@ SYSTEM_ROLES = {
             *PAYMASTER,
             *ATTENDANCE_BOSS,
             *SALES_BOSS,
+            *PRODUCTION_BOSS,
         ),
     ),
     "accountant": (
         "Accountant",
         _allow("finance:ledger:read", "finance:balance_sheet:read"),
     ),
-    "sales": ("Sales", _allow(*ATTENDANCE_DESK, *SALES_DESK)),
-    "achari": ("Achari", []),
-    "worker": ("Worker", []),
-    "artisan": ("Artisan", []),
+    "sales": (
+        "Sales",
+        _allow(
+            *ATTENDANCE_DESK, *SALES_DESK, *FLOOR_VIEW, "inventory:stock_location:view"
+        ),
+    ),
+    "achari": ("Achari", _allow(*ACHARI)),
+    "worker": ("Worker", _allow(*FLOOR_VIEW)),
+    "artisan": ("Artisan", _allow(*FLOOR_VIEW)),
 }
 
 

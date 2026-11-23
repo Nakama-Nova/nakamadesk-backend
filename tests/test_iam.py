@@ -84,6 +84,45 @@ def test_sales_and_purchases_parity_with_old_role_lists(role, action):
     assert evaluator.decide(stmts(role), action) == (role in LEGACY_SALES[action])
 
 
+# Production and inventory. OMA = owner+manager+achari; items are readable by all but the accountant.
+OMA = OM | {"achari"}
+LEGACY_FLOOR = {
+    **{
+        a: OM
+        for a in (
+            "production:job:create",
+            "production:job:assign",
+            "production:job:run",
+            "items:cost:read",
+            "items:item:write",
+            "items:stock:adjust",
+            "inventory:raw_material:read",
+            "inventory:raw_material:write",
+            "inventory:raw_material:adjust",
+            "inventory:stock_location:transfer",
+            "inventory:master:read",
+            "inventory:master:write",
+            "machines:machine:read",
+            "machines:machine:write",
+            "machines:tool:manage",
+        )
+    },
+    **{a: OMA for a in ("production:job:read", "bom:entry:read", "machines:tool:view")},
+    "bom:entry:write": {"owner", "achari"},
+    "items:item:read": {"owner", "manager", "sales", "achari", "worker", "artisan"},
+    "inventory:stock_location:view": OMS,
+    "inventory:raw_material:delete": {"owner"},
+    "inventory:supplier:delete": {"owner"},
+    "plants:plant_unit:write": {"owner"},
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_FLOOR)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_production_and_inventory_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_FLOOR[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_WORK)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
@@ -277,3 +316,35 @@ def test_sales_and_purchases_endpoints_follow_role(client, db):
     assert client.get("/sales/").status_code == 403
     assert client.get("/customers/").status_code == 403
     assert client.get("/invoices/").status_code == 403
+
+
+def test_every_registered_action_is_covered_by_a_parity_table():
+    tables = {**LEGACY_FINANCE, **LEGACY_WORK, **LEGACY_SALES, **LEGACY_FLOOR}
+    skip = {a for a in ACTIONS if a.startswith("iam:")}
+    assert set(ACTIONS) - skip == set(tables)
+
+
+def test_items_hide_cost_without_the_cost_permission(client, db):
+    from decimal import Decimal
+
+    from app.models.item import Item
+
+    item = Item(
+        name="Chair",
+        sku=f"CH-{uuid.uuid4().hex[:6]}",
+        selling_price=Decimal("10"),
+        purchase_price=Decimal("4"),
+        production_cost=Decimal("3"),
+        current_stock=1,
+    )
+    db.add(item)
+    db.commit()
+    act_as(make_user(db, "worker"))
+    row = client.get(f"/items/{item.id}").json()
+    assert Decimal(str(row["purchase_price"])) == 0
+    act_as(make_user(db, "manager"))
+    assert Decimal(str(client.get(f"/items/{item.id}").json()["purchase_price"])) == 4
+    act_as(make_user(db, "accountant"))
+    assert client.get(f"/items/{item.id}").status_code == 403
+    db.delete(item)  # the shared test database keeps rows between tests
+    db.commit()

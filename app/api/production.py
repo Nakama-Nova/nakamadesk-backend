@@ -17,8 +17,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.production import (
@@ -41,7 +41,7 @@ class CompleteJobRequest(BaseModel):
 @router.post("/jobs", response_model=ProductionJobResponse, status_code=201)
 def create_production_job(
     job_data: ProductionJobCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("production:job:create")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -76,9 +76,7 @@ def list_production_jobs(
     ),
     order_id: Optional[UUID] = None,
     assigned_to: Optional[UUID] = None,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.ACHARI])
-    ),
+    current_user: User = Depends(require("production:job:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -111,9 +109,7 @@ def list_production_jobs(
 @router.get("/jobs/{job_id}", response_model=ProductionJobResponse)
 def get_production_job(
     job_id: UUID,
-    current_user: User = Depends(
-        check_role([UserRole.OWNER, UserRole.MANAGER, UserRole.ACHARI])
-    ),
+    current_user: User = Depends(require("production:job:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -146,7 +142,7 @@ def get_production_job(
 def assign_worker_to_job(
     job_id: UUID,
     assignment_data: WorkerAssignmentCreate,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("production:job:assign")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -180,7 +176,7 @@ def assign_worker_to_job(
 def remove_worker_from_job(
     job_id: UUID,
     worker_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("production:job:assign")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -214,7 +210,7 @@ def remove_worker_from_job(
 @router.patch("/jobs/{job_id}/start", response_model=ProductionJobResponse)
 def start_production_job(
     job_id: UUID,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("production:job:run")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -247,7 +243,7 @@ def start_production_job(
 def complete_production_job(
     job_id: UUID,
     body: CompleteJobRequest,
-    current_user: User = Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user: User = Depends(require("production:job:run")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

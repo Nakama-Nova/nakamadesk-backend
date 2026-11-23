@@ -4,8 +4,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.db.deps import check_role, get_current_user, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_current_user, get_db
+from app.iam.service import require
 from app.models.user import User
 from app.schemas.registers import (
     IssueIn,
@@ -19,14 +19,11 @@ from app.services import tool_service as service
 
 router = APIRouter(prefix="/tools", tags=["Tools"])
 
-MANAGE = [UserRole.OWNER, UserRole.MANAGER]
-VIEW = [UserRole.OWNER, UserRole.MANAGER, UserRole.ACHARI]
-
 
 @router.post("/", response_model=ToolOut, status_code=201)
 def create_tool(
     body: ToolIn,
-    _: User = Depends(check_role(MANAGE)),
+    _: User = Depends(require("machines:tool:manage")),
     db: Session = Depends(get_db),
 ):
     """Add a tool to the register. Owner and manager."""
@@ -41,7 +38,7 @@ def list_tools(
     location_id: Optional[UUID] = None,
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(VIEW)),
+    _: User = Depends(require("machines:tool:view")),
     db: Session = Depends(get_db),
 ):
     return service.list_tools(db, status, location_id, limit, offset)
@@ -58,7 +55,7 @@ def my_tools(
 @router.get("/{tool_id}", response_model=ToolOut)
 def get_tool(
     tool_id: UUID,
-    _: User = Depends(check_role(VIEW)),
+    _: User = Depends(require("machines:tool:view")),
     db: Session = Depends(get_db),
 ):
     return service.get(db, tool_id)
@@ -68,7 +65,7 @@ def get_tool(
 def update_tool(
     tool_id: UUID,
     body: ToolUpdate,
-    _: User = Depends(check_role(MANAGE)),
+    _: User = Depends(require("machines:tool:manage")),
     db: Session = Depends(get_db),
 ):
     """Change a tool's details; retire it, or make a found or repaired one available."""
@@ -79,7 +76,7 @@ def update_tool(
 def issue_tool(
     tool_id: UUID,
     body: IssueIn,
-    current_user: User = Depends(check_role(MANAGE)),
+    current_user: User = Depends(require("machines:tool:manage")),
     db: Session = Depends(get_db),
 ):
     """Hand the tool to a person. 409 if it is already out or not available."""
@@ -90,7 +87,7 @@ def issue_tool(
 def return_tool(
     tool_id: UUID,
     body: ReturnIn,
-    _: User = Depends(check_role(MANAGE)),
+    _: User = Depends(require("machines:tool:manage")),
     db: Session = Depends(get_db),
 ):
     """Take the tool back: fine, damaged (becomes broken) or lost."""
@@ -102,7 +99,7 @@ def tool_history(
     tool_id: UUID,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    _: User = Depends(check_role(MANAGE)),
+    _: User = Depends(require("machines:tool:manage")),
     db: Session = Depends(get_db),
 ):
     """Everyone who has had this tool, newest first."""

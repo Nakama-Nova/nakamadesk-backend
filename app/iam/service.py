@@ -65,7 +65,10 @@ def require(action: str):
 
     def dep(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
         if not allowed(db, user, action):
-            raise HTTPException(status_code=403, detail=f"Operation not permitted. Missing permission: {action}")
+            raise HTTPException(
+                status_code=403,
+                detail=f"Operation not permitted. Missing permission: {action}",
+            )
         return user
 
     return dep

@@ -5,8 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam.service import require
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.raw_material import (
     RawMaterialCreate,
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/raw-materials", tags=["Manufacturing - Raw Materials
 )
 def create_raw_material(
     material: RawMaterialCreate,
-    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user=Depends(require("inventory:raw_material:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -48,7 +48,7 @@ def create_raw_material(
 def get_raw_materials(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user=Depends(require("inventory:raw_material:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -68,7 +68,7 @@ def get_raw_materials(
 @router.get("/{id}", response_model=RawMaterialResponse)
 def get_raw_material(
     id: UUID,
-    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user=Depends(require("inventory:raw_material:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -94,7 +94,7 @@ def get_raw_material(
 def update_raw_material(
     id: UUID,
     material_update: RawMaterialUpdate,
-    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user=Depends(require("inventory:raw_material:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -123,7 +123,7 @@ def update_raw_material(
 @router.delete("/{id}")
 def delete_raw_material(
     id: UUID,
-    current_user=Depends(check_role([UserRole.OWNER])),
+    current_user=Depends(require("inventory:raw_material:delete")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """
@@ -160,7 +160,7 @@ class StockAdjust(BaseModel):
 def adjust_raw_material_stock(
     id: UUID,
     body: StockAdjust,
-    current_user=Depends(check_role([UserRole.OWNER, UserRole.MANAGER])),
+    current_user=Depends(require("inventory:raw_material:adjust")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Receive or write off raw material and record it in the stock ledger."""
