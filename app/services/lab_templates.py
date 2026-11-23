@@ -35,6 +35,35 @@ def all_templates() -> Dict[str, Dict[str, Any]]:
     return out
 
 
+# Each template in plain words, for guessing the kind of piece from a photo
+# (the workshop PC compares the photo with these sentences).
+LOOKS = {
+    "bed-crown-headboard": "a wooden bed with a tall carved headboard with a shaped crown",
+    "bed-square-posts": "a wooden bed with four square posts and a tall flat headboard",
+    "bookshelf-open": "an open wooden bookshelf with shelves",
+    "chair-dining": "a wooden dining chair",
+    "chest-box": "a wooden storage chest with a lid",
+    "diwan-couch": "a wooden diwan couch with a back and arms",
+    "door-panelled": "a plain wooden door with two panels",
+    "door-traditional-frame": "a traditional carved wooden temple door with a frame",
+    "dressing-table": "a wooden dressing table with drawers and a mirror",
+    "jhula-swing": "a wooden swing seat hanging from chains",
+    "pillar-carved": "a carved wooden pillar with a base and a capital",
+    "stool-4-leg": "a small wooden stool with four legs",
+    "table-dining": "a wooden table with four legs",
+    "tv-unit-2-door": "a low wooden TV unit with two doors",
+    "wall-panel-deity": "a framed wooden wall panel carved with a deity",
+    "wardrobe-2-door": "a wooden wardrobe with two doors",
+}
+
+
+def choices() -> List[Dict[str, str]]:
+    """What a photo can be matched to: every template and how it looks."""
+    return [
+        {"id": i, "label": LOOKS.get(i, t["name"])} for i, t in all_templates().items()
+    ]
+
+
 def summary(t: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": t["id"],
