@@ -228,6 +228,8 @@ PRIVATE_KINDS = {
     "nc": ({".nc", ".gcode", ".ngc", ".tap"}, 50 * MB, False),
     # the stored master of a flat carving (16-bit grey, white = nearest): every other file is made from it on request
     "depth": ({".png"}, 50 * MB, False),
+    # the CAD folder asked for later: a zip of the model, the outline (DXF, SVG), the depth map and a read-me
+    "cad": ({".zip"}, 300 * MB, False),
     "source_scan": (
         {".mp4", ".mov", ".jpg", ".jpeg", ".png", ".zip"},
         1024 * MB,

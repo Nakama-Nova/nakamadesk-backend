@@ -159,3 +159,80 @@ def test_a_scans_files_download_through_the_lab_page_and_sculptures_stay_private
         ).status_code
         == 404
     )
+
+
+def test_a_cad_folder_can_be_asked_for_uploaded_by_the_worker_and_downloaded_as_a_zip(
+    client, people, chair, db, store
+):
+    job, _ = with_master(db, store, chair["id"], width=1471.0)
+    r = ask(client, people, job, outputs=["cad"])
+    assert r.status_code == 201, r.text
+    queued = db.get(ScanJob, r.json()["id"])
+    assert queued.params["outputs"] == ["cad"] and queued.params["gcode"] is False
+
+    # the workshop PC claims it, uploads the zip and finishes
+    queued.status, queued.claimed_by = (
+        "processing",
+        f"{people['owner']['id']}|workshop-pc",
+    )
+    db.commit()
+    p = client.post(
+        f"/scans/{queued.id}/results/presign",
+        headers=people["owner"]["h"],
+        json={
+            "worker": "workshop-pc",
+            "kind": "cad",
+            "filename": "cad-folder.zip",
+            "content_type": "application/zip",
+            "size": 5000,
+        },
+    )
+    assert p.status_code == 200, p.text
+    key = p.json()["key"]
+    store.objects[key] = b"PK-zip"
+    # a zip may not be passed off as another kind of file
+    bad = client.post(
+        f"/scans/{queued.id}/results/presign",
+        headers=people["owner"]["h"],
+        json={
+            "worker": "workshop-pc",
+            "kind": "stl",
+            "filename": "x.zip",
+            "content_type": "application/zip",
+            "size": 10,
+        },
+    )
+    assert bad.status_code == 415
+    done = client.post(
+        f"/scans/{queued.id}/finish",
+        headers=people["owner"]["h"],
+        json={
+            "worker": "workshop-pc",
+            "assets": [
+                {
+                    "key": key,
+                    "kind": "cad",
+                    "visibility": "staff",
+                    "content_type": "application/zip",
+                    "alt": "Queen bed (CAD folder)",
+                }
+            ],
+        },
+    )
+    assert done.status_code == 200, done.text
+    rows = client.get(
+        f"/lab/items/{chair['id']}/scans", headers=people["owner"]["h"]
+    ).json()
+    export = next(r for r in rows if r["id"] == str(job.id))["exports"][0]
+    assert export["status"] == "done" and export["files"][0]["kind"] == "cad"
+    names = []
+    real_get = store.presign_get
+    store.presign_get = lambda key, expires=900, filename=None: (
+        names.append(filename) or real_get(key, expires, filename)
+    )
+    r = client.get(
+        export["files"][0]["download_path"],
+        headers=people["owner"]["h"],
+        follow_redirects=False,
+    )
+    assert r.status_code in (302, 307) and names == ["cad-folder.zip"]
