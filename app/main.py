@@ -25,6 +25,7 @@ from app.api import (
     designs,
     expenses,
     health,
+    iam,
     invoices,
     items,
     lab,
@@ -103,6 +104,7 @@ app.include_router(account.router)
 app.include_router(machines.router)
 app.include_router(budgets.router)
 app.include_router(finance_api.router)
+app.include_router(iam.router)
 app.include_router(tools.router)
 app.include_router(wages.router)
 app.include_router(expenses.router)
