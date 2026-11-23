@@ -6,8 +6,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.uploads import asset_out
-from app.db.deps import check_role, get_uow
-from app.models.enums import UserRole
+from app.db.deps import get_uow
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.product_asset import ProductAsset
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
@@ -17,8 +18,6 @@ from app.services.object_store import S3Store, get_store_or_none
 
 router = APIRouter(prefix="/items", tags=["Product assets"])
 
-STAFF = [UserRole.OWNER, UserRole.MANAGER]
-
 
 def _out(a: ProductAsset) -> AssetResponse:
     return asset_out(a)
@@ -27,11 +26,11 @@ def _out(a: ProductAsset) -> AssetResponse:
 @router.get("/{item_id}/assets", response_model=List[AssetResponse])
 def list_assets(
     item_id: UUID,
-    current_user: User = Depends(check_role(STAFF + [UserRole.ARTISAN])),
+    current_user: User = Depends(require("assets:file:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Owner and manager see every product's files; an artisan only a sculpture's (their own work)."""
-    if current_user.role == UserRole.ARTISAN:
+    if not iam.allowed(uow.session, current_user, "assets:file:read_all"):
         item = uow.items.get_by_id(item_id)
         if not item or item.item_type != "sculpture":
             raise HTTPException(status_code=404, detail="Product not found")
@@ -50,7 +49,7 @@ async def upload_asset(
     file: UploadFile = File(...),
     alt: Optional[str] = Form(None, max_length=200),
     sort: int = Form(0),
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("assets:file:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):
@@ -91,7 +90,7 @@ async def upload_asset(
 def delete_asset(
     item_id: UUID,
     asset_id: UUID,
-    current_user: User = Depends(check_role(STAFF)),
+    current_user: User = Depends(require("assets:file:write")),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: Optional[S3Store] = Depends(get_store_or_none),
 ):

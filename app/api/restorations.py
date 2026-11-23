@@ -19,9 +19,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from app.api.scans import ScanOut, _out
-from app.db.deps import RESTORATION_ROLES, check_role, get_uow
+from app.db.deps import get_uow
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.design import Design
-from app.models.enums import UserRole
 from app.models.expense import Expense
 from app.models.item import Item
 from app.models.payroll import WorkEntry
@@ -31,6 +32,8 @@ from app.models.supplier import Supplier
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.services.object_store import S3Store, get_store
+
+RESTORE = "restoration:project:access"  # owner and artisans, by default
 
 router = APIRouter(prefix="/restorations", tags=["Restoration"])
 
@@ -157,7 +160,7 @@ def _check_lead(uow: AbstractUnitOfWork, lead_id: Optional[UUID]) -> None:
     if lead_id is None:
         return
     user = uow.users.get_by_id(lead_id)
-    if not user or not user.is_active or user.role not in RESTORATION_ROLES:
+    if not user or not user.is_active or not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=422, detail="The lead must be an active artisan or the owner"
         )
@@ -210,26 +213,24 @@ def _out_project(uow: AbstractUnitOfWork, p: RestorationProject) -> dict:
 # ---------------------------------------------------------------- routes
 @router.get("/team", response_model=List[TeamMember])
 def team(
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """Who can lead a restoration: the owner and active artisans."""
-    people = (
+    everyone = (
         uow.session.query(User)
-        .filter(
-            User.is_active.is_(True),
-            User.role.in_([r.value for r in RESTORATION_ROLES]),
-        )
+        .filter(User.is_active.is_(True))
         .order_by(User.full_name, User.username)
         .all()
     )
+    people = [u for u in everyone if iam.allowed(uow.session, u, RESTORE)]
     return [TeamMember(id=u.id, name=_name(u), role=u.role) for u in people]
 
 
 @router.post("", response_model=RestorationOut, status_code=201)
 def create_restoration(
     req: RestorationCreate,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     _check_lead(uow, req.lead_artisan_id)
@@ -250,7 +251,7 @@ def create_restoration(
 @router.get("", response_model=List[RestorationOut])
 def list_restorations(
     status: Optional[Status] = Query(default=None),
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     query = uow.session.query(RestorationProject)
@@ -263,7 +264,7 @@ def list_restorations(
 @router.get("/{restoration_id}", response_model=RestorationDetail)
 def get_restoration(
     restoration_id: UUID,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     project = _project(uow, restoration_id)
@@ -297,7 +298,7 @@ def get_restoration(
 def update_restoration(
     restoration_id: UUID,
     req: RestorationUpdate,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     project = _project(uow, restoration_id)
@@ -330,7 +331,7 @@ def update_restoration(
 def download_file(
     restoration_id: UUID,
     file_id: UUID,
-    user: User = Depends(check_role(RESTORATION_ROLES)),
+    user: User = Depends(require(RESTORE)),
     uow: AbstractUnitOfWork = Depends(get_uow),
     store: S3Store = Depends(get_store),
 ):
@@ -352,7 +353,7 @@ def download_file(
 @router.get("/{restoration_id}/cost", response_model=CostOut)
 def restoration_cost(
     restoration_id: UUID,
-    user: User = Depends(check_role([UserRole.OWNER])),
+    user: User = Depends(require("restoration:cost:read")),
     uow: AbstractUnitOfWork = Depends(get_uow),
 ):
     """

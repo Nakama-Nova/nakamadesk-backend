@@ -132,6 +132,28 @@ def test_production_and_inventory_parity_with_old_role_lists(role, action):
     assert evaluator.decide(stmts(role), action) == (role in LEGACY_FLOOR[action])
 
 
+# 3D Lab, restoration, scans, expenses, assets. LAB_VIEW = every role but sales/accountant.
+LEGACY_LAB = {
+    "lab:part:read": {"owner", "manager", "achari", "worker", "artisan"},
+    "lab:part:edit": OM,
+    "restoration:project:access": {"owner", "artisan"},
+    "restoration:cost:read": {"owner"},
+    "scans:job:work": OM | {"artisan"},
+    "scans:job:process": OM,
+    "expenses:expense:write": OM,
+    "expenses:expense:void": {"owner"},
+    "assets:file:read": OM | {"artisan"},
+    "assets:file:read_all": OM,
+    "assets:file:write": OM,
+}
+
+
+@pytest.mark.parametrize("action", LEGACY_LAB)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_lab_restoration_scans_parity_with_old_role_lists(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in LEGACY_LAB[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_WORK)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_payroll_and_attendance_parity_with_old_role_lists(role, action):
@@ -328,7 +350,13 @@ def test_sales_and_purchases_endpoints_follow_role(client, db):
 
 
 def test_every_registered_action_is_covered_by_a_parity_table():
-    tables = {**LEGACY_FINANCE, **LEGACY_WORK, **LEGACY_SALES, **LEGACY_FLOOR}
+    tables = {
+        **LEGACY_FINANCE,
+        **LEGACY_WORK,
+        **LEGACY_SALES,
+        **LEGACY_FLOOR,
+        **LEGACY_LAB,
+    }
     skip = {a for a in ACTIONS if a.startswith("iam:")}
     assert set(ACTIONS) - skip == set(tables)
 

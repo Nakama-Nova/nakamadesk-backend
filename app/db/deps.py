@@ -63,16 +63,6 @@ def check_role(allowed_roles: List[UserRole]):
 
 
 LAB_COOKIE = "lab_session"
-# Temple restorations (projects, scans, 3D results) are for the owner and artisans only.
-RESTORATION_ROLES = [UserRole.OWNER, UserRole.ARTISAN]
-LAB_ROLES = [
-    UserRole.OWNER,
-    UserRole.MANAGER,
-    UserRole.ACHARI,
-    UserRole.WORKER,
-    UserRole.ARTISAN,
-]
-LAB_EDIT_ROLES = [UserRole.OWNER, UserRole.MANAGER]
 
 
 def get_lab_user(
@@ -106,13 +96,19 @@ def get_lab_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="User not found")
     check_token_version(payload, user)
-    if user.role not in LAB_ROLES:
+    from app.iam import service as iam  # late: iam imports this module
+
+    if not iam.allowed(uow.session, user, "lab:part:read"):
         raise HTTPException(status_code=403, detail="Not permitted for your role")
     return user
 
 
-def get_lab_editor(user: User = Depends(get_lab_user)) -> User:
-    if user.role not in LAB_EDIT_ROLES:
+def get_lab_editor(
+    user: User = Depends(get_lab_user), uow: AbstractUnitOfWork = Depends(get_uow)
+) -> User:
+    from app.iam import service as iam  # late: iam imports this module
+
+    if not iam.allowed(uow.session, user, "lab:part:edit"):
         raise HTTPException(
             status_code=403, detail="Only the owner or a manager can edit parts"
         )

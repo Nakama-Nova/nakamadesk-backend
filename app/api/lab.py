@@ -32,13 +32,12 @@ from app.api.scans import GCODE_NEEDS_WIDTH, Crop
 from app.core.security import create_scoped_token, verify_token
 from app.db.deps import (
     LAB_COOKIE,
-    LAB_EDIT_ROLES,
-    RESTORATION_ROLES,
     check_token_version,
     get_lab_editor,
     get_lab_user,
     get_uow,
 )
+from app.iam import service as iam
 from app.models.category import Category
 from app.models.design import Design
 from app.models.furniture_carving import FurnitureCarving
@@ -76,6 +75,8 @@ from app.services import (
     media_service,
 )
 from app.services.object_store import S3Store, get_store_or_none
+
+RESTORE = "restoration:project:access"  # owner and artisans, by default
 
 router = APIRouter(prefix="/lab", tags=["3D Lab"])
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static" / "lab"
@@ -351,8 +352,8 @@ def solve_item(
     """The parts, positions and cutting list for a size. Read-only: nothing is saved."""
     item = _furniture(uow, item_id)
     out = _solved(uow, item, size=size, l=l, w=w, h=h)
-    out["can_edit"] = (
-        user.role in LAB_EDIT_ROLES
+    out["can_edit"] = iam.allowed(
+        uow.session, user, "lab:part:edit"
     )  # the viewer then offers an Edit button
     return out
 
@@ -675,7 +676,7 @@ async def suggest_template(
     with its best guesses (see GET .../suggestions); the photo is deleted once it has answered.
     """
     item = _item(uow, item_id)
-    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+    if item.item_type == "sculpture" and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
@@ -707,7 +708,7 @@ def template_suggestions(
 ):
     """The latest template guesses for this piece: waiting, failed, or the best matches."""
     item = _item(uow, item_id)
-    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+    if item.item_type == "sculpture" and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
@@ -765,7 +766,7 @@ async def send_area(
     offers it under "Designs from scans". A marked area is an ordinary flat-carving scan.
     """
     item = _item(uow, item_id)
-    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+    if item.item_type == "sculpture" and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
@@ -826,7 +827,7 @@ def design_from_scan(
     On request, from the editor: make a furniture design from a finished flat-carving
     scan of a piece. Designs are owner and artisan only, so here that means the owner.
     """
-    if user.role not in RESTORATION_ROLES:
+    if not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Only the owner can make a design from a scan"
         )
@@ -869,7 +870,7 @@ def make_files(
             status_code=404, detail="Finished flat-carving scan not found"
         )
     item = _item(uow, job.item_id)
-    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+    if item.item_type == "sculpture" and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
@@ -939,7 +940,7 @@ def download_scan_file(
     job = uow.session.get(ScanJob, asset.scan_id) if asset and asset.scan_id else None
     if not asset or not job or asset.storage != "s3":
         raise HTTPException(status_code=404, detail="File not found")
-    if job.artisan_only and user.role not in RESTORATION_ROLES:
+    if job.artisan_only and not iam.allowed(uow.session, user, RESTORE):
         raise HTTPException(
             status_code=403, detail="Sculpture scans are for the owner and artisans"
         )
@@ -1122,7 +1123,7 @@ def make_link(
     login: its token is scoped to the Lab and is exchanged for a Lab-only
     cookie, so it cannot call anything else.
     """
-    if body.mode == "edit" and user.role not in LAB_EDIT_ROLES:
+    if body.mode == "edit" and not iam.allowed(uow.session, user, "lab:part:edit"):
         raise HTTPException(
             status_code=403, detail="Only the owner or a manager can edit parts"
         )

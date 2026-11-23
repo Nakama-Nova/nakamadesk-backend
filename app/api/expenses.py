@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.db.deps import RESTORATION_ROLES, check_role, get_db
-from app.models.enums import UserRole
+from app.db.deps import get_db
+from app.iam import service as iam
+from app.iam.service import require
 from app.models.expense import Expense
 from app.models.restoration import RestorationProject
 from app.models.user import User
@@ -22,14 +23,14 @@ from app.services import profit_service
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
-BOOKKEEPERS = [UserRole.OWNER, UserRole.MANAGER]
+RESTORE = "restoration:project:access"  # owner and artisans, by default
 
 
 def _check_restoration(db: Session, user: User, restoration_id) -> None:
     """Linking an expense to a restoration is for the owner (who may see restorations)."""
     if restoration_id is None:
         return
-    if user.role not in RESTORATION_ROLES:
+    if not iam.allowed(db, user, RESTORE):
         raise HTTPException(
             status_code=403,
             detail="Only the owner can link an expense to a restoration",
@@ -49,7 +50,7 @@ def _get(db: Session, expense_id: UUID) -> Expense:
 def add_expense(
     data: ExpenseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(BOOKKEEPERS)),
+    current_user: User = Depends(require("expenses:expense:write")),
 ):
     """Record money spent (rent, power, transport, tools...). OWNER, MANAGER."""
     _check_restoration(db, current_user, data.restoration_id)
@@ -70,7 +71,7 @@ def list_expenses(
     include_voided: bool = Query(False),
     restoration_id: Optional[UUID] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(BOOKKEEPERS)),
+    current_user: User = Depends(require("expenses:expense:write")),
 ):
     query = db.query(Expense)
     if not include_voided:
@@ -91,7 +92,7 @@ def expense_summary(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(BOOKKEEPERS)),
+    current_user: User = Depends(require("expenses:expense:write")),
 ):
     rows = profit_service.expenses_by_category(db, start_date, end_date)
     return {"total": sum((r["total"] for r in rows), 0), "by_category": rows}
@@ -102,7 +103,7 @@ def edit_expense(
     expense_id: UUID,
     data: ExpenseUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role(BOOKKEEPERS)),
+    current_user: User = Depends(require("expenses:expense:write")),
 ):
     expense = _get(db, expense_id)
     if expense.voided_at:
@@ -113,9 +114,8 @@ def edit_expense(
         and changes["restoration_id"] != expense.restoration_id
     ):
         # moving an expense onto, off or between projects changes what a piece has cost
-        if (
-            changes["restoration_id"] is None
-            and current_user.role not in RESTORATION_ROLES
+        if changes["restoration_id"] is None and not iam.allowed(
+            db, current_user, RESTORE
         ):
             raise HTTPException(
                 status_code=403,
@@ -136,7 +136,7 @@ def void_expense(
     expense_id: UUID,
     body: ExpenseVoid,
     db: Session = Depends(get_db),
-    current_user: User = Depends(check_role([UserRole.OWNER])),
+    current_user: User = Depends(require("expenses:expense:void")),
 ):
     """Cancel a wrong entry, keeping it on record with the reason. OWNER only."""
     expense = _get(db, expense_id)

@@ -73,9 +73,27 @@ ACHARI = (
     "production:job:read",
     "bom:entry:read",
     "bom:entry:write",
+    "lab:part:read",
     "items:item:read",
     "attendance:record:read_own",
     "machines:tool:view",
+)
+
+LAB_BOSS = (
+    "lab:part:read",
+    "lab:part:edit",
+    "scans:job:work",
+    "scans:job:process",
+    "expenses:expense:write",
+    "assets:file:read",
+    "assets:file:read_all",
+    "assets:file:write",
+)
+ARTISAN = (
+    "lab:part:read",
+    "restoration:project:access",
+    "scans:job:work",
+    "assets:file:read",
 )
 
 SYSTEM_ROLES = {
@@ -91,6 +109,7 @@ SYSTEM_ROLES = {
             *ATTENDANCE_BOSS,
             *SALES_BOSS,
             *PRODUCTION_BOSS,
+            *LAB_BOSS,
         ),
     ),
     "accountant": (
@@ -104,8 +123,8 @@ SYSTEM_ROLES = {
         ),
     ),
     "achari": ("Achari", _allow(*ACHARI)),
-    "worker": ("Worker", _allow(*FLOOR_VIEW)),
-    "artisan": ("Artisan", _allow(*FLOOR_VIEW)),
+    "worker": ("Worker", _allow(*FLOOR_VIEW, "lab:part:read")),
+    "artisan": ("Artisan", _allow(*FLOOR_VIEW, *ARTISAN)),
 }
 
 
