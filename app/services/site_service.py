@@ -1,15 +1,22 @@
 """The website's top-bar announcement and the ribbons on product photos."""
 
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.item import Item
-from app.models.site_content import ProductRibbon, SiteAnnouncement, SiteBanner
+from app.models.site_content import (
+    ProductRibbon,
+    SiteAnnouncement,
+    SiteBanner,
+    SiteHit,
+)
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.public import PublicAnnouncement, PublicBanner
 from app.schemas.site import (
@@ -18,6 +25,9 @@ from app.schemas.site import (
     BannerIn,
     BannerOut,
     RibbonRow,
+    StatDay,
+    StatRow,
+    StatsOut,
     read_video_link,
 )
 from app.services import media_service
@@ -260,3 +270,76 @@ def save_banner_image(
         media_service.delete(old_key, old_storage or "local", store)
     db.refresh(b)
     return _banner_out(b)
+
+
+# --------------------------------------------------------------------------- visitor numbers
+# Only these actions are counted, and a page view must look like one of the site's own addresses,
+# so the table cannot be filled with arbitrary text.
+EVENTS = {
+    "add_to_cart",
+    "checkout_open",
+    "order_placed",
+    "enquiry_sent",
+    "comment_sent",
+    "video_play",
+    "whatsapp_click",
+}
+PAGE = re.compile(r"^/[a-z0-9][a-z0-9\-/]{0,100}$|^/$")
+BOTS = re.compile(r"bot|crawl|spider|slurp|preview|monitor|headless", re.I)
+
+
+def record_hit(db: Session, kind: str, key: str, user_agent: str = "") -> None:
+    """Add one to today's count for a page or action. Quietly ignores anything that is not a known page or action, and robots."""
+    if BOTS.search(user_agent or ""):
+        return
+    key = key.strip().lower()
+    if kind == "view":
+        key = key.split("?")[0].split("#")[0].rstrip("/") or "/"
+        if not PAGE.match(key):
+            return
+    elif kind == "event":
+        if key not in EVENTS:
+            return
+    else:
+        return
+    stmt = pg_insert(SiteHit).values(day=today_india(), kind=kind, key=key, count=1)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[SiteHit.day, SiteHit.kind, SiteHit.key],
+        set_={"count": SiteHit.count + 1},
+    )
+    db.execute(stmt)
+    db.commit()
+
+
+def _ranked(counts: Dict[str, int]) -> List[StatRow]:
+    """Most first; ties in alphabetical order."""
+    return [
+        StatRow(key=k, count=v)
+        for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+
+
+def stats(db: Session, days: int) -> StatsOut:
+    """Totals for the last `days` days (today included): views, top pages, actions, and a line per day."""
+    since = today_india() - timedelta(days=days - 1)
+    rows = db.query(SiteHit).filter(SiteHit.day >= since).all()
+    pages: Dict[str, int] = {}
+    events: Dict[str, int] = {}
+    per: Dict[date, List[int]] = {}
+    for r in rows:
+        day = per.setdefault(r.day, [0, 0])
+        if r.kind == "view":
+            pages[r.key] = pages.get(r.key, 0) + r.count
+            day[0] += r.count
+        else:
+            events[r.key] = events.get(r.key, 0) + r.count
+            day[1] += r.count
+    return StatsOut(
+        days=days,
+        views=sum(pages.values()),
+        pages=_ranked(pages)[:15],
+        events=_ranked(events),
+        per_day=[
+            StatDay(day=d, views=v[0], events=v[1]) for d, v in sorted(per.items())
+        ],
+    )

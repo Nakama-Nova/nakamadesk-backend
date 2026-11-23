@@ -650,6 +650,97 @@ def get_area_size(
     }
 
 
+async def _read_photo(photo: UploadFile):
+    """The bytes and the on-screen size of an uploaded JPG or PNG, checked to really be one."""
+    data = await photo.read(AREA_PHOTO_MAX + 1)
+    if photo.content_type not in AREA_PHOTO_TYPES:
+        raise HTTPException(status_code=415, detail="Send a JPG or PNG photo")
+    if len(data) > AREA_PHOTO_MAX:
+        raise HTTPException(status_code=413, detail="The photo is larger than 25 MB")
+    media_service.validate(photo.content_type, data)  # really an image of that type
+    with Image.open(io.BytesIO(data)) as img:
+        return data, ImageOps.exif_transpose(img).size  # as it looks on screen
+
+
+@router.post("/items/{item_id}/suggest-template", status_code=201)
+async def suggest_template(
+    item_id: UUID,
+    photo: UploadFile = File(...),
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """
+    Ask the workshop PC which built-in template a photo of the piece looks like. It answers
+    with its best guesses (see GET .../suggestions); the photo is deleted once it has answered.
+    """
+    item = _item(uow, item_id)
+    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Sculpture scans are for the owner and artisans"
+        )
+    if store is None:
+        raise HTTPException(status_code=503, detail="File storage is not set up yet")
+    data, _ = await _read_photo(photo)
+    job = ScanJob(
+        item_id=item_id,
+        artisan_only=item.item_type == "sculpture",
+        created_by=user.id,
+        source_kind="photos",
+        status="created",
+        params={"shape": "suggest", "choices": lab_templates.choices()},
+    )
+    uow.session.add(job)
+    uow.session.flush()
+    key = f"scans/{job.id}/src/{uuidlib.uuid4().hex}{AREA_PHOTO_TYPES[photo.content_type]}"
+    store.put_bytes(key, data, photo.content_type)
+    job.source_keys, job.source_bytes, job.status = [key], len(data), "uploaded"
+    uow.commit()
+    return {"id": str(job.id), "status": job.status}
+
+
+@router.get("/items/{item_id}/suggestions")
+def template_suggestions(
+    item_id: UUID,
+    user: User = Depends(get_lab_editor),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """The latest template guesses for this piece: waiting, failed, or the best matches."""
+    item = _item(uow, item_id)
+    if item.item_type == "sculpture" and user.role not in RESTORATION_ROLES:
+        raise HTTPException(
+            status_code=403, detail="Sculpture scans are for the owner and artisans"
+        )
+    jobs = (
+        uow.session.query(ScanJob)
+        .filter(ScanJob.item_id == item_id, ScanJob.params["shape"].astext == "suggest")
+        .order_by(ScanJob.created_at.desc())
+        .limit(3)
+        .all()
+    )
+    templates = lab_templates.all_templates()
+    return [
+        {
+            "id": str(j.id),
+            "status": j.status,
+            "error": j.error,
+            "created_at": j.created_at.isoformat() if j.created_at else None,
+            "picks": [
+                {
+                    "template": p["id"],
+                    "name": templates[p["id"]]["name"],
+                    "score": p["score"],
+                    "size_hint": templates[p["id"]]["size_hint"],
+                }
+                for p in (j.params or {}).get("picks", [])
+                if p["id"]
+                in templates  # a template removed since is simply not offered
+            ],
+        }
+        for j in jobs
+    ]
+
+
 @router.post("/items/{item_id}/areas", status_code=201)
 async def send_area(
     item_id: UUID,
@@ -682,14 +773,7 @@ async def send_area(
         raise HTTPException(status_code=422, detail=GCODE_NEEDS_WIDTH)
     if store is None:
         raise HTTPException(status_code=503, detail="File storage is not set up yet")
-    data = await photo.read(AREA_PHOTO_MAX + 1)
-    if photo.content_type not in AREA_PHOTO_TYPES:
-        raise HTTPException(status_code=415, detail="Send a JPG or PNG photo")
-    if len(data) > AREA_PHOTO_MAX:
-        raise HTTPException(status_code=413, detail="The photo is larger than 25 MB")
-    media_service.validate(photo.content_type, data)  # really an image of that type
-    with Image.open(io.BytesIO(data)) as img:
-        size = ImageOps.exif_transpose(img).size  # as it looks on screen
+    data, size = await _read_photo(photo)
     points = _json_field(quad, "The corners")
     cut = _json_field(outline, "The outline")
     try:

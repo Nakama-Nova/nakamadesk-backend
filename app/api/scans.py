@@ -153,6 +153,15 @@ class Finish(Claim):
     assets: List[ResultAsset] = Field(min_length=1, max_length=20)
 
 
+class Pick(BaseModel):
+    id: str = Field(max_length=60)  # one of the choices the question offered
+    score: float = Field(ge=0, le=1)
+
+
+class Answer(Claim):
+    picks: List[Pick] = Field(min_length=1, max_length=5)  # best first
+
+
 class Fail(Claim):
     error: str = Field(min_length=1, max_length=500)
 
@@ -713,6 +722,44 @@ def finish_scan(
     job.progress = 100
     job.note = "Finished"
     job.result_asset_ids = ids
+    job.finished_at = _now()
+    uow.commit()
+    uow.refresh(job)
+    return _out(job, uow)
+
+
+@router.post("/{scan_id}/answer", response_model=ScanOut)
+def answer_scan(
+    scan_id: UUID,
+    req: Answer,
+    user: User = Depends(check_role(WORKERS)),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+    store: S3Store = Depends(get_store),
+):
+    """
+    The workshop PC's reply to a question job (shape "suggest": which template does this photo
+    look like?). It makes no files, and the photo is deleted: it only served the question.
+    """
+    job = _get(uow, scan_id)
+    if job.status == "done" and job.claimed_by == f"{user.id}|{req.worker}":
+        return _out(job, uow)  # a retried call
+    _claimed(job, user, req.worker)
+    params = job.params or {}
+    if params.get("shape") != "suggest":
+        raise HTTPException(status_code=409, detail="This scan asks no question")
+    offered = {c["id"] for c in params.get("choices", [])}
+    if any(p.id not in offered for p in req.picks):
+        raise HTTPException(status_code=422, detail="That was not one of the choices")
+    for key in job.source_keys or []:
+        try:
+            store.delete(key)
+        except (
+            Exception
+        ):  # ponytail: tidiness only; a photo left behind is not worth failing the answer
+            pass
+    job.params = {**params, "picks": [p.model_dump() for p in req.picks]}
+    job.source_keys, job.source_bytes = [], 0
+    job.status, job.progress, job.note = "done", 100, "Finished"
     job.finished_at = _now()
     uow.commit()
     uow.refresh(job)

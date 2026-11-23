@@ -80,6 +80,14 @@
     </form>
 
     <section class="card">
+      <h2>Visitor numbers</h2>
+      <p class="meta">Page views and actions, counted without cookies and without recording who you are. A visitor whose browser says "do not track" is not counted.</p>
+      <label>Show the last <select id="sd"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select></label>
+      <p id="smsg" class="meta" aria-live="polite"></p>
+      <div id="stats"></div>
+    </section>
+
+    <section class="card">
       <h2>Ribbons on product photos</h2>
       <p class="meta">Pick a label for each piece, or none.</p>
       <p id="rmsg" class="meta" aria-live="polite"></p>
@@ -135,7 +143,30 @@ $("pic").onchange = async () => {
   } catch (e) { $("pmsg").textContent = e.message; $("pmsg").className = "meta err"; }
 };
 
+function table(rows, head) {
+  const t = document.createElement("table"); t.style.cssText = "width:100%;border-collapse:collapse;font-size:.9rem";
+  const th = document.createElement("tr"); for (const h of head) { const c = document.createElement("th"); c.textContent = h; c.style.cssText = "text-align:left;padding:4px 6px;border-bottom:1px solid #e8dcc8"; th.append(c); } t.append(th);
+  for (const r of rows) { const tr = document.createElement("tr"); r.forEach((v, i) => { const c = document.createElement("td"); c.textContent = v; c.style.cssText = "padding:4px 6px;border-bottom:1px solid #f0e6d4" + (i ? ";text-align:right" : ""); tr.append(c); }); t.append(tr); }
+  return t;
+}
+const EVENT_NAMES = { add_to_cart: "Added to cart", checkout_open: "Opened checkout", order_placed: "Placed an order", enquiry_sent: "Sent a custom enquiry", comment_sent: "Sent a comment", video_play: "Played the banner video", whatsapp_click: "Tapped WhatsApp" };
+async function loadStats() {
+  const s = await api("/site/stats?days=" + $("sd").value);
+  const box = $("stats"); box.replaceChildren();
+  $("smsg").textContent = s.views ? s.views + " page views in the last " + s.days + " days." : "No visits counted yet.";
+  if (!s.views && !s.events.length) return;
+  const get = (k) => (s.events.find((e) => e.key === k) || { count: 0 }).count;
+  const products = s.pages.filter((p) => p.key.startsWith("/shop/")).reduce((n, p) => n + p.count, 0);
+  const pct = (a, b) => (b ? Math.round((100 * a) / b) + "%" : "-");
+  const funnel = [["Product pages viewed (top 15 pages)", products, ""], ["Added to cart", get("add_to_cart"), pct(get("add_to_cart"), products)], ["Opened checkout", get("checkout_open"), pct(get("checkout_open"), get("add_to_cart"))], ["Placed an order", get("order_placed"), pct(get("order_placed"), get("checkout_open"))]];
+  const h = document.createElement("h2"); h.textContent = "From product to order"; h.style.fontSize = "1rem"; box.append(h, table(funnel.map((r) => [r[0], r[1] + (r[2] ? " (" + r[2] + ")" : "")]), ["Step", "Times"]));
+  const h2 = document.createElement("h2"); h2.textContent = "Most viewed pages"; h2.style.cssText = "font-size:1rem;margin-top:14px"; box.append(h2, table(s.pages.map((p) => [p.key, p.count]), ["Page", "Views"]));
+  const h3 = document.createElement("h2"); h3.textContent = "Other actions"; h3.style.cssText = "font-size:1rem;margin-top:14px"; box.append(h3, table(s.events.map((e) => [EVENT_NAMES[e.key] || e.key, e.count]), ["Action", "Times"]));
+}
+$("sd").addEventListener("change", () => loadStats().catch((e) => { $("smsg").textContent = e.message; }));
+
 async function load() {
+  loadStats().catch((e) => { $("smsg").textContent = e.message; });
   await loadBanner();
   const a = await api("/site/announcement");
   if (a) {
