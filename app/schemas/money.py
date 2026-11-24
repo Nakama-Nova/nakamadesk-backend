@@ -157,6 +157,13 @@ class OwedSummary(BaseModel):
     pending_extras: Decimal
     owed_gross: Decimal
     advance_balance: Decimal
+    # pay type (daily, weekly, monthly, hourly) and the days behind pending_daily
+    pay_type: str = "daily"
+    employment: str = "full_time"
+    payable_days: Decimal = Decimal("0")
+    unpaid_days: Decimal = Decimal("0")
+    # hours past the shift end on unpaid days: a hint, never paid automatically
+    overtime_hours_suggested: Decimal = Decimal("0")
 
 
 class MyPayroll(OwedSummary):

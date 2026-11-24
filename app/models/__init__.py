@@ -23,6 +23,14 @@ from app.models.expense import Expense  # noqa: F401
 from app.models.furniture_carving import FurnitureCarving  # noqa: F401
 from app.models.furniture_hardware import FurnitureHardware  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
+from app.models.hr import (  # noqa: F401
+    Holiday,
+    LeaveRequest,
+    LeaveType,
+    Shift,
+    UserDocument,
+    UserWage,
+)
 from app.models.iam import (  # noqa: F401
     IamPolicy,
     IamRole,

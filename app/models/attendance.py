@@ -2,11 +2,13 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Date,
     DateTime,
     Float,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     func,
@@ -69,6 +71,18 @@ class Attendance(Base):
     check_out_longitude = Column(Float, nullable=True)
     check_out_accuracy_m = Column(Float, nullable=True)
     check_out_location_status = Column(String, nullable=True)
+    # Approved leave is written here as status "leave" (see leave_service).
+    leave_type_id = Column(
+        UUID(as_uuid=True), ForeignKey("leave_types.id"), nullable=True
+    )
+    leave_request_id = Column(
+        UUID(as_uuid=True), ForeignKey("leave_requests.id"), nullable=True, index=True
+    )
+    leave_half_day = Column(Boolean, nullable=True)
+    paid = Column(Boolean, nullable=True)  # a leave day: paid or unpaid leave
+    # minutes past the shift start (beyond the grace) and minutes left before its end
+    late_minutes = Column(Integer, nullable=False, default=0, server_default="0")
+    early_leave_minutes = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 

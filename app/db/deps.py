@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -42,6 +44,9 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is switched off")
+    if user.last_working_date and user.last_working_date < date.today():
+        # offboarded: the account goes off the day after the last working day
         raise HTTPException(status_code=401, detail="Account is switched off")
     check_token_version(payload, user)
     return user

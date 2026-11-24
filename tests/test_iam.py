@@ -196,6 +196,30 @@ LEGACY_PEOPLE = {
 }
 
 
+# HR: leave, shifts, holidays, wage history, staff documents (new, so no old lists).
+EVERYONE = {r.value for r in UserRole}
+HR_TABLE = {
+    "leave:request:create": EVERYONE,
+    "leave:request:read_all": OM,
+    "leave:request:approve": OM,
+    "leave:balance:read_all": OM,
+    "leave:type:manage": {"owner"},
+    "shifts:shift:manage": OM,
+    "holidays:holiday:manage": OM,
+    "people:wage:history_read": OM,
+    "people:wage:history_write": {"owner"},
+    "people:user:read_documents": OM,
+    "people:user:write_documents": {"owner"},
+    "people:user:offboard": {"owner"},
+}
+
+
+@pytest.mark.parametrize("action", HR_TABLE)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_hr_actions_follow_the_contract(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in HR_TABLE[action])
+
+
 @pytest.mark.parametrize("action", LEGACY_PEOPLE)
 @pytest.mark.parametrize("role", [r.value for r in UserRole])
 def test_people_comments_site_parity_with_old_role_lists(role, action):
@@ -406,6 +430,7 @@ def test_every_registered_action_is_covered_by_a_parity_table():
         **LEGACY_LAB,
         **LEGACY_DOCS,
         **LEGACY_PEOPLE,
+        **HR_TABLE,
     }
     skip = {a for a in ACTIONS if a.startswith("iam:")}
     assert set(ACTIONS) - skip == set(tables)
