@@ -15,9 +15,29 @@ from app.schemas.attendance import (
     AttendanceUpdate,
 )
 from app.schemas.plant_unit import GeoAttendanceIn, GeoPointIn
-from app.services import workforce_service
+from app.services import hr_service, workforce_service
 
 router = APIRouter(prefix="/attendance", tags=["Workforce"])
+
+
+def _with_holidays(uow, rows, start_date, end_date, user_ids):
+    """
+    A month sheet needs no second call: when a date range is asked for, public
+    holidays are added as rows (status "holiday", no check-in) for the days a person
+    has no record of their own. Approved leave is already in `rows` (status "leave").
+    Without both dates the answer is exactly what it always was.
+    """
+    if not (start_date and end_date):
+        return rows
+    seen = {(r.user_id, r.date) for r in rows}
+    extra = hr_service.holiday_rows(uow.session, start_date, end_date, user_ids, seen)
+    if not extra:
+        return rows
+    return sorted(
+        [AttendanceResponse.model_validate(r) for r in rows]
+        + [AttendanceResponse(**r) for r in extra],
+        key=lambda r: (r.date, str(r.user_id)),
+    )
 
 
 @router.post("/", response_model=AttendanceResponse)
@@ -143,6 +163,8 @@ def check_out(
 
 @router.get("/my", response_model=List[AttendanceResponse])
 def get_my_attendance(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
@@ -160,13 +182,15 @@ def get_my_attendance(
     Returns:
         List[AttendanceResponse]: List of attendance records for the user.
     """
-    return (
-        uow.attendance.session.query(Attendance)
-        .filter(Attendance.user_id == current_user.id)
-        .limit(limit)
-        .offset(offset)
-        .all()
+    query = uow.attendance.session.query(Attendance).filter(
+        Attendance.user_id == current_user.id
     )
+    if start_date:
+        query = query.filter(Attendance.date >= start_date)
+    if end_date:
+        query = query.filter(Attendance.date <= end_date)
+    rows = query.limit(limit).offset(offset).all()
+    return _with_holidays(uow, rows, start_date, end_date, [current_user.id])
 
 
 @router.get("/all", response_model=List[AttendanceResponse])
@@ -208,7 +232,10 @@ def get_all_attendance(
         query = query.filter(Attendance.date <= end_date)
     if location_status:
         query = query.filter(Attendance.location_status == location_status)
-    return query.limit(limit).offset(offset).all()
+    rows = query.limit(limit).offset(offset).all()
+    return _with_holidays(
+        uow, rows, start_date, end_date, [user_id] if user_id else None
+    )
 
 
 @router.patch("/{attendance_id}", response_model=AttendanceResponse)

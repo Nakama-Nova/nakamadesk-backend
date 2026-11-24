@@ -116,6 +116,20 @@ PEOPLE_BOSS = PEOPLE_DESK + (
     "site:stats:read",
 )
 
+# HR: everyone may ask for leave; the manager runs leave, shifts, holidays and reads
+# wage history and staff documents; changing pay, deleting documents and offboarding
+# stay with the owner.
+LEAVE_SELF = ("leave:request:create",)
+HR_BOSS = LEAVE_SELF + (
+    "leave:request:read_all",
+    "leave:request:approve",
+    "leave:balance:read_all",
+    "shifts:shift:manage",
+    "holidays:holiday:manage",
+    "people:wage:history_read",
+    "people:user:read_documents",
+)
+
 SYSTEM_ROLES = {
     "owner": ("Owner", ALLOW_ALL),
     "manager": (
@@ -132,11 +146,12 @@ SYSTEM_ROLES = {
             *LAB_BOSS,
             *DOCS_BOSS,
             *PEOPLE_BOSS,
+            *HR_BOSS,
         ),
     ),
     "accountant": (
         "Accountant",
-        _allow("finance:ledger:read", "finance:balance_sheet:read"),
+        _allow("finance:ledger:read", "finance:balance_sheet:read", *LEAVE_SELF),
     ),
     "sales": (
         "Sales",
@@ -147,11 +162,12 @@ SYSTEM_ROLES = {
             "inventory:stock_location:view",
             *DOCS_DESK,
             *PEOPLE_DESK,
+            *LEAVE_SELF,
         ),
     ),
-    "achari": ("Achari", _allow(*ACHARI)),
-    "worker": ("Worker", _allow(*FLOOR_VIEW, "lab:part:read")),
-    "artisan": ("Artisan", _allow(*FLOOR_VIEW, *ARTISAN)),
+    "achari": ("Achari", _allow(*ACHARI, *LEAVE_SELF)),
+    "worker": ("Worker", _allow(*FLOOR_VIEW, "lab:part:read", *LEAVE_SELF)),
+    "artisan": ("Artisan", _allow(*FLOOR_VIEW, *ARTISAN, *LEAVE_SELF)),
 }
 
 

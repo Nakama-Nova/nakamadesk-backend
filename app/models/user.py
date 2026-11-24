@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean,
     Column,
+    Date,
     DateTime,
     ForeignKey,
     Integer,
@@ -56,4 +57,25 @@ class User(Base):
         nullable=True,
         index=True,
     )
+    # HR (see wage_service): daily, weekly, monthly or hourly; pay_amount is the rate for
+    # that type; base_daily_wage stays the daily rate in force so older screens work.
+    pay_type = Column(String, nullable=False, default="daily", server_default="daily")
+    employment = Column(
+        String, nullable=False, default="full_time", server_default="full_time"
+    )
+    pay_amount = Column(Numeric(12, 2), nullable=True)
+    shift_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("shifts.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    joining_date = Column(Date, nullable=True)
+    last_working_date = Column(Date, nullable=True)
+    address = Column(String, nullable=True)
+    emergency_contact_name = Column(String, nullable=True)
+    emergency_contact_phone = Column(String, nullable=True)
+    pay_upi = Column(String, nullable=True)
+    id_proof_type = Column(String, nullable=True)
+    id_proof_last4 = Column(String(4), nullable=True)  # never the full number
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

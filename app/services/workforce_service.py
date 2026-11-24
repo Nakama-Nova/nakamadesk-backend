@@ -6,12 +6,13 @@ from uuid import UUID
 from app.iam import service as iam
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
+from app.models.hr import Shift
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.attendance import AttendanceCreate, AttendanceUpdate
 from app.schemas.plant_unit import GeoAttendanceIn, GeoPointIn
 from app.schemas.wage import WagePaymentRequest
-from app.services import plant_unit_service
+from app.services import plant_unit_service, wage_service
 
 
 def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
@@ -38,6 +39,41 @@ def calculate_wage(status: str, daily_wage: Decimal) -> Decimal:
         return (daily_wage / Decimal("2")).quantize(Decimal("0.01"))
     else:
         return Decimal("0.00")
+
+
+def apply_shift_minutes(session, attendance: Attendance) -> None:
+    """
+    Late and early-leave minutes from the person's shift (both 0 without one).
+    Late = minutes after the shift start, once past the grace; early = minutes the
+    person left before the shift end. Shift times are workshop wall-clock times.
+    """
+    attendance.late_minutes = attendance.early_leave_minutes = 0
+    user = session.get(User, attendance.user_id)
+    shift = session.get(Shift, user.shift_id) if user and user.shift_id else None
+    if not shift:
+        return
+    if attendance.check_in:
+        local = wage_service.to_local(attendance.check_in)
+        start = local.replace(
+            hour=shift.start_time.hour,
+            minute=shift.start_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        late = int((local - start).total_seconds() // 60)
+        if late > (shift.grace_minutes or 0):
+            attendance.late_minutes = late
+    if attendance.check_out and shift.end_time > shift.start_time:
+        local = wage_service.to_local(attendance.check_out)
+        end = local.replace(
+            hour=shift.end_time.hour,
+            minute=shift.end_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        early = int((end - local).total_seconds() // 60)
+        if early > 0:
+            attendance.early_leave_minutes = early
 
 
 def check_in(
@@ -91,15 +127,17 @@ def check_in(
                 ),
             )
 
+        wage_service.refresh_current(uow.session, user, today)
         db_attendance = Attendance(
             user_id=user_id,
             date=today,
             status="absent",  # Initially absent until check-out
             check_in=now,
-            daily_wage=user.base_daily_wage or Decimal("0"),
+            daily_wage=wage_service.daily_rate_for(uow.session, user, today),
             recorded_by=recorder_id,
             **(location.as_columns() if location else {}),
         )
+        apply_shift_minutes(uow.session, db_attendance)
         uow.attendance.add(db_attendance)
         uow.commit()
     uow.refresh(db_attendance)
@@ -169,8 +207,16 @@ def check_out(
         else:
             db_attendance.status = "absent"
 
-        # Calculate and create/update wage entry
-        amount = calculate_wage(db_attendance.status, db_attendance.daily_wage)
+        # Calculate and create/update wage entry (daily, hourly or none for salaried)
+        amount = wage_service.attendance_pay(
+            uow.session,
+            db_attendance.user_id,
+            db_attendance.date,
+            db_attendance.status,
+            db_attendance.daily_wage,
+            db_attendance.total_hours,
+        )
+        apply_shift_minutes(uow.session, db_attendance)
 
         if db_attendance.wage_entry:
             db_attendance.wage_entry.amount = amount
@@ -304,7 +350,15 @@ def mark_attendance(
         uow.flush()  # Get ID
 
         # 2. Calculate and create wage entry
-        amount = calculate_wage(db_attendance.status, db_attendance.daily_wage)
+        amount = wage_service.attendance_pay(
+            uow.session,
+            db_attendance.user_id,
+            db_attendance.date,
+            db_attendance.status,
+            db_attendance.daily_wage,
+            db_attendance.total_hours,
+        )
+        apply_shift_minutes(uow.session, db_attendance)
         db_wage = DailyWage(
             attendance_id=db_attendance.id,
             amount=amount,
@@ -346,11 +400,13 @@ def mark_present_at_location(
     except plant_unit_service.GeoError as e:
         raise HTTPException(status_code=422, detail=str(e)) from None
 
+    today = datetime.now(timezone.utc).date()
+    wage_service.refresh_current(uow.session, staff, today)
     create = AttendanceCreate(
         user_id=staff.id,
-        date=datetime.now(timezone.utc).date(),
+        date=today,
         status=data.status,
-        daily_wage=staff.base_daily_wage or Decimal("0"),
+        daily_wage=wage_service.daily_rate_for(uow.session, staff, today),
         client_id=data.client_id,
     )
     return mark_attendance(uow, create, recorder.id, location)
@@ -442,10 +498,20 @@ def update_attendance(
             setattr(db_attendance, key, value)
 
         # If status or wage changed, re-calculate the linked wage entry
-        if update_data.status or update_data.daily_wage:
+        apply_shift_minutes(uow.session, db_attendance)
+        if (
+            update_data.status
+            or update_data.daily_wage
+            or update_data.total_hours is not None
+        ):
             if db_attendance.wage_entry:
-                db_attendance.wage_entry.amount = calculate_wage(
-                    db_attendance.status, db_attendance.daily_wage
+                db_attendance.wage_entry.amount = wage_service.attendance_pay(
+                    uow.session,
+                    db_attendance.user_id,
+                    db_attendance.date,
+                    db_attendance.status,
+                    db_attendance.daily_wage,
+                    db_attendance.total_hours,
                 )
 
         uow.commit()

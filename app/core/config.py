@@ -122,6 +122,11 @@ class Settings:
     # The installers are GitHub Releases. While the repos are public no token is needed
     # (GitHub is asked anonymously, 60 questions an hour). A fine-grained token with
     # read-only "Contents" access is only for a private repo or a higher limit.
+    # Shift times are wall-clock times at the workshop; check-ins are stored in UTC.
+    # India has no daylight saving, so a fixed offset (minutes east of UTC) is enough.
+    BUSINESS_UTC_OFFSET_MINUTES: int = int(
+        os.getenv("BUSINESS_UTC_OFFSET_MINUTES", "330")
+    )
     GITHUB_RELEASES_REPO: str = os.getenv(
         "GITHUB_RELEASES_REPO", "Nakama-Nova/nakama-desktop"
     )
