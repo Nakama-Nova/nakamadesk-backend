@@ -24,7 +24,12 @@ pytest_plugins = (
 
 # Use the configured TEST_DATABASE_URL from settings
 SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# The app treats the database's naive timestamps as UTC, so tests must run with a UTC
+# session whatever the server's own timezone is (a developer's local Postgres is often
+# set to local time, which broke the notification and sync tests there).
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"options": "-c timezone=utc"}
+)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
