@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.iam import service as iam
@@ -360,7 +360,262 @@ def issue_completion_certificate(db, user, data, existing=None) -> Letter:
     )
 
 
+# ------------------------------------------------------------- HR letters
+OFFER_TERMS = [
+    "This offer is subject to a satisfactory probation period.",
+    "Pay is given after taking back any advance, as recorded at each pay-out.",
+    "Either side may end the employment by giving the notice period above.",
+]
+WEEKDAY_NAMES = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
+PAY_UNIT = {
+    "daily": "per day",
+    "weekly": "per week",
+    "monthly": "per month",
+    "hourly": "per hour",
+}
+
+
+def _staff(db: Session, user_id) -> User:
+    person = db.get(User, user_id)
+    if not person:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    return person
+
+
+def _employee(db: Session, person: User, designation: Optional[str]) -> Dict:
+    from app.services import hr_service
+
+    return {
+        "name": person.full_name or person.username,
+        "phone": person.phone,
+        "address": person.address,
+        "staff_code": hr_service.assign_staff_code(db, person),
+        "designation": (
+            designation or str(person.role).replace("_", " ").title()
+        ).strip(),
+    }
+
+
+def _party(emp: Dict) -> Dict:
+    return {"name": emp["name"], "phone": emp["phone"], "address": emp["address"]}
+
+
+def issue_offer_letter(db, user, data, existing=None) -> Letter:
+    from app.models.hr import LeaveType, Shift
+
+    person = _staff(db, data.user_id)
+    pay_type = data.pay_type or person.pay_type or "daily"
+    amount = data.pay_amount
+    if amount is None:
+        amount = (
+            person.pay_amount
+            if person.pay_amount is not None
+            else person.base_daily_wage
+        )
+    if not amount:
+        raise HTTPException(
+            status_code=422, detail="Set what this person is paid first"
+        )
+    joining = data.joining_date or person.joining_date
+    if not joining:
+        raise HTTPException(status_code=422, detail="Give the joining date")
+    shift = db.get(Shift, person.shift_id) if person.shift_id else None
+    leave = [
+        {
+            "name": t.name,
+            "paid": t.paid,
+            "yearly_days": money(t.yearly_days) if t.yearly_days is not None else None,
+        }
+        for t in db.query(LeaveType)
+        .filter(LeaveType.active.is_(True))
+        .order_by(LeaveType.name)
+    ]
+    emp = _employee(db, person, data.designation)
+    return _issue(
+        db,
+        user,
+        "offer_letter",
+        existing=existing,
+        issued_on=data.issued_on or date.today(),
+        subject=f"Offer of employment: {emp['designation']}",
+        party=_party(emp),
+        amount=Decimal(str(amount)),
+        payload={
+            "employee": emp,
+            "joining_date": joining.isoformat(),
+            "pay_type": pay_type,
+            "pay_amount": money(amount),
+            "pay_unit": PAY_UNIT[pay_type],
+            "employment": person.employment or "full_time",
+            "probation_months": data.probation_months,
+            "notice_days": data.notice_days,
+            "shift": shift
+            and {
+                "name": shift.name,
+                "start_time": shift.start_time.strftime("%H:%M"),
+                "end_time": shift.end_time.strftime("%H:%M"),
+                "weekly_off": [WEEKDAY_NAMES[d] for d in (shift.weekly_off or [])],
+            },
+            "leave": leave,
+            "notes": data.notes,
+            "terms": data.terms if data.terms is not None else OFFER_TERMS,
+        },
+    )
+
+
+def issue_payslip(db, user, data, existing=None) -> Letter:
+    from app.models.attendance import Attendance
+    from app.models.daily_wage import DailyWage
+    from app.models.payroll import PayrollPayment, WorkEntry
+
+    pay = db.get(PayrollPayment, data.payment_id)
+    if not pay:
+        raise HTTPException(status_code=404, detail="Pay-out not found")
+    if existing is None:  # one payslip a pay-out: asking again returns it
+        have = (
+            db.query(Letter)
+            .filter(
+                Letter.kind == "payslip",
+                Letter.status == "issued",
+                Letter.payload["payment"]["id"].astext == str(pay.id),
+            )
+            .first()
+        )
+        if have:
+            return have
+    person = _staff(db, pay.user_id)
+    before = (
+        db.query(func.max(PayrollPayment.through))
+        .filter(
+            PayrollPayment.user_id == person.id, PayrollPayment.through < pay.through
+        )
+        .scalar()
+    )
+    period_from = (
+        before + timedelta(days=1)
+        if before
+        else (person.joining_date or pay.through.replace(day=1))
+    )
+    counts = dict(
+        db.query(Attendance.status, func.count())
+        .filter(
+            Attendance.user_id == person.id,
+            Attendance.date >= period_from,
+            Attendance.date <= pay.through,
+        )
+        .group_by(Attendance.status)
+        .all()
+    )
+    entries = (
+        db.query(WorkEntry)
+        .filter(WorkEntry.payment_id == pay.id)
+        .order_by(WorkEntry.work_date)
+        .all()
+    )
+    wage_days = (
+        db.query(func.count(DailyWage.id))
+        .filter(DailyWage.payment_id == pay.id)
+        .scalar()
+    )
+    earnings = [
+        {
+            "label": "Wages",
+            "detail": f"{person.pay_type or 'daily'} pay",
+            "amount": money(pay.gross_daily),
+        }
+    ]
+    earnings += [
+        {
+            "label": e.description,
+            "detail": f"{e.kind}, {e.work_date.isoformat()}",
+            "amount": money(e.amount),
+        }
+        for e in entries
+    ]
+    deductions = (
+        [{"label": "Advance taken back", "amount": money(pay.deductions)}]
+        if pay.deductions
+        else []
+    )
+    emp = _employee(db, person, None)
+    gross = Decimal(pay.gross_daily) + Decimal(pay.gross_extras)
+    return _issue(
+        db,
+        user,
+        "payslip",
+        existing=existing,
+        issued_on=pay.paid_on,
+        subject=(
+            f"Payslip for {period_from.strftime('%d %b')} to "
+            f"{pay.through.strftime('%d %b %Y')}"
+        ),
+        party=_party(emp),
+        amount=Decimal(pay.net_paid),
+        payload={
+            "employee": {
+                **emp,
+                "pay_type": person.pay_type or "daily",
+                "employment": person.employment,
+                "pay_upi": person.pay_upi,
+            },
+            "payment": {
+                "id": str(pay.id),
+                "paid_on": pay.paid_on.isoformat(),
+                "method": pay.method,
+                "reference": pay.reference,
+            },
+            "period": {"from": period_from.isoformat(), "to": pay.through.isoformat()},
+            "attendance": {k: int(v) for k, v in counts.items()}
+            | {"paid_wage_days": int(wage_days or 0)},
+            "earnings": earnings,
+            "gross": money(gross),
+            "deductions": deductions,
+            "net": money(pay.net_paid),
+        },
+    )
+
+
+def issue_experience_letter(db, user, data, existing=None) -> Letter:
+    person = _staff(db, data.user_id)
+    if not person.last_working_date:
+        raise HTTPException(
+            status_code=409,
+            detail="Offboard this person first (record the last working day)",
+        )
+    if not person.joining_date:
+        raise HTTPException(status_code=422, detail="Set the joining date first")
+    emp = _employee(db, person, data.designation)
+    return _issue(
+        db,
+        user,
+        "experience_letter",
+        existing=existing,
+        issued_on=data.issued_on or date.today(),
+        subject=f"Experience and relieving letter: {emp['name']}",
+        party=_party(emp),
+        amount=None,
+        payload={
+            "employee": emp,
+            "joining_date": person.joining_date.isoformat(),
+            "last_working_date": person.last_working_date.isoformat(),
+            "remarks": data.remarks,
+            "notes": data.notes,
+        },
+    )
+
+
 ISSUERS = {
+    "offer_letter": issue_offer_letter,
+    "payslip": issue_payslip,
+    "experience_letter": issue_experience_letter,
     "quotation": issue_quotation,
     "order_confirmation": issue_order_confirmation,
     "purchase_receipt": issue_purchase_receipt,

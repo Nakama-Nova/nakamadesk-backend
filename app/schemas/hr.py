@@ -233,3 +233,7 @@ class Settlement(BaseModel):
     advance_balance: Decimal
     gross: Decimal
     net_to_pay: Decimal
+
+
+class PayslipRequest(BaseModel):
+    payment_id: UUID

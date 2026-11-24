@@ -23,6 +23,10 @@ KINDS = {
     "order_confirmation": ("OCF", "Order confirmation and advance receipt"),
     "purchase_receipt": ("PRC", "Purchase receipt"),
     "completion_certificate": ("CCT", "Certificate of completion"),
+    # HR (see letter_service): about a person on the staff list, not a customer
+    "offer_letter": ("OFL", "Offer letter"),
+    "payslip": ("PSL", "Payslip"),
+    "experience_letter": ("EXL", "Experience and relieving letter"),
 }
 
 

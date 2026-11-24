@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     Numeric,
+    Sequence,
     String,
     text,
 )
@@ -78,4 +79,10 @@ class User(Base):
     pay_upi = Column(String, nullable=True)
     id_proof_type = Column(String, nullable=True)
     id_proof_last4 = Column(String(4), nullable=True)  # never the full number
+    # The number printed on the ID card and payslips (VS-0001), given once, never reused.
+    staff_code = Column(String, unique=True, index=True, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# the counter behind staff_code (created with the table in tests, by the migration live)
+Sequence("staff_code_seq", metadata=Base.metadata)

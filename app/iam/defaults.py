@@ -121,6 +121,8 @@ PEOPLE_BOSS = PEOPLE_DESK + (
 # stay with the owner.
 LEAVE_SELF = ("leave:request:create",)
 HR_BOSS = LEAVE_SELF + (
+    "letters:payslip:issue",
+    "people:user:id_card",
     "leave:request:read_all",
     "leave:request:approve",
     "leave:balance:read_all",

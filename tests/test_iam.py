@@ -215,6 +215,10 @@ HR_TABLE = {
     "people:user:read_documents": OM,
     "people:user:write_documents": {"owner"},
     "people:user:offboard": {"owner"},
+    "letters:offer_letter:issue": {"owner"},
+    "letters:payslip:issue": OM,
+    "letters:experience_letter:issue": {"owner"},
+    "people:user:id_card": OM,
 }
 
 

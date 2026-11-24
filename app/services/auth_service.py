@@ -13,7 +13,7 @@ from app.models.enums import UserRole
 from app.models.hr import UserWage
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.services import audit, team_service, wage_service
+from app.services import audit, hr_service, team_service, wage_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -138,6 +138,7 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
 
     db.add(new_user)
     db.flush()
+    hr_service.assign_staff_code(db, new_user)
     if amount is not None:  # the first rate in the wage history
         db.add(
             UserWage(

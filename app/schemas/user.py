@@ -127,6 +127,7 @@ class UserResponse(UserBase):
     pay_amount: Optional[Decimal] = None
     employment: Optional[str] = None
     shift_id: Optional[UUID] = None
+    staff_code: Optional[str] = None
     joining_date: Optional[date] = None
     last_working_date: Optional[date] = None
     address: Optional[str] = None

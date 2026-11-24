@@ -41,6 +41,9 @@ TITLES = {
     "order_confirmation": "ORDER CONFIRMATION AND ADVANCE RECEIPT",
     "purchase_receipt": "PURCHASE RECEIPT",
     "completion_certificate": "CERTIFICATE OF COMPLETION",
+    "offer_letter": "OFFER OF EMPLOYMENT",
+    "payslip": "PAYSLIP",
+    "experience_letter": "EXPERIENCE AND RELIEVING LETTER",
 }
 
 
@@ -391,7 +394,155 @@ def _completion_certificate(letter, p) -> list:
     ]
 
 
+def _sign_off(p) -> list:
+    head = p["letterhead"]
+    return [
+        Spacer(1, 14),
+        KeepTogether(
+            [_signature("", head.get("signatory_name"), head.get("signatory_title"))]
+        ),
+    ]
+
+
+def _offer_letter(letter, p) -> list:
+    e, head = p["employee"], p["letterhead"]["name"]
+    rows = [
+        ("Position", safe(e["designation"])),
+        ("Staff no.", safe(e["staff_code"])),
+        ("Joining date", day(p["joining_date"])),
+        ("Pay", f"<b>{money(p['pay_amount'])}</b> {safe(p['pay_unit'])}"),
+        ("Employment", "Part time" if p["employment"] == "part_time" else "Full time"),
+        ("Probation", f"{p['probation_months']} months"),
+        ("Notice period", f"{p['notice_days']} days"),
+    ]
+    shift = p.get("shift")
+    if shift:
+        off = ", ".join(shift["weekly_off"]) or "none"
+        rows.append(
+            (
+                "Working hours",
+                f"{safe(shift['name'])}: {shift['start_time']} to {shift['end_time']}; weekly off: {safe(off)}",
+            )
+        )
+    out = [
+        _kv([("Letter no.", safe(letter.number)), ("Date", day(letter.issued_on))]),
+        Spacer(1, 10),
+        *_party(p, "To"),
+        P(
+            f"Dear {safe(e['name'])}, we are pleased to offer you the position of "
+            f"<b>{safe(e['designation'])}</b> at {safe(head)} on the following terms."
+        ),
+        Spacer(1, 8),
+        _kv(rows),
+    ]
+    if p.get("leave"):
+        out += [Spacer(1, 6), P("Leave in a year (April to March)", "label")]
+        for t in p["leave"]:
+            days = f"{t['yearly_days']} days" if t["yearly_days"] else "no fixed limit"
+            out.append(
+                P(
+                    f"{safe(t['name'])}: {days}, {'paid' if t['paid'] else 'unpaid'}",
+                    "small",
+                )
+            )
+    out += _notes(p)
+    out += [
+        Spacer(1, 8),
+        P("Please sign below to accept this offer and bring a copy on your first day."),
+        Spacer(1, 4),
+        KeepTogether(
+            [
+                _signature(
+                    safe(e["name"]),
+                    p["letterhead"].get("signatory_name"),
+                    p["letterhead"].get("signatory_title"),
+                )
+            ]
+        ),
+    ]
+    return out
+
+
+def _payslip(letter, p) -> list:
+    e, pay, per = p["employee"], p["payment"], p["period"]
+    att = p.get("attendance", {})
+    worked = (
+        f"present {att.get('present', 0)}, half days {att.get('half-day', 0)}, "
+        f"leave {att.get('leave', 0)}, absent {att.get('absent', 0)}"
+    )
+    earn = [
+        [safe(r["label"]), safe(r.get("detail")), money(r["amount"])]
+        for r in p["earnings"]
+    ]
+    ded = [[safe(r["label"]), "", money(r["amount"])] for r in p["deductions"]]
+    totals = [("Gross earnings", money(p["gross"]))]
+    totals += [
+        ("Less: " + safe(r["label"]), "- " + money(r["amount"]))
+        for r in p["deductions"]
+    ]
+    totals += [("Net pay", money(p["net"]))]
+    return [
+        _kv(
+            [
+                ("Payslip no.", safe(letter.number)),
+                ("Paid on", day(pay["paid_on"])),
+                ("Period", f"{day(per['from'])} to {day(per['to'])}"),
+            ]
+        ),
+        Spacer(1, 8),
+        _kv(
+            [
+                ("Name", safe(e["name"])),
+                ("Staff no.", safe(e["staff_code"])),
+                ("Position", safe(e["designation"])),
+                ("Pay type", safe(str(e["pay_type"]).title())),
+                ("Attendance", safe(worked)),
+            ]
+        ),
+        Spacer(1, 8),
+        _grid(
+            ["Earnings", "Details", "Amount"],
+            earn + ded,
+            [66 * mm, 66 * mm, 34 * mm],
+            right_cols=(2,),
+        ),
+        Spacer(1, 4),
+        _totals(totals),
+        Spacer(1, 6),
+        P(
+            f"Net pay in words: {safe(amount_in_words(p['net'].replace(',', '')))}",
+            "small",
+        ),
+        P(
+            f"Paid by {method_word(pay.get('method'))}"
+            + (f", reference {safe(pay['reference'])}" if pay.get("reference") else ""),
+            "small",
+        ),
+    ]
+
+
+def _experience_letter(letter, p) -> list:
+    e, head = p["employee"], p["letterhead"]["name"]
+    out = [
+        _kv([("Letter no.", safe(letter.number)), ("Date", day(letter.issued_on))]),
+        Spacer(1, 10),
+        P(
+            f"This is to certify that <b>{safe(e['name'])}</b> (staff no. {safe(e['staff_code'])}) "
+            f"worked with {safe(head)} as <b>{safe(e['designation'])}</b> from "
+            f"{day(p['joining_date'])} to {day(p['last_working_date'])}, "
+            f"and is relieved of duty with effect from the close of {day(p['last_working_date'])}."
+        ),
+    ]
+    if p.get("remarks"):
+        out += [Spacer(1, 8), P(safe(p["remarks"]))]
+    out += _notes(p)
+    return out + _sign_off(p)
+
+
 BODIES = {
+    "offer_letter": _offer_letter,
+    "payslip": _payslip,
+    "experience_letter": _experience_letter,
     "quotation": _quotation,
     "order_confirmation": _order_confirmation,
     "purchase_receipt": _purchase_receipt,
