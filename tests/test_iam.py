@@ -65,6 +65,8 @@ LEGACY_SALES = {
             "sales:order:payment_add",
             "sales:order:invoice",
             "sales:invoice:read",
+            "sales:credit_note:read",
+            "sales:payment:add",
             "sales:customer:read",
             "sales:customer:write",
             "purchases:purchase:read",
@@ -74,6 +76,8 @@ LEGACY_SALES = {
         a: OM
         for a in (
             "sales:sale:edit",
+            "sales:sale:return",
+            "sales:payment:void",
             "sales:order:update",
             "sales:order:delete",
             "sales:customer:delete",
@@ -194,6 +198,30 @@ LEGACY_PEOPLE = {
     "site:content:manage": OM,
     "site:stats:read": OM,
 }
+
+
+# HR: leave, shifts, holidays, wage history, staff documents (new, so no old lists).
+EVERYONE = {r.value for r in UserRole}
+HR_TABLE = {
+    "leave:request:create": EVERYONE,
+    "leave:request:read_all": OM,
+    "leave:request:approve": OM,
+    "leave:balance:read_all": OM,
+    "leave:type:manage": {"owner"},
+    "shifts:shift:manage": OM,
+    "holidays:holiday:manage": OM,
+    "people:wage:history_read": OM,
+    "people:wage:history_write": {"owner"},
+    "people:user:read_documents": OM,
+    "people:user:write_documents": {"owner"},
+    "people:user:offboard": {"owner"},
+}
+
+
+@pytest.mark.parametrize("action", HR_TABLE)
+@pytest.mark.parametrize("role", [r.value for r in UserRole])
+def test_hr_actions_follow_the_contract(role, action):
+    assert evaluator.decide(stmts(role), action) == (role in HR_TABLE[action])
 
 
 @pytest.mark.parametrize("action", LEGACY_PEOPLE)
@@ -431,6 +459,7 @@ def test_every_registered_action_is_covered_by_a_parity_table():
         **LEGACY_LAB,
         **LEGACY_DOCS,
         **LEGACY_PEOPLE,
+        **HR_TABLE,
     }
     skip = {a for a in ACTIONS if a.startswith("iam:")}
     assert set(ACTIONS) - skip == set(tables)

@@ -152,6 +152,8 @@ def list_users(
     out = [UserResponse.model_validate(u) for u in users]
     for u in out:
         u.base_daily_wage = u.overtime_rate_per_hour = None
+        u.pay_type = u.pay_amount = u.pay_upi = None
+        u.id_proof_type = u.id_proof_last4 = None
     return out
 
 

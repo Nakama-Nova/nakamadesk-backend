@@ -29,6 +29,7 @@ from app.api import (
     invoices,
     items,
     lab,
+    leave,
     letters,
     machines,
     masters,
@@ -36,6 +37,7 @@ from app.api import (
     notifications,
     orders,
     payroll,
+    people,
     plant_units,
     production,
     public,
@@ -43,8 +45,10 @@ from app.api import (
     raw_materials,
     reports,
     restorations,
+    returns,
     sales,
     scans,
+    shifts,
     site,
     stock_locations,
     sync,
@@ -93,12 +97,17 @@ app.include_router(sales.router)
 app.include_router(reports.router)
 app.include_router(customers.router)
 app.include_router(invoices.router)
+app.include_router(returns.router)
 app.include_router(dashboard.router)
 app.include_router(raw_materials.router)
 app.include_router(bom.router)
 app.include_router(attendance.router)
 app.include_router(plant_units.router)
 app.include_router(team.router)
+app.include_router(leave.router)
+app.include_router(shifts.shifts)
+app.include_router(shifts.holidays)
+app.include_router(people.router)
 app.include_router(stock_locations.router)
 app.include_router(account.router)
 app.include_router(machines.router)

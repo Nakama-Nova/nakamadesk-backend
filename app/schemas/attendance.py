@@ -13,7 +13,7 @@ class AttendanceBase(BaseModel):
 
     user_id: UUID
     date: date
-    status: str  # present, absent, half-day
+    status: str  # present, absent, half-day (responses also: leave, holiday)
     check_in: Optional[datetime] = None
     check_out: Optional[datetime] = None
     total_hours: Optional[Decimal] = None
@@ -62,6 +62,14 @@ class AttendanceResponse(AttendanceBase):
 
     id: UUID
     recorded_by: UUID
+    # leave days (status "leave") and public holidays (status "holiday", no check-in)
+    leave_type_id: Optional[UUID] = None
+    leave_request_id: Optional[UUID] = None
+    leave_half_day: Optional[bool] = None
+    paid: Optional[bool] = None
+    holiday_name: Optional[str] = None
+    late_minutes: int = 0
+    early_leave_minutes: int = 0
     plant_unit_id: Optional[UUID] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -76,3 +84,8 @@ class AttendanceResponse(AttendanceBase):
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):  # the response also carries leave and holiday rows
+        return v

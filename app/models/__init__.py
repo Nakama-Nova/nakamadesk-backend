@@ -23,6 +23,14 @@ from app.models.expense import Expense  # noqa: F401
 from app.models.furniture_carving import FurnitureCarving  # noqa: F401
 from app.models.furniture_hardware import FurnitureHardware  # noqa: F401
 from app.models.furniture_part import FurniturePart  # noqa: F401
+from app.models.hr import (  # noqa: F401
+    Holiday,
+    LeaveRequest,
+    LeaveType,
+    Shift,
+    UserDocument,
+    UserWage,
+)
 from app.models.iam import (  # noqa: F401
     IamPolicy,
     IamRole,
@@ -30,7 +38,7 @@ from app.models.iam import (  # noqa: F401
     IamUserRole,
 )
 from app.models.inventory_movement import InventoryMovement  # noqa: F401
-from app.models.invoice_counter import InvoiceCounter  # noqa: F401
+from app.models.invoice_counter import CreditNoteCounter, InvoiceCounter  # noqa: F401
 from app.models.item import Item  # noqa: F401
 from app.models.job_assignment import JobWorkerAssignment  # noqa: F401
 from app.models.letter import BusinessProfile, Letter  # noqa: F401
@@ -66,6 +74,8 @@ from app.models.restoration import (  # noqa: F401
 )
 from app.models.sale import Sale  # noqa: F401
 from app.models.sale_item import SaleItem  # noqa: F401
+from app.models.sale_payment import SalePayment  # noqa: F401
+from app.models.sale_return import SaleReturn, SaleReturnItem  # noqa: F401
 from app.models.scan_job import ScanJob  # noqa: F401
 from app.models.site_content import (  # noqa: F401
     ProductRibbon,

@@ -1,4 +1,5 @@
 import secrets
+from datetime import date
 from typing import List
 
 from fastapi import HTTPException
@@ -9,9 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.iam import service as iam
 from app.models.enums import UserRole
+from app.models.hr import UserWage
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.services import audit, team_service
+from app.services import audit, team_service, wage_service
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -110,10 +112,43 @@ def register_user(db: Session, user: UserCreate, actor_id=None) -> User:
         base_daily_wage=user.base_daily_wage,
         overtime_rate_per_hour=user.overtime_rate_per_hour,
         reports_to_id=user.reports_to_id,
+        employment=user.employment or "full_time",
+        joining_date=user.joining_date,
+        last_working_date=user.last_working_date,
+        address=user.address,
+        emergency_contact_name=user.emergency_contact_name,
+        emergency_contact_phone=user.emergency_contact_phone,
+        pay_upi=user.pay_upi,
+        id_proof_type=user.id_proof_type,
+        id_proof_last4=user.id_proof_last4,
     )
+    pay_type = user.pay_type or "daily"
+    if user.pay_amount is not None:
+        amount = user.pay_amount
+    elif user.base_daily_wage is not None:
+        amount = wage_service.amount_from_daily(
+            pay_type, user.base_daily_wage, date.today()
+        )
+    else:
+        amount = None
+    if amount is not None:
+        wage_service.set_user_rate(new_user, pay_type, amount, date.today())
+    else:
+        new_user.pay_type = pay_type
 
     db.add(new_user)
     db.flush()
+    if amount is not None:  # the first rate in the wage history
+        db.add(
+            UserWage(
+                user_id=new_user.id,
+                pay_type=pay_type,
+                amount=wage_service.q(amount),
+                effective_from=user.joining_date or date.today(),
+                note="Starting rate",
+                created_by=actor_id,
+            )
+        )
     audit.record(
         db,
         actor_id,
@@ -211,9 +246,22 @@ def update_user(db: Session, actor: User, user_id, data: UserUpdate) -> User:
         team_service.check_manager(db, user.id, new_role, changes["reports_to_id"])
     elif new_role == UserRole.OWNER and user.reports_to_id:
         changes["reports_to_id"] = None  # promoted to owner: now at the top
+    for key in ("pay_type", "employment"):  # never null
+        if key in changes and changes[key] is None:
+            del changes[key]
     old = {k: getattr(user, k) for k in changes}
+    old_pay_type = user.pay_type
+    rate_changes = {
+        k: changes.pop(k)
+        for k in ("base_daily_wage", "pay_type", "pay_amount")
+        if k in changes and changes[k] is not None
+    }
+    for k in ("base_daily_wage", "pay_type", "pay_amount"):
+        changes.pop(k, None)
     for key, value in changes.items():
         setattr(user, key, value)
+    wage_service.record_rate_edit(db, actor, user, rate_changes, old_pay_type)
+    changes.update(rate_changes)
     if "is_active" in changes:
         user.status = "active" if user.is_active else "inactive"
     # a changed role or a switch-off ends this person's current sessions

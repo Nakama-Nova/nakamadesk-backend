@@ -17,9 +17,11 @@ from sqlalchemy.orm import Session
 
 from app.models.attendance import Attendance
 from app.models.daily_wage import DailyWage
+from app.models.hr import Shift
 from app.models.payroll import PayrollPayment, WorkEntry, WorkerAdvance
 from app.models.user import User
 from app.schemas.money import AdvanceCreate, PayRequest, WorkEntryCreate
+from app.services import wage_service
 
 CENT = Decimal("0.01")
 MAX_AMOUNT = Decimal("9999999999.99")  # what Numeric(12, 2) can hold
@@ -66,18 +68,85 @@ def advance_balance(db: Session, user_id: UUID) -> Decimal:
     return q(total)
 
 
+def _days_in_pending_rows(db: Session, user_id: UUID):
+    """Days of unpaid daily/hourly wages: present counts 1, half-day 0.5."""
+    rows = (
+        db.query(Attendance.status, func.count())
+        .join(DailyWage, DailyWage.attendance_id == Attendance.id)
+        .filter(
+            Attendance.user_id == user_id,
+            DailyWage.payment_status == "pending",
+            DailyWage.amount
+            > 0,  # a weekly/monthly person's days are counted by period
+        )
+        .group_by(Attendance.status)
+        .all()
+    )
+    counts = {status: n for status, n in rows}
+    return Decimal(counts.get("present", 0)) + Decimal(counts.get("half-day", 0)) / 2
+
+
+def overtime_hours_suggested(db: Session, user: User) -> Decimal:
+    """Hours worked past the shift end on days not yet paid. A hint, never paid by itself."""
+    if not user.shift_id:
+        return Decimal("0.00")
+    shift = db.get(Shift, user.shift_id)
+    if not shift or shift.end_time <= shift.start_time:
+        return Decimal("0.00")
+    paid_to = wage_service.last_paid_through(db, user.id)
+    query = (
+        db.query(Attendance)
+        .outerjoin(DailyWage, DailyWage.attendance_id == Attendance.id)
+        .filter(Attendance.user_id == user.id, Attendance.check_out.isnot(None))
+    )
+    if paid_to:
+        query = query.filter(
+            (DailyWage.payment_status == "pending") | (Attendance.date > paid_to)
+        )
+    else:
+        query = query.filter(
+            (DailyWage.payment_status.is_(None))
+            | (DailyWage.payment_status == "pending")
+        )
+    total = Decimal(0)
+    for row in query:
+        local = wage_service.to_local(row.check_out)
+        end = local.replace(
+            hour=shift.end_time.hour,
+            minute=shift.end_time.minute,
+            second=0,
+            microsecond=0,
+        )
+        if local > end:
+            total += Decimal((local - end).total_seconds()) / 3600
+    return q(total)
+
+
 def owed_summary(db: Session, user: User) -> dict:
+    wage_service.refresh_current(db, user)
     daily = pending_daily(db, user.id)
+    payable = _days_in_pending_rows(db, user.id)
+    unpaid = Decimal(0)
+    if wage_service.has_salaried(db, user):
+        period = wage_service.salaried_period(db, user)
+        daily += period["amount"]
+        payable += period["payable_days"]
+        unpaid += period["unpaid_days"]
     extras = pending_extras(db, user.id)
     return {
         "user_id": user.id,
         "full_name": user.full_name,
         "username": user.username,
         "role": user.role,
+        "pay_type": user.pay_type or "daily",
+        "employment": user.employment or "full_time",
         "pending_daily": daily,
         "pending_extras": extras,
         "owed_gross": daily + extras,
         "advance_balance": advance_balance(db, user.id),
+        "payable_days": payable,
+        "unpaid_days": unpaid,
+        "overtime_hours_suggested": overtime_hours_suggested(db, user),
     }
 
 
@@ -203,6 +272,11 @@ def pay(db: Session, actor: User, req: PayRequest) -> PayrollPayment:
     advance if asked. Locks the person's row so two clicks cannot pay twice.
     """
     user = _user(db, req.user_id, lock=True)
+    if req.through > date.today() and wage_service.has_salaried(db, user):
+        raise HTTPException(
+            status_code=400,
+            detail="A weekly or monthly person can be paid up to today at most",
+        )
     wages = (
         db.query(DailyWage)
         .join(Attendance, DailyWage.attendance_id == Attendance.id)
@@ -225,6 +299,8 @@ def pay(db: Session, actor: User, req: PayRequest) -> PayrollPayment:
         .all()
     )
     gross_daily = q(sum((w.amount for w in wages), Decimal(0)))
+    if wage_service.has_salaried(db, user):  # weekly/monthly pay for the whole period
+        gross_daily += wage_service.salaried_period(db, user, req.through)["amount"]
     gross_extras = q(sum((e.amount for e in entries), Decimal(0)))
     gross = gross_daily + gross_extras
     if gross <= 0:
