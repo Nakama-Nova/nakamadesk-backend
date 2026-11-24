@@ -7,14 +7,26 @@ from app.db.deps import get_uow
 from app.iam.service import require
 from app.models.user import User
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.sale import SaleCreate, SaleItemResponse, SaleResponse, SaleUpdate
+from app.schemas.sale import (
+    ReturnCreate,
+    ReturnResponse,
+    SaleCreate,
+    SaleItemResponse,
+    SalePaymentCreate,
+    SalePaymentVoid,
+    SaleResponse,
+    SaleUpdate,
+)
+from app.services import sale_returns_service
 from app.services.sales_service import (
+    add_payment,
     cancel_sale,
     create_sale_transaction,
     get_all_sales,
     get_sale_by_id,
     get_sale_items_by_id,
     update_sale,
+    void_payment,
 )
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
@@ -154,3 +166,47 @@ def delete_sale(
     RBAC: OWNER only.
     """
     return cancel_sale(uow, sale_id, reason, current_user.id)
+
+
+@router.post("/{sale_id}/payments", response_model=SaleResponse)
+def add_sale_payment(
+    sale_id: UUID,
+    data: SalePaymentCreate,
+    current_user: User = Depends(require("sales:payment:add")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Take a payment on a bill (part or all of what is left). Status and method follow."""
+    return add_payment(uow, sale_id, data, current_user.id)
+
+
+@router.post("/{sale_id}/payments/{payment_id}/void", response_model=SaleResponse)
+def void_sale_payment(
+    sale_id: UUID,
+    payment_id: UUID,
+    data: SalePaymentVoid,
+    current_user: User = Depends(require("sales:payment:void")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Take a wrong payment off the bill; it stays on record with the reason."""
+    return void_payment(uow, sale_id, payment_id, data.reason, current_user.id)
+
+
+@router.post("/{sale_id}/returns", response_model=ReturnResponse)
+def create_sale_return(
+    sale_id: UUID,
+    data: ReturnCreate,
+    current_user: User = Depends(require("sales:sale:return")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """Take goods back from a bill: a credit note, the refund and (optionally) stock."""
+    return sale_returns_service.create_return(uow, sale_id, data, current_user.id)
+
+
+@router.get("/{sale_id}/returns", response_model=List[ReturnResponse])
+def get_sale_returns(
+    sale_id: UUID,
+    current_user: User = Depends(require("sales:sale:read")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """The credit notes on a bill, newest first."""
+    return sale_returns_service.list_returns(uow, sale_id)

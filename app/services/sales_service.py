@@ -1,12 +1,14 @@
 import logging
 import time
 import uuid
+from datetime import date, datetime, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError, InternalError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
 
 from app.models.customer import Customer
@@ -14,8 +16,10 @@ from app.models.item import Item
 from app.models.order import Order
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
+from app.models.sale_payment import SalePayment
+from app.models.sale_return import SaleReturn
 from app.repositories.base import AbstractUnitOfWork
-from app.schemas.sale import SaleCreate
+from app.schemas.sale import SaleCreate, SalePaymentCreate
 from app.services import (
     audit,
     inventory_service,
@@ -26,6 +30,59 @@ from app.services.invoice_service import generate_invoice_number
 from app.utils.money import to_decimal
 
 logger = logging.getLogger(__name__)
+
+# what a bill's response needs to show its payments and credit notes
+MONEY_LOAD = (
+    selectinload(Sale.payments),
+    selectinload(Sale.returns).selectinload(SaleReturn.items),
+)
+
+
+def q(value) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _derive(sale: Sale) -> None:
+    """payment_status and payment_method follow the un-voided payment rows."""
+    live = sale.live_payments
+    paid = sum((Decimal(p.amount) for p in live), Decimal("0.00"))
+    total = Decimal(sale.total_amount or 0)
+    sale.payment_status = (
+        "pending" if paid <= 0 else ("paid" if paid >= total else "partial")
+    )
+    methods = {p.method for p in live}
+    sale.payment_method = (
+        None if not methods else (methods.pop() if len(methods) == 1 else "split")
+    )
+
+
+def _first_payments(sale: Sale, sale_data: SaleCreate, user_id: UUID) -> None:
+    """Payments taken with the bill. Given: use them. Not given: the old fields, where
+    only 'paid' + a method is a known amount (the whole bill)."""
+    total = Decimal(sale.total_amount)
+    if sale_data.payments:
+        rows = [(q(p.amount), p.method, p.reference, p.note) for p in sale_data.payments]
+        if sum((r[0] for r in rows), Decimal("0")) > total:
+            raise HTTPException(status_code=422, detail="More than the bill")
+    elif sale_data.payment_status == "paid" and sale_data.payment_method and total > 0:
+        rows = [(total, sale_data.payment_method, None, None)]
+    else:
+        if sale_data.payment_status == "pending":
+            sale.payment_method = None  # a method with nothing paid is ignored
+        return
+    sale.payments = [
+        SalePayment(
+            id=uuid.uuid4(),
+            amount=amount,
+            method=method,
+            reference=reference,
+            note=note,
+            paid_on=date.today(),
+            created_by=user_id,
+        )
+        for amount, method, reference, note in rows
+    ]
+    _derive(sale)
 
 
 def build_sale(
@@ -158,6 +215,7 @@ def build_sale(
     new_sale.sub_total = sub_total
     new_sale.tax_total = tax_total
     new_sale.total_amount = sub_total + tax_total - discount
+    _first_payments(new_sale, sale_data, current_user_id)
 
     # 5. Attach items and persist
     new_sale.items = sale_items
@@ -264,7 +322,7 @@ def get_all_sales(
         List[Sale]: List of sale records.
     """
     query = uow.sales.session.query(Sale).options(
-        joinedload(Sale.items).joinedload(SaleItem.item)
+        joinedload(Sale.items).joinedload(SaleItem.item), *MONEY_LOAD
     )
 
     if customer_id:
@@ -281,7 +339,10 @@ def get_all_sales(
         except ValueError:
             pass
 
-    sales = query.limit(limit).offset(offset).all()
+    # newest first: without an order the page is whatever the database finds first
+    sales = (
+        query.order_by(Sale.created_at.desc()).limit(limit).offset(offset).all()
+    )
     return sales
 
 
@@ -298,7 +359,7 @@ def get_sale_by_id(uow: AbstractUnitOfWork, sale_id: UUID) -> Optional[Sale]:
     """
     sale = (
         uow.sales.session.query(Sale)
-        .options(joinedload(Sale.items).joinedload(SaleItem.item))
+        .options(joinedload(Sale.items).joinedload(SaleItem.item), *MONEY_LOAD)
         .filter(Sale.id == sale_id)
         .first()
     )
@@ -352,7 +413,16 @@ def cancel_sale(
                 status_code=409, detail="This bill is already cancelled"
             )
 
-        lines = [(ln.item_id, ln.quantity) for ln in sale.items if ln.item_id]
+        back = {}  # sale line -> units a return already put back on the shelf
+        for ret in sale.returns:
+            if ret.restocked:
+                for r in ret.items:
+                    back[r.sale_item_id] = back.get(r.sale_item_id, 0) + r.quantity
+        lines = [
+            (ln.item_id, ln.quantity - back.get(ln.id, 0))
+            for ln in sale.items
+            if ln.item_id and ln.quantity - back.get(ln.id, 0) > 0
+        ]
         item_ids = sorted({item_id for item_id, _ in lines})
         if item_ids:  # lock in a fixed order so two cancellations cannot deadlock
             uow.session.query(Item).filter(Item.id.in_(item_ids)).order_by(
@@ -421,6 +491,8 @@ def update_sale(
             raise HTTPException(
                 status_code=409, detail="A cancelled bill cannot be edited"
             )
+        if sale.payments and ({"payment_status", "payment_method"} & set(changes)):
+            raise HTTPException(status_code=409, detail="Use the payments")
         if sale.order_type == "order" and (
             {"payment_status", "payment_method"} & set(changes)
         ):
@@ -437,6 +509,96 @@ def update_sale(
             setattr(sale, key, value)
         audit.record(
             uow.session, user_id, "sales", sale.id, "update", old=old, new=changes
+        )
+        uow.commit()
+    return uow.sales.get_by_id_eager(sale_id)
+
+
+def locked_sale(uow: AbstractUnitOfWork, sale_id: UUID) -> Sale:
+    sale = uow.session.query(Sale).filter(Sale.id == sale_id).with_for_update().first()
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    return sale
+
+
+def add_payment(
+    uow: AbstractUnitOfWork,
+    sale_id: UUID,
+    data: SalePaymentCreate,
+    user_id: Optional[UUID],
+) -> Sale:
+    """Take a payment on a bill. The row is locked so two payments at once cannot both
+    pass the balance check; more than is left to pay is refused."""
+    amount = q(data.amount)
+    with uow:
+        sale = locked_sale(uow, sale_id)
+        if (sale.order_status or "completed") == "cancelled":
+            raise HTTPException(
+                status_code=409, detail="A cancelled bill cannot take payments"
+            )
+        if sale.order_type == "order":
+            raise HTTPException(
+                status_code=409,
+                detail="This bill follows the payments recorded on its order",
+            )
+        balance = sale.balance_due
+        if amount > balance:
+            raise HTTPException(
+                status_code=422,
+                detail=f"The bill has only \u20b9{balance} left to pay",
+            )
+        sale.payments.append(
+            SalePayment(
+                id=uuid.uuid4(),
+                amount=amount,
+                method=data.method,
+                reference=data.reference,
+                note=data.note,
+                paid_on=data.paid_on or date.today(),
+                created_by=user_id,
+            )
+        )
+        _derive(sale)
+        audit.record(
+            uow.session,
+            user_id,
+            "sales",
+            sale.id,
+            "payment_add",
+            new={"amount": amount, "method": data.method},
+        )
+        uow.commit()
+    return uow.sales.get_by_id_eager(sale_id)
+
+
+def void_payment(
+    uow: AbstractUnitOfWork,
+    sale_id: UUID,
+    payment_id: UUID,
+    reason: str,
+    user_id: Optional[UUID],
+) -> Sale:
+    """Take a wrong payment off the bill. It stays on record with the reason."""
+    with uow:
+        sale = locked_sale(uow, sale_id)
+        payment = next((p for p in sale.payments if p.id == payment_id), None)
+        if payment is None:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        if payment.voided_at is not None:
+            raise HTTPException(
+                status_code=409, detail="This payment is already voided"
+            )
+        payment.voided_at = datetime.now(timezone.utc)
+        payment.voided_by = user_id
+        payment.void_reason = reason.strip()
+        _derive(sale)
+        audit.record(
+            uow.session,
+            user_id,
+            "sales",
+            sale.id,
+            "payment_void",
+            new={"payment_id": payment_id, "reason": reason.strip()},
         )
         uow.commit()
     return uow.sales.get_by_id_eager(sale_id)
