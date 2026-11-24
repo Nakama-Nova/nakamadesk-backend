@@ -55,7 +55,9 @@ def create_return(
             for r in ret.items:
                 done[r.sale_item_id] = done.get(r.sale_item_id, 0) + r.quantity
 
-        bill_lines = sum((Decimal(ln.total_price or 0) for ln in sale.items), Decimal(0))
+        bill_lines = sum(
+            (Decimal(ln.total_price or 0) for ln in sale.items), Decimal(0)
+        )
         discount = Decimal(sale.discount or 0)
         rows: List[SaleReturnItem] = []
         for line_id, qty in wanted.items():
@@ -132,7 +134,7 @@ def create_return(
             new={"credit_note": number, "refund": ret.refund_amount},
         )
         uow.commit()
-    logger.info("Credit note %s issued on bill %s", number, sale.invoice_number)
+    logger.info("Credit note issued on a bill")
     return (
         uow.session.query(SaleReturn)
         .options(_with_items())

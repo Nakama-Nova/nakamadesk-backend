@@ -28,7 +28,7 @@ def get_credit_note_pdf(
     try:
         pdf = render_credit_note_pdf(ret, letter_service.get_profile(db))
     except Exception as exc:
-        logger.exception("Could not draw the credit note PDF for %s", credit_note_number)
+        logger.exception("Could not draw a credit note PDF")
         raise HTTPException(
             status_code=500, detail="Could not draw the credit note PDF"
         ) from exc

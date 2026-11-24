@@ -84,9 +84,8 @@ class SaleRepository(SQLAlchemyRepository):
     def get_by_id_eager(self, sale_id: UUID) -> Optional[Sale]:
         from sqlalchemy.orm import joinedload
 
-        from app.services.sales_service import MONEY_LOAD
-
         from app.models.sale_item import SaleItem
+        from app.services.sales_service import MONEY_LOAD
 
         return (
             self.session.query(Sale)
@@ -102,9 +101,8 @@ class SaleRepository(SQLAlchemyRepository):
     def get_by_client_id_eager(self, client_id: str) -> Optional[Sale]:
         from sqlalchemy.orm import joinedload
 
-        from app.services.sales_service import MONEY_LOAD
-
         from app.models.sale_item import SaleItem
+        from app.services.sales_service import MONEY_LOAD
 
         return (
             self.session.query(Sale)

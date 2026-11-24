@@ -260,9 +260,13 @@ def test_return_quantity_limits(auth_client):
         "reason": "x",
         "refund_method": "cash",
     }
-    assert auth_client.post(f"/sales/{sale['id']}/returns", json=wrong).status_code == 422
+    assert (
+        auth_client.post(f"/sales/{sale['id']}/returns", json=wrong).status_code == 422
+    )
     empty = {"items": [], "reason": "x", "refund_method": "cash"}
-    assert auth_client.post(f"/sales/{sale['id']}/returns", json=empty).status_code == 422
+    assert (
+        auth_client.post(f"/sales/{sale['id']}/returns", json=empty).status_code == 422
+    )
     # the same line twice in one request counts together
     again = make_sale(auth_client, [(make_item(auth_client, 100), 2)])
     line = again["items"][0]["id"]
@@ -274,7 +278,9 @@ def test_return_quantity_limits(auth_client):
         "reason": "x",
         "refund_method": "cash",
     }
-    assert auth_client.post(f"/sales/{again['id']}/returns", json=body).status_code == 422
+    assert (
+        auth_client.post(f"/sales/{again['id']}/returns", json=body).status_code == 422
+    )
 
 
 def test_refund_is_pro_rata_after_the_bill_discount(auth_client):
@@ -308,7 +314,9 @@ def test_rounding_is_per_line(auth_client):
     # 3 pieces at 100.00: a third of 300 each time is exact; with a discount it is not
     item = make_item(auth_client, 100)
     sale = make_sale(auth_client, [(item, 3)], discount=10)  # paid 290
-    refunds = [D(do_return(auth_client, sale, 1).json()["refund_amount"]) for _ in range(3)]
+    refunds = [
+        D(do_return(auth_client, sale, 1).json()["refund_amount"]) for _ in range(3)
+    ]
     assert refunds == [D("96.67")] * 3  # each rounded to the paisa on its own
 
 
@@ -391,9 +399,7 @@ def test_sale_shows_what_was_returned(auth_client):
     # the bill itself is not edited
     assert got["total_amount"] == sale["total_amount"]
     assert got["invoice_number"] == sale["invoice_number"]
-    assert (
-        auth_client.get(f"/sales/{uuid.uuid4()}/returns").status_code == 404
-    )
+    assert auth_client.get(f"/sales/{uuid.uuid4()}/returns").status_code == 404
 
 
 def test_credit_note_pdf(auth_client):

@@ -61,7 +61,9 @@ def _first_payments(sale: Sale, sale_data: SaleCreate, user_id: UUID) -> None:
     only 'paid' + a method is a known amount (the whole bill)."""
     total = Decimal(sale.total_amount)
     if sale_data.payments:
-        rows = [(q(p.amount), p.method, p.reference, p.note) for p in sale_data.payments]
+        rows = [
+            (q(p.amount), p.method, p.reference, p.note) for p in sale_data.payments
+        ]
         if sum((r[0] for r in rows), Decimal("0")) > total:
             raise HTTPException(status_code=422, detail="More than the bill")
     elif sale_data.payment_status == "paid" and sale_data.payment_method and total > 0:
@@ -340,9 +342,7 @@ def get_all_sales(
             pass
 
     # newest first: without an order the page is whatever the database finds first
-    sales = (
-        query.order_by(Sale.created_at.desc()).limit(limit).offset(offset).all()
-    )
+    sales = query.order_by(Sale.created_at.desc()).limit(limit).offset(offset).all()
     return sales
 
 

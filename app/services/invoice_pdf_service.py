@@ -193,9 +193,7 @@ def render_credit_note_pdf(ret, profile: dict) -> bytes:
     )
     sold_on = sale.invoice_date.strftime("%Y-%m-%d") if sale.invoice_date else ""
     elements.append(
-        Paragraph(
-            f"<b>Against bill:</b> {sale.invoice_number} dated {sold_on}", info
-        )
+        Paragraph(f"<b>Against bill:</b> {sale.invoice_number} dated {sold_on}", info)
     )
     customer = sale.customer.name if sale.customer else "Walk-in Customer"
     elements.append(Paragraph(f"<b>Customer:</b> {escape(customer)}", info))
@@ -228,9 +226,7 @@ def render_credit_note_pdf(ret, profile: dict) -> bytes:
     )
     elements += [table, Spacer(1, 16)]
     refund = Decimal(ret.refund_amount)
-    elements.append(
-        Paragraph(f"<b>Total refunded:</b> Rs. {refund:.2f}", right)
-    )
+    elements.append(Paragraph(f"<b>Total refunded:</b> Rs. {refund:.2f}", right))
     elements.append(
         Paragraph(
             f"<b>Refunded by:</b> {escape(ret.refund_method.replace('_', ' '))}", right
