@@ -29,7 +29,7 @@ from app.services import audit, letter_pdf_service, letter_service
 
 router = APIRouter(prefix="/letters", tags=["Letters"])
 
-Kind = Literal["quotation", "order_confirmation", "purchase_receipt", "completion_certificate"]  # fmt: skip
+Kind = Literal["quotation", "order_confirmation", "purchase_receipt", "completion_certificate", "offer_letter", "payslip", "experience_letter"]  # fmt: skip
 assert set(Kind.__args__) == set(KINDS)
 
 
@@ -92,6 +92,31 @@ class CompletionIn(BaseModel):
     restoration_id: UUID
     work_done: str = Field(min_length=1, max_length=2000)
     completed_on: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+
+
+class OfferLetterIn(BaseModel):
+    user_id: UUID
+    designation: Optional[str] = Field(default=None, max_length=80)
+    joining_date: Optional[date] = None  # default: the date on the staff record
+    pay_type: Optional[Literal["daily", "weekly", "monthly", "hourly"]] = None
+    pay_amount: Optional[Decimal] = Field(default=None, gt=0, max_digits=12, decimal_places=2)  # fmt: skip
+    probation_months: int = Field(default=3, ge=0, le=24)
+    notice_days: int = Field(default=30, ge=0, le=180)
+    issued_on: Optional[date] = None
+    notes: Optional[str] = Field(default=None, max_length=1000)
+    terms: Optional[List[str]] = Field(default=None, max_length=12)
+
+
+class PayslipIn(BaseModel):
+    payment_id: UUID
+
+
+class ExperienceLetterIn(BaseModel):
+    user_id: UUID
+    designation: Optional[str] = Field(default=None, max_length=80)
+    remarks: Optional[str] = Field(default=None, max_length=1000)
+    issued_on: Optional[date] = None
     notes: Optional[str] = Field(default=None, max_length=1000)
 
 
@@ -212,6 +237,34 @@ def issue_completion_certificate(
     return _issue(uow, user, "completion_certificate", letter_service.issue_completion_certificate, req)  # fmt: skip
 
 
+@router.post("/offer-letter", response_model=LetterOut, status_code=201)
+def issue_offer_letter(
+    req: OfferLetterIn,
+    user: User = Depends(require("letters:offer_letter:issue")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    return _issue(uow, user, "offer_letter", letter_service.issue_offer_letter, req)
+
+
+@router.post("/payslip", response_model=LetterOut, status_code=201)
+def issue_payslip(
+    req: PayslipIn,
+    user: User = Depends(require("letters:payslip:issue")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    """The payslip of one pay-out. Asking again for the same pay-out returns the same slip."""
+    return _issue(uow, user, "payslip", letter_service.issue_payslip, req)
+
+
+@router.post("/experience-letter", response_model=LetterOut, status_code=201)
+def issue_experience_letter(
+    req: ExperienceLetterIn,
+    user: User = Depends(require("letters:experience_letter:issue")),
+    uow: AbstractUnitOfWork = Depends(get_uow),
+):
+    return _issue(uow, user, "experience_letter", letter_service.issue_experience_letter, req)  # fmt: skip
+
+
 # ------------------------------------------------------------------- reading
 @router.get("", response_model=List[LetterOut])
 def list_letters(
@@ -293,6 +346,9 @@ INPUTS = {
     "order_confirmation": OrderConfirmationIn,
     "purchase_receipt": PurchaseReceiptIn,
     "completion_certificate": CompletionIn,
+    "offer_letter": OfferLetterIn,
+    "payslip": PayslipIn,
+    "experience_letter": ExperienceLetterIn,
 }
 
 

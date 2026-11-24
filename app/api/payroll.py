@@ -2,13 +2,15 @@ from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_current_user, get_db
 from app.iam import service as iam
 from app.iam.service import require
+from app.models.payroll import PayrollPayment
 from app.models.user import User
+from app.schemas.hr import PayslipRequest
 from app.schemas.money import (
     AdvanceCreate,
     AdvanceLedger,
@@ -20,7 +22,7 @@ from app.schemas.money import (
     WorkEntryCreate,
     WorkEntryResponse,
 )
-from app.services import payroll_service
+from app.services import letter_pdf_service, letter_service, payroll_service
 
 router = APIRouter(prefix="/payroll", tags=["Payroll"])
 
@@ -121,3 +123,29 @@ def list_payments(
     if not iam.allowed(db, current_user, READ_ALL):
         user_id = current_user.id
     return payroll_service.list_payments(db, user_id, start_date, end_date)
+
+
+@router.get("/payments/{payment_id}/payslip.pdf")
+def payslip_pdf(
+    payment_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The payslip of one pay-out as a PDF: made the first time it is asked for and the same
+    afterwards. You can open your own; seeing anyone's needs payroll:records:read_all.
+    """
+    pay = db.get(PayrollPayment, payment_id)
+    if not pay or (
+        pay.user_id != current_user.id and not iam.allowed(db, current_user, READ_ALL)
+    ):
+        raise HTTPException(status_code=404, detail="Pay-out not found")
+    letter = letter_service.issue_payslip(
+        db, db.get(User, current_user.id), PayslipRequest(payment_id=payment_id)
+    )
+    db.commit()
+    return Response(
+        content=letter_pdf_service.render(letter),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{letter.number}.pdf"'},
+    )

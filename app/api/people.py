@@ -4,10 +4,11 @@ from datetime import date
 from typing import List, Optional, get_args
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.db.deps import get_current_user, get_db
+from app.iam import service as iam
 from app.iam.service import require
 from app.models.hr import Holiday, LeaveType, Shift, UserWage
 from app.models.user import User
@@ -30,7 +31,7 @@ from app.schemas.user import (
     PayType,
     UserResponse,
 )
-from app.services import hr_service, wage_service
+from app.services import hr_service, id_card_service, wage_service
 from app.services.object_store import S3Store, get_store, get_store_or_none
 
 router = APIRouter(prefix="/people/users", tags=["People"])
@@ -244,4 +245,33 @@ def offboard(
     """Set the last working day; the account goes off the day after. Returns what is owed."""
     return hr_service.offboard(
         db, current_user, user_id, body.last_working_date, body.note
+    )
+
+
+@router.get("/{user_id}/id-card.pdf")
+def id_card(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    store: Optional[S3Store] = Depends(get_store_or_none),
+):
+    """The staff ID card (front and back, credit-card size). Your own, or anyone's with people:user:id_card."""
+    if user_id != current_user.id and not iam.allowed(
+        db, current_user, "people:user:id_card"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Operation not permitted. Missing permission: people:user:id_card",
+        )
+    person = db.query(User).filter(User.id == user_id).with_for_update().first()
+    if not person:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    pdf = id_card_service.render(db, person, store)
+    db.commit()  # the staff number may have just been given
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="id-card-{person.staff_code}.pdf"'
+        },
     )

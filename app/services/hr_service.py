@@ -305,3 +305,27 @@ def offboard(
         "gross": gross,
         "net_to_pay": gross - min(advance, gross),
     }
+
+
+# ---------------------------------------------------------------- staff code
+
+
+def code_prefix(name: Optional[str]) -> str:
+    """Initials of the business name: Vriksha Studios -> VS."""
+    letters = [w[0] for w in re.findall(r"[A-Za-z]+", name or "") if w]
+    return "".join(letters[:3]).upper() or "ST"
+
+
+def assign_staff_code(db: Session, user: User) -> str:
+    """The person's number for ID cards and payslips; given once, from a counter."""
+    from sqlalchemy import text
+
+    from app.services import letter_service
+
+    if user.staff_code:
+        return user.staff_code
+    n = db.execute(text("select nextval('staff_code_seq')")).scalar_one()
+    prefix = code_prefix(letter_service.get_profile(db)["name"])
+    user.staff_code = f"{prefix}-{n:04d}"
+    db.flush()
+    return user.staff_code
