@@ -1219,3 +1219,51 @@ def test_old_daily_flow_is_unchanged(client, db, owner):
         db.query(WorkerAdvance).filter(WorkerAdvance.user_id == staff.id).count() == 0
     )
     assert db.query(UserWage).filter(UserWage.user_id == staff.id).count() == 0
+
+
+def test_options_list_everything_the_screens_need(client, db, owner):
+    kind = new_leave_type(client, name=f"Opt {uuid.uuid4().hex[:5]}", yearly_days=5)
+    shift = new_shift(client, weekly_off=[6, 2])
+    client.post(
+        "/holidays", json={"date": f"{date.today().year}-12-25", "name": "Christmas"}
+    )
+    act_as(make(db, "worker"))  # anyone signed in
+    body = client.get("/people/options").json()
+    assert [p["value"] for p in body["pay_types"]] == [
+        "daily",
+        "weekly",
+        "monthly",
+        "hourly",
+    ]
+    assert (
+        body["pay_types"][2]["label"] == "Monthly salary"
+        and body["pay_types"][2]["unit"] == "per month"
+    )
+    assert [e["value"] for e in body["employment"]] == ["full_time", "part_time"]
+    assert {i["value"] for i in body["id_proof_types"]} == {
+        "aadhaar",
+        "pan",
+        "voter",
+        "driving",
+        "other",
+    }
+    assert {k["value"] for k in body["document_kinds"]} == {
+        "id_proof",
+        "contract",
+        "photo",
+        "other",
+    }
+    assert (
+        body["document_max_bytes"] == 10 * 1024 * 1024
+        and "application/pdf" in body["document_content_types"]
+    )
+    assert (
+        body["weekdays"][0] == {"value": 0, "label": "Monday"}
+        and len(body["weekdays"]) == 7
+    )
+    assert kind["id"] in {t["id"] for t in body["leave_types"]}
+    assert [s for s in body["shifts"] if s["id"] == shift["id"]][0]["weekly_off"] == [
+        2,
+        6,
+    ]
+    assert "Christmas" in {h["name"] for h in body["holidays"]}

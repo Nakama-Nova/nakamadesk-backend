@@ -1,16 +1,20 @@
 """A person's wage history, shift, documents and exit. Staff accounts stay under /auth/users."""
 
-from typing import List, Optional
+from datetime import date
+from typing import List, Optional, get_args
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.deps import get_db
+from app.db.deps import get_current_user, get_db
 from app.iam.service import require
-from app.models.hr import UserWage
+from app.models.hr import Holiday, LeaveType, Shift, UserWage
 from app.models.user import User
 from app.schemas.hr import (
+    DOC_TYPES,
+    MAX_DOC_BYTES,
+    DocKind,
     DocumentResponse,
     DocumentUploadRequest,
     DocumentUploadResponse,
@@ -20,11 +24,100 @@ from app.schemas.hr import (
     WageCreate,
     WageResponse,
 )
-from app.schemas.user import UserResponse
+from app.schemas.user import (
+    Employment,
+    IdProofType,
+    PayType,
+    UserResponse,
+)
 from app.services import hr_service, wage_service
 from app.services.object_store import S3Store, get_store, get_store_or_none
 
 router = APIRouter(prefix="/people/users", tags=["People"])
+options_router = APIRouter(prefix="/people", tags=["People"])
+
+LABELS = {
+    "daily": ("Daily wage", "per day"),
+    "weekly": ("Weekly wage", "per week"),
+    "monthly": ("Monthly salary", "per month"),
+    "hourly": ("Hourly wage", "per hour"),
+    "full_time": ("Full time", None),
+    "part_time": ("Part time", None),
+    "aadhaar": ("Aadhaar", None),
+    "pan": ("PAN", None),
+    "voter": ("Voter ID", None),
+    "driving": ("Driving licence", None),
+    "other": ("Other", None),
+    "id_proof": ("ID proof", None),
+    "contract": ("Contract", None),
+    "photo": ("Photo", None),
+}
+WEEKDAYS = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+]
+
+
+def _choices(values):
+    return [
+        {
+            "value": v,
+            "label": LABELS.get(v, (v.replace("_", " ").title(), None))[0],
+            "unit": LABELS.get(v, ("", None))[1],
+        }
+        for v in values
+    ]
+
+
+@options_router.get("/options")
+def hr_options(
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """
+    Every choice list the staff, leave, shift and holiday screens need, so no client
+    hardcodes them: the fixed lists (pay types, employment, ID proof types, document
+    kinds and limits, weekdays, leave statuses) and the live ones (active leave types,
+    active shifts, holidays from this year on). Anyone signed in.
+    """
+    return {
+        "pay_types": _choices(get_args(PayType)),
+        "employment": _choices(get_args(Employment)),
+        "id_proof_types": _choices(get_args(IdProofType)),
+        "document_kinds": _choices(get_args(DocKind)),
+        "document_content_types": list(DOC_TYPES),
+        "document_max_bytes": MAX_DOC_BYTES,
+        "id_proof_last_chars": 4,
+        "weekdays": [{"value": i, "label": n} for i, n in enumerate(WEEKDAYS)],
+        "leave_statuses": ["pending", "approved", "rejected", "cancelled"],
+        "leave_types": [
+            {"id": t.id, "name": t.name, "paid": t.paid, "yearly_days": t.yearly_days}
+            for t in db.query(LeaveType)
+            .filter(LeaveType.active.is_(True))
+            .order_by(LeaveType.name)
+        ],
+        "shifts": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "start_time": s.start_time.isoformat(),
+                "end_time": s.end_time.isoformat(),
+                "grace_minutes": s.grace_minutes,
+                "weekly_off": s.weekly_off or [],
+            }
+            for s in db.query(Shift).filter(Shift.active.is_(True)).order_by(Shift.name)
+        ],
+        "holidays": [
+            {"id": h.id, "date": h.date, "name": h.name, "paid": h.paid}
+            for h in db.query(Holiday)
+            .filter(Holiday.date >= date(date.today().year, 1, 1))
+            .order_by(Holiday.date)
+        ],
+    }
 
 
 def _exists(db: Session, user_id: UUID) -> User:
