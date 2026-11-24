@@ -491,13 +491,6 @@ class SaleSyncHandler(GenericSyncHandler):
                 for line in data.get("items", [])
             ],
             payment_method=data.get("payment_method"),
-            # a bill rung up offline arrives with how it was paid, as it would online; anything
-            # else (or nothing, from an older desktop) is recorded as not paid yet
-            payment_status=(
-                data.get("payment_status")
-                if data.get("payment_status") in ("pending", "partial", "paid")
-                else "pending"
-            ),
             location_id=data.get("location_id"),
             discount=data.get("discount") or 0,
             payment_status=data.get("payment_status") or "pending",
