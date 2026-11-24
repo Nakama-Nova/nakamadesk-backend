@@ -253,7 +253,8 @@ def get_user_roles(
     db: Session = Depends(get_db),
 ):
     """This person's EXTRA roles (their main role is on the staff screen), in the form the PUT
-    below takes, so a screen can show them and save changes without wiping what is there."""
+    below takes, so a screen can show them and save changes without wiping what is there.
+    """
     if not db.get(User, user_id):
         raise HTTPException(status_code=404, detail="User not found")
     rows = (
@@ -265,7 +266,10 @@ def get_user_roles(
     )
     return {
         "user_id": user_id,
-        "roles": [{"role_key": role.key, "plant_unit_id": link.plant_unit_id} for link, role in rows],
+        "roles": [
+            {"role_key": role.key, "plant_unit_id": link.plant_unit_id}
+            for link, role in rows
+        ],
     }
 
 

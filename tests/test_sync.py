@@ -680,13 +680,18 @@ def _push_sale_paid(auth_client, item_id, **payment):
 
 def test_an_offline_bill_arrives_with_how_it_was_paid(auth_client: TestClient):
     item_id = _make_item(auth_client, 10)
-    sale = _push_sale_paid(auth_client, item_id, payment_method="upi", payment_status="paid")
+    sale = _push_sale_paid(
+        auth_client, item_id, payment_method="upi", payment_status="paid"
+    )
     assert sale["payment_status"] == "paid" and sale["payment_method"] == "upi"
 
 
 def test_an_offline_bill_without_a_status_is_not_paid_yet(auth_client: TestClient):
     item_id = _make_item(auth_client, 10)
-    assert _push_sale_paid(auth_client, item_id, payment_method="cash")["payment_status"] == "pending"
+    assert (
+        _push_sale_paid(auth_client, item_id, payment_method="cash")["payment_status"]
+        == "pending"
+    )
 
 
 def test_an_offline_bill_cannot_invent_a_payment_status(auth_client: TestClient):

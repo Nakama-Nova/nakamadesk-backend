@@ -357,7 +357,10 @@ def test_a_persons_extra_roles_can_be_read_back(client, db):
     person = make_user(db, "worker")
     act_as(boss)
     assert client.get(f"/iam/users/{person.id}/roles").json()["roles"] == []
-    client.put(f"/iam/users/{person.id}/roles", json=[{"role_key": "accountant"}, {"role_key": "manager"}])
+    client.put(
+        f"/iam/users/{person.id}/roles",
+        json=[{"role_key": "accountant"}, {"role_key": "manager"}],
+    )
     got = client.get(f"/iam/users/{person.id}/roles")
     assert got.status_code == 200, got.text
     assert [r["role_key"] for r in got.json()["roles"]] == ["accountant", "manager"]
