@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import List
 
 from sqlalchemy import desc, text
@@ -37,6 +37,26 @@ def generate_invoice_number(db: Session) -> str:
         {"y": current_year},
     ).scalar_one()
     return f"NTD-{current_year}-{last_no:05d}"
+
+
+def generate_credit_note_number(db: Session, on: date) -> str:
+    """
+    The next credit note number, CN/26-27/0001, counting from 1 each 1 April.
+
+    Same rules as the bill number: bumped in the caller's transaction (a rolled-back
+    return gives its number back, so there are no gaps) and concurrent returns queue on
+    the counter row.
+    """
+    start = on.year if on.month >= 4 else on.year - 1
+    n = db.execute(
+        text(
+            "INSERT INTO credit_note_counters (fy_start, last_no) VALUES (:y, 1) "
+            "ON CONFLICT (fy_start) DO UPDATE "
+            "SET last_no = credit_note_counters.last_no + 1 RETURNING last_no"
+        ),
+        {"y": start},
+    ).scalar_one()
+    return f"CN/{start % 100:02d}-{(start + 1) % 100:02d}/{n:04d}"
 
 
 def format_invoice_response(sale: Sale) -> InvoiceResponse:

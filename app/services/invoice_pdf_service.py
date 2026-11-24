@@ -163,3 +163,76 @@ def render_invoice_pdf(sale: Sale) -> bytes:
     # Build PDF
     doc.build(elements)
     return buffer.getvalue()
+
+
+def render_credit_note_pdf(ret, profile: dict) -> bytes:
+    """
+    Draw the PDF credit note for a return: the shop (name and GSTIN from the letters
+    profile), the bill it refers to, each returned line with its GST, the total
+    refunded, the reason and how the money went back. Same drawing style as the bill.
+    """
+    from decimal import Decimal
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    info = styles["Normal"]
+    right = ParagraphStyle("RightAlign", parent=styles["Normal"], alignment=2)
+    title = ParagraphStyle(
+        "MainTitle", parent=styles["Heading1"], alignment=1, spaceAfter=6
+    )
+    sale = ret.sale
+    elements = [Paragraph(escape(profile.get("name") or "Vriksha Furnitures"), title)]
+    if profile.get("gstin"):
+        elements.append(Paragraph(f"<b>GSTIN:</b> {escape(profile['gstin'])}", info))
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph("<b>CREDIT NOTE</b>", info))
+    elements.append(Paragraph(f"<b>Credit note:</b> {ret.credit_note_number}", info))
+    elements.append(
+        Paragraph(f"<b>Date:</b> {ret.created_at.strftime('%Y-%m-%d')}", info)
+    )
+    sold_on = sale.invoice_date.strftime("%Y-%m-%d") if sale.invoice_date else ""
+    elements.append(
+        Paragraph(f"<b>Against bill:</b> {sale.invoice_number} dated {sold_on}", info)
+    )
+    customer = sale.customer.name if sale.customer else "Walk-in Customer"
+    elements.append(Paragraph(f"<b>Customer:</b> {escape(customer)}", info))
+    elements.append(Spacer(1, 16))
+
+    data = [["Item", "Qty", "Taxable", "CGST", "SGST", "Refund"]]
+    for line in ret.items:
+        data.append(
+            [
+                line.item_name or "Item",
+                str(line.quantity),
+                f"Rs. {line.taxable_value:.2f}",
+                f"Rs. {line.cgst_amount:.2f}",
+                f"Rs. {line.sgst_amount:.2f}",
+                f"Rs. {line.amount:.2f}",
+            ]
+        )
+    table = Table(data, colWidths=[150, 40, 80, 70, 70, 80])
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ]
+        )
+    )
+    elements += [table, Spacer(1, 16)]
+    refund = Decimal(ret.refund_amount)
+    elements.append(Paragraph(f"<b>Total refunded:</b> Rs. {refund:.2f}", right))
+    elements.append(
+        Paragraph(
+            f"<b>Refunded by:</b> {escape(ret.refund_method.replace('_', ' '))}", right
+        )
+    )
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(f"<b>Reason:</b> {escape(ret.reason)}", info))
+    doc.build(elements)
+    return buffer.getvalue()

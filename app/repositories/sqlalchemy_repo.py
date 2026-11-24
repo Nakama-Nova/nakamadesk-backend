@@ -85,12 +85,14 @@ class SaleRepository(SQLAlchemyRepository):
         from sqlalchemy.orm import joinedload
 
         from app.models.sale_item import SaleItem
+        from app.services.sales_service import MONEY_LOAD
 
         return (
             self.session.query(Sale)
             .options(
                 joinedload(Sale.items).joinedload(SaleItem.item),
                 joinedload(Sale.customer),
+                *MONEY_LOAD,
             )
             .filter(Sale.id == sale_id)
             .first()
@@ -100,12 +102,14 @@ class SaleRepository(SQLAlchemyRepository):
         from sqlalchemy.orm import joinedload
 
         from app.models.sale_item import SaleItem
+        from app.services.sales_service import MONEY_LOAD
 
         return (
             self.session.query(Sale)
             .options(
                 joinedload(Sale.items).joinedload(SaleItem.item),
                 joinedload(Sale.customer),
+                *MONEY_LOAD,
             )
             .filter(Sale.client_id == client_id)
             .first()

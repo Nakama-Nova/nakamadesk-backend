@@ -16,3 +16,12 @@ class InvoiceCounter(Base):
 
     year = Column(Integer, primary_key=True, autoincrement=False)
     last_no = Column(Integer, nullable=False, default=0)
+
+
+class CreditNoteCounter(Base):
+    """Last credit note number per Indian financial year (key = the year it starts in)."""
+
+    __tablename__ = "credit_note_counters"
+
+    fy_start = Column(Integer, primary_key=True, autoincrement=False)
+    last_no = Column(Integer, nullable=False, default=0)

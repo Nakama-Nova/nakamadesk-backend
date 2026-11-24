@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.sale import SalePaymentIn
+
 # Upper bound on operations per /sync/push request. Keeps a single request's
 # DB transaction bounded even for a legitimate-but-corrupted/runaway client
 # outbox; matches /sync/pull's existing limit=500 cap.
@@ -45,6 +47,10 @@ class SalePayload(BaseModel):
     invoice_number: Optional[str] = None
     # The place it was sold from. Left out, the one shop is used (as for a live sale).
     location_id: Optional[UUID] = None
+    # A discount and split payments taken offline (all optional: older clients omit them)
+    discount: Decimal = Decimal("0.00")
+    payment_status: Optional[str] = None
+    payments: Optional[List[SalePaymentIn]] = None
 
 
 class ItemPayload(BaseModel):

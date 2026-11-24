@@ -32,12 +32,16 @@ SALES_DESK = (
     "sales:order:payment_add",
     "sales:order:invoice",
     "sales:invoice:read",
+    "sales:credit_note:read",
+    "sales:payment:add",
     "sales:customer:read",
     "sales:customer:write",
     "purchases:purchase:read",
 )
 SALES_BOSS = SALES_DESK + (
     "sales:sale:edit",
+    "sales:sale:return",
+    "sales:payment:void",
     "sales:order:update",
     "sales:order:delete",
     "sales:customer:delete",

@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -57,3 +58,46 @@ class Sale(Base):
     items = relationship("SaleItem", back_populates="sale")
     customer = relationship("Customer")
     user = relationship("User")
+    payments = relationship(
+        "SalePayment",
+        back_populates="sale",
+        order_by="SalePayment.created_at",
+        cascade="all, delete-orphan",
+    )
+    returns = relationship(
+        "SaleReturn", back_populates="sale", order_by="SaleReturn.created_at.desc()"
+    )
+
+    # --- money, derived from the payment rows and the credit notes -------------
+
+    @property
+    def live_payments(self):
+        return [p for p in self.payments if p.voided_at is None]
+
+    @property
+    def amount_paid(self):
+        """Sum of un-voided payments. A bill from before payment rows existed has none:
+        it counts as fully paid when it was marked paid, else nothing is known."""
+        if not self.payments:
+            return (
+                Decimal(self.total_amount or 0)
+                if self.payment_status == "paid"
+                else Decimal("0.00")
+            )
+        return sum((Decimal(p.amount) for p in self.live_payments), Decimal("0.00"))
+
+    @property
+    def balance_due(self):
+        return max(Decimal(self.total_amount or 0) - self.amount_paid, Decimal("0.00"))
+
+    @property
+    def returned_total(self):
+        return sum((Decimal(r.refund_amount) for r in self.returns), Decimal("0.00"))
+
+    @property
+    def returned_quantities(self):
+        out = {}
+        for r in self.returns:
+            for line in r.items:
+                out[line.sale_item_id] = out.get(line.sale_item_id, 0) + line.quantity
+        return out
