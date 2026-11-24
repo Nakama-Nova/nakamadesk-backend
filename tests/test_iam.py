@@ -352,6 +352,28 @@ def test_extra_role_grants_and_session_ends(client, db):
     assert "finance:ledger:write" not in client.get("/iam/me").json()["allowed"]
 
 
+def test_a_persons_extra_roles_can_be_read_back(client, db):
+    boss = make_user(db, "owner")
+    person = make_user(db, "worker")
+    act_as(boss)
+    assert client.get(f"/iam/users/{person.id}/roles").json()["roles"] == []
+    client.put(f"/iam/users/{person.id}/roles", json=[{"role_key": "accountant"}, {"role_key": "manager"}])
+    got = client.get(f"/iam/users/{person.id}/roles")
+    assert got.status_code == 200, got.text
+    assert [r["role_key"] for r in got.json()["roles"]] == ["accountant", "manager"]
+    assert all(r["plant_unit_id"] is None for r in got.json()["roles"])
+    assert got.json()["user_id"] == str(person.id)
+
+
+def test_reading_extra_roles_needs_the_right_to_assign_them(client, db):
+    boss = make_user(db, "owner")
+    person = make_user(db, "worker")
+    act_as(make_user(db, "sales"))
+    assert client.get(f"/iam/users/{person.id}/roles").status_code == 403
+    act_as(boss)
+    assert client.get(f"/iam/users/{uuid.uuid4()}/roles").status_code == 404
+
+
 def test_owner_role_is_locked_and_simulator_works(client, db):
     boss = make_user(db, "owner")
     act_as(boss)

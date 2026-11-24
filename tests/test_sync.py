@@ -653,6 +653,48 @@ def _make_item(auth_client, stock):
     return r.json()["id"]
 
 
+def _push_sale_paid(auth_client, item_id, **payment):
+    op_id = str(uuid.uuid4())
+    payload = {
+        "customer_name": "Walk-in",
+        "customer_phone": "9000000002",
+        "items": [{"product_id": item_id, "quantity": 1, "price": 100}],
+        "total_amount": 100,
+        **payment,
+    }
+    body = {
+        "operations": [
+            {
+                "id": op_id,
+                "entity": "sale",
+                "action": "create",
+                "payload": payload,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        ]
+    }
+    resp = auth_client.post("/sync/push", json=body)
+    assert resp.status_code == 200 and len(resp.json()["success"]) == 1, resp.text
+    return auth_client.get(f"/sales/{resp.json()['success'][0]['record_id']}").json()
+
+
+def test_an_offline_bill_arrives_with_how_it_was_paid(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    sale = _push_sale_paid(auth_client, item_id, payment_method="upi", payment_status="paid")
+    assert sale["payment_status"] == "paid" and sale["payment_method"] == "upi"
+
+
+def test_an_offline_bill_without_a_status_is_not_paid_yet(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    assert _push_sale_paid(auth_client, item_id, payment_method="cash")["payment_status"] == "pending"
+
+
+def test_an_offline_bill_cannot_invent_a_payment_status(auth_client: TestClient):
+    item_id = _make_item(auth_client, 10)
+    sale = _push_sale_paid(auth_client, item_id, payment_status="settled-in-full")
+    assert sale["payment_status"] == "pending"
+
+
 def test_pushed_sale_deducts_stock_and_gets_bill_number(auth_client: TestClient):
     item_id = _make_item(auth_client, 10)
     _, data = _push_sale(auth_client, item_id, 3)
