@@ -492,6 +492,9 @@ class SaleSyncHandler(GenericSyncHandler):
             ],
             payment_method=data.get("payment_method"),
             location_id=data.get("location_id"),
+            discount=data.get("discount") or 0,
+            payment_status=data.get("payment_status") or "pending",
+            payments=data.get("payments"),
         )
         sale_id = data.get("id")
         existing = uow.sales.get_by_id(sale_id) if sale_id else None

@@ -10,6 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.models.item import Item
 from app.models.sale import Sale
 from app.models.sale_item import SaleItem
+from app.models.sale_return import SaleReturn, SaleReturnItem
 from app.repositories.base import AbstractUnitOfWork
 from app.schemas.report import (
     GSTSummaryResponse,
@@ -23,6 +24,31 @@ from app.schemas.report import (
 def _counted():
     """A cancelled bill is out of every sales report."""
     return func.coalesce(Sale.order_status, "completed") != "cancelled"
+
+
+def _credit_notes(uow, start_date, end_date):
+    """(refunded, cgst, sgst) on credit notes dated in the range, for bills still counted.
+    A credit note reduces revenue and GST of the month it is dated."""
+    query = (
+        uow.session.query(
+            func.coalesce(func.sum(SaleReturnItem.amount), 0),
+            func.coalesce(func.sum(SaleReturnItem.cgst_amount), 0),
+            func.coalesce(func.sum(SaleReturnItem.sgst_amount), 0),
+        )
+        .join(SaleReturn, SaleReturn.id == SaleReturnItem.return_id)
+        .join(Sale, Sale.id == SaleReturn.sale_id)
+        .filter(_counted())
+    )
+    if start_date:
+        query = query.filter(
+            SaleReturn.created_at >= datetime.combine(start_date, datetime.min.time())
+        )
+    if end_date:
+        query = query.filter(
+            SaleReturn.created_at <= datetime.combine(end_date, datetime.max.time())
+        )
+    refunded, cgst, sgst = query.one()
+    return Decimal(str(refunded)), Decimal(str(cgst)), Decimal(str(sgst))
 
 
 def get_sales_analytics(
@@ -62,6 +88,9 @@ def get_sales_analytics(
     revenue = Decimal(str(result.total_revenue or 0))
     tax = Decimal(str(result.total_tax or 0))
     discount = Decimal(str(result.total_discount or 0))
+    refunded, cgst_back, sgst_back = _credit_notes(uow, start_date, end_date)
+    revenue -= refunded
+    tax -= cgst_back + sgst_back
 
     return SalesReportResponse(
         total_sales=revenue,
@@ -244,9 +273,10 @@ def get_gst_summary(
 
     res = query.first()
 
-    gross = Decimal(str(res.gross or 0))
-    cgst = Decimal(str(res.cgst or 0))
-    sgst = Decimal(str(res.sgst or 0))
+    refunded, cgst_back, sgst_back = _credit_notes(uow, start_date, end_date)
+    gross = Decimal(str(res.gross or 0)) - refunded
+    cgst = Decimal(str(res.cgst or 0)) - cgst_back
+    sgst = Decimal(str(res.sgst or 0)) - sgst_back
     igst = Decimal("0.00")
 
     total_tax = cgst + sgst + igst
